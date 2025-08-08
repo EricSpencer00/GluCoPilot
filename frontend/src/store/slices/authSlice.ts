@@ -33,14 +33,14 @@ export const login = createAsyncThunk(
   ) => {
     try {
       // Backend expects username; map email to username for now
-      const tokenRes = await axios.post('/auth/login', {
+      const tokenRes = await axios.post('/api/v1/auth/login', {
         username: email,
         password,
       });
       const token: string = tokenRes.data.access_token;
 
       // Fetch user profile
-      const userRes = await axios.get('/auth/me', {
+      const userRes = await axios.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -59,7 +59,7 @@ export const register = createAsyncThunk(
   ) => {
     try {
       // Use email as username for now to satisfy backend schema
-      await axios.post('/auth/register', {
+      await axios.post('/api/v1/auth/register', {
         username: userData.email,
         email: userData.email,
         password: userData.password,
@@ -68,14 +68,14 @@ export const register = createAsyncThunk(
       });
 
       // Auto login after registration
-      const loginRes = await axios.post('/auth/login', {
+      const loginRes = await axios.post('/api/v1/auth/login', {
         username: userData.email,
         password: userData.password,
       });
       const token: string = loginRes.data.access_token;
 
       // Fetch user profile
-      const userRes = await axios.get('/auth/me', {
+      const userRes = await axios.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
 

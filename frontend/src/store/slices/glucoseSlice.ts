@@ -45,9 +45,9 @@ export const fetchGlucoseData = createAsyncThunk(
       const days = Math.max(1, Math.ceil(hours / 24));
 
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        axios.get('/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
-        axios.get('/glucose/latest'),
-        axios.get('/glucose/stats', { params: { days } }),
+        axios.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+        axios.get('/api/v1/glucose/latest'),
+        axios.get('/api/v1/glucose/stats', { params: { days } }),
       ]);
 
       return {
@@ -68,13 +68,13 @@ export const syncDexcomData = createAsyncThunk(
   async (_: void, { rejectWithValue }) => {
     try {
       // Trigger sync
-      await axios.post('/glucose/sync');
+      await axios.post('/api/v1/glucose/sync');
 
       // After sync, refresh data (default 24h)
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        axios.get('/glucose/readings', { params: { limit: 24 * 12 } }),
-        axios.get('/glucose/latest'),
-        axios.get('/glucose/stats', { params: { days: 1 } }),
+        axios.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
+        axios.get('/api/v1/glucose/latest'),
+        axios.get('/api/v1/glucose/stats', { params: { days: 1 } }),
       ]);
 
       return {
