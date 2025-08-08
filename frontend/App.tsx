@@ -14,7 +14,9 @@ import { NotificationManager } from './src/services/NotificationManager';
 
 // Set up axios defaults
 import axios from 'axios';
-axios.defaults.baseURL = 'http://127.0.0.1:8000/api/v1'; // Match FastAPI route prefix
+import Constants from 'expo-constants';
+
+axios.defaults.baseURL = `${Constants.manifest?.extra?.API_BASE_URL}/api/v1`;
 
 export default function App() {
   React.useEffect(() => {
