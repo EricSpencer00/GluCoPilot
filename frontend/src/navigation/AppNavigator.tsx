@@ -7,6 +7,32 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 // Import screens
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { LoadingScreen } from '../components/common/LoadingScreen';
+import { LoginScreen } from '../screens/LoginScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+
+// Simple placeholder screens for tabs
+import { View, Text } from 'react-native';
+const TrendsScreen = () => (
+  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <Text>Trends</Text>
+  </View>
+);
+const LogScreen = () => (
+  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <Text>Log</Text>
+  </View>
+);
+const InsightsScreen = () => (
+  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <Text>Insights</Text>
+  </View>
+);
+const ProfileScreen = () => (
+  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <Text>Profile</Text>
+  </View>
+);
 
 // Import types
 import { RootState } from '../store/store';
@@ -46,10 +72,10 @@ const MainTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Log" component={DashboardScreen} />
-      <Tab.Screen name="Trends" component={DashboardScreen} />
-      <Tab.Screen name="Insights" component={DashboardScreen} />
-      <Tab.Screen name="Profile" component={DashboardScreen} />
+      <Tab.Screen name="Log" component={LogScreen} />
+      <Tab.Screen name="Trends" component={TrendsScreen} />
+      <Tab.Screen name="Insights" component={InsightsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };
@@ -58,16 +84,15 @@ const MainTabNavigator = () => {
 const AuthStackNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={DashboardScreen} />
-      <Stack.Screen name="Register" component={DashboardScreen} />
-      <Stack.Screen name="ForgotPassword" component={DashboardScreen} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );
 };
 
 // Root navigator
 export const AppNavigator = () => {
-  // This line correctly accesses the auth state from Redux
   const auth = useSelector((state: RootState) => state.auth);
   const user = auth.user;
   const isLoading = auth.isLoading;
@@ -76,13 +101,5 @@ export const AppNavigator = () => {
     return <LoadingScreen />;
   }
 
-  return (
-    <>
-      {user ? (
-        <MainTabNavigator />
-      ) : (
-        <AuthStackNavigator />
-      )}
-    </>
-  );
+  return <>{user ? <MainTabNavigator /> : <AuthStackNavigator />}</>;
 };

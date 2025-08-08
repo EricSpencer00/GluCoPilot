@@ -42,22 +42,50 @@ export const fetchGlucoseData = createAsyncThunk(
   'glucose/fetchData',
   async ({ hours = 24 }: { hours?: number }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`/api/glucose/readings?hours=${hours}`);
-      return response.data;
+      const days = Math.max(1, Math.ceil(hours / 24));
+
+      const [readingsRes, latestRes, statsRes] = await Promise.all([
+        axios.get('/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+        axios.get('/glucose/latest'),
+        axios.get('/glucose/stats', { params: { days } }),
+      ]);
+
+      return {
+        readings: readingsRes.data,
+        latest_reading: latestRes.data,
+        stats: statsRes.data,
+      };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch glucose data');
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to fetch glucose data'
+      );
     }
   }
 );
 
 export const syncDexcomData = createAsyncThunk(
   'glucose/syncDexcom',
-  async (_, { rejectWithValue }) => {
+  async (_: void, { rejectWithValue }) => {
     try {
-      const response = await axios.post('/api/glucose/sync/dexcom');
-      return response.data;
+      // Trigger sync
+      await axios.post('/glucose/sync');
+
+      // After sync, refresh data (default 24h)
+      const [readingsRes, latestRes, statsRes] = await Promise.all([
+        axios.get('/glucose/readings', { params: { limit: 24 * 12 } }),
+        axios.get('/glucose/latest'),
+        axios.get('/glucose/stats', { params: { days: 1 } }),
+      ]);
+
+      return {
+        readings: readingsRes.data,
+        latest_reading: latestRes.data,
+        stats: statsRes.data,
+      };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to sync Dexcom data');
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to sync Dexcom data'
+      );
     }
   }
 );

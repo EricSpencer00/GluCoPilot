@@ -27,39 +27,69 @@ const initialState: AuthState = {
 // Async thunks
 export const login = createAsyncThunk(
   'auth/login',
-  async ({ email, password }: { email: string, password: string }, { rejectWithValue }) => {
+  async (
+    { email, password }: { email: string; password: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      return response.data;
+      // Backend expects username; map email to username for now
+      const tokenRes = await axios.post('/auth/login', {
+        username: email,
+        password,
+      });
+      const token: string = tokenRes.data.access_token;
+
+      // Fetch user profile
+      const userRes = await axios.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return { user: userRes.data, token };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Login failed');
+      return rejectWithValue(error.response?.data?.detail || 'Login failed');
     }
   }
 );
 
 export const register = createAsyncThunk(
   'auth/register',
-  async (userData: { email: string, password: string, first_name: string, last_name: string }, { rejectWithValue }) => {
+  async (
+    userData: { email: string; password: string; first_name: string; last_name: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await axios.post('/api/auth/register', userData);
-      return response.data;
+      // Use email as username for now to satisfy backend schema
+      await axios.post('/auth/register', {
+        username: userData.email,
+        email: userData.email,
+        password: userData.password,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+      });
+
+      // Auto login after registration
+      const loginRes = await axios.post('/auth/login', {
+        username: userData.email,
+        password: userData.password,
+      });
+      const token: string = loginRes.data.access_token;
+
+      // Fetch user profile
+      const userRes = await axios.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return { user: userRes.data, token };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Registration failed');
+      return rejectWithValue(error.response?.data?.detail || 'Registration failed');
     }
   }
 );
 
-export const logout = createAsyncThunk(
-  'auth/logout',
-  async (_, { rejectWithValue }) => {
-    try {
-      await axios.post('/api/auth/logout');
-      return null;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Logout failed');
-    }
-  }
-);
+export const logout = createAsyncThunk('auth/logout', async () => {
+  // No backend logout endpoint; clear client state
+  return null;
+});
 
 // Slice
 const authSlice = createSlice({
