@@ -1,12 +1,5 @@
 # API routers package
-from . import auth, glucose, insulin, food, analysis, recommendations, health
-
+# Avoiding circular imports - don't import modules directly here
 __all__ = [
-    "auth",
-    "glucose", 
-    "insulin",
-    "food",
-    "analysis",
-    "recommendations",
-    "health"
+    "routers"
 ]
