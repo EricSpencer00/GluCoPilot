@@ -35,7 +35,7 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
             secureTextEntry
             style={styles.input}
           />
-          {error ? <HelperText type="error" visible={true}>{error}</HelperText> : null}
+          {error ? <HelperText type="error" visible={true}>{typeof error === 'string' ? error : JSON.stringify(error)}</HelperText> : null}
           <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button}>
             Log In
           </Button>
