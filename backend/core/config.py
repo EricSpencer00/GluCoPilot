@@ -54,8 +54,12 @@ class Settings(BaseSettings):
     # HealthKit Bridge
     HEALTHKIT_BRIDGE_URL: str = "http://localhost:3001"
     
+    # Expo Mobile App
+    EXPO_APP_ID: str = "f16e8675-cf9b-4b3d-a4ba-58b21d990311"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields from environment
 
 settings = Settings()

@@ -59,14 +59,14 @@ app.add_middleware(
 security = HTTPBearer()
 
 # Include routers
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(glucose.router, prefix="/api/v1/glucose", tags=["Glucose"])
+app.include_router(auth, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(glucose, prefix="/api/v1/glucose", tags=["Glucose"])
 # Include other routers when they become available
-# app.include_router(insulin.router, prefix="/api/v1/insulin", tags=["Insulin"])
-# app.include_router(food.router, prefix="/api/v1/food", tags=["Food"])
-# app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"])
-# app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
-# app.include_router(health.router, prefix="/api/v1/health", tags=["Health"])
+# app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
+# app.include_router(food, prefix="/api/v1/food", tags=["Food"])
+# app.include_router(analysis, prefix="/api/v1/analysis", tags=["Analysis"])
+# app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
+# app.include_router(health, prefix="/api/v1/health", tags=["Health"])
 
 @app.get("/")
 async def root():
