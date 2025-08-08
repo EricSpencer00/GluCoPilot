@@ -6,6 +6,31 @@ ulimit -n 8192
 # Define root directory
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
+# Get the user's local IP address
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # MacOS
+  IP_ADDRESS=$(ipconfig getifaddr en0)
+  if [ -z "$IP_ADDRESS" ]; then
+    IP_ADDRESS=$(ipconfig getifaddr en1)
+  fi
+else
+  # Linux and others
+  IP_ADDRESS=$(hostname -I | awk '{print $1}')
+fi
+
+if [ -z "$IP_ADDRESS" ]; then
+  echo "Could not determine your local IP address. Using 127.0.0.1"
+  IP_ADDRESS="127.0.0.1"
+fi
+
+echo "Your local IP address is: $IP_ADDRESS"
+
+# Update the app.json with the correct IP address
+sed -i.bak "s|\"API_BASE_URL\": \"http://[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}:[0-9]\{1,5\}\"|\"API_BASE_URL\": \"http://$IP_ADDRESS:8000\"|g" "$ROOT_DIR/frontend/app.json"
+rm -f "$ROOT_DIR/frontend/app.json.bak"
+
+echo "Updated app.json with API_BASE_URL: http://$IP_ADDRESS:8000"
+
 # Check for python and required packages
 echo "Checking for required Python packages..."
 cd "$ROOT_DIR/backend" || { echo "Failed to change to backend directory"; exit 1; }
@@ -25,7 +50,7 @@ pip install -r requirements.txt
 # Start the backend server
 echo "Starting GluCoPilot backend..."
 cd "$ROOT_DIR/backend" || { echo "Failed to change to backend directory"; exit 1; }
-python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Check if backend started successfully
@@ -48,7 +73,7 @@ npx expo install --fix
 
 # Start the frontend
 echo "Starting GluCoPilot frontend..."
-npm start &
+npx expo start --clear &
 FRONTEND_PID=$!
 
 # Function to handle termination

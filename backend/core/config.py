@@ -18,9 +18,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # API Configuration
-    API_HOST: str = "127.0.0.1"
+    API_HOST: str = "0.0.0.0"  # Allow connections from any IP
     API_PORT: int = 8000
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:19006,exp://,http://192.168.1.36:8000,exp://192.168.1.36:19000,http://localhost:19000,http://localhost:19001,http://localhost:19002,*"
+    CORS_ORIGINS: str = "*"
     
     # Dexcom
     DEXCOM_USERNAME: str = ""

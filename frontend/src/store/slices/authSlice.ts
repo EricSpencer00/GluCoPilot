@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import api from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Interfaces
 interface User {
@@ -33,14 +34,17 @@ export const login = createAsyncThunk(
   ) => {
     try {
       // Backend expects username; map email to username for now
-      const tokenRes = await axios.post('/api/v1/auth/login', {
+      const tokenRes = await api.post('/api/v1/auth/login', {
         username: email,
         password,
       });
       const token: string = tokenRes.data.access_token;
+      
+      // Store token in AsyncStorage
+      await AsyncStorage.setItem('auth_token', token);
 
       // Fetch user profile
-      const userRes = await axios.get('/api/v1/auth/me', {
+      const userRes = await api.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -59,7 +63,7 @@ export const register = createAsyncThunk(
   ) => {
     try {
       // Use email as username for now to satisfy backend schema
-      await axios.post('/api/v1/auth/register', {
+      await api.post('/api/v1/auth/register', {
         username: userData.email,
         email: userData.email,
         password: userData.password,
@@ -68,14 +72,17 @@ export const register = createAsyncThunk(
       });
 
       // Auto login after registration
-      const loginRes = await axios.post('/api/v1/auth/login', {
+      const loginRes = await api.post('/api/v1/auth/login', {
         username: userData.email,
         password: userData.password,
       });
       const token: string = loginRes.data.access_token;
+      
+      // Store token in AsyncStorage
+      await AsyncStorage.setItem('auth_token', token);
 
       // Fetch user profile
-      const userRes = await axios.get('/api/v1/auth/me', {
+      const userRes = await api.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -87,7 +94,8 @@ export const register = createAsyncThunk(
 );
 
 export const logout = createAsyncThunk('auth/logout', async () => {
-  // No backend logout endpoint; clear client state
+  // Clear token from AsyncStorage
+  await AsyncStorage.removeItem('auth_token');
   return null;
 });
 

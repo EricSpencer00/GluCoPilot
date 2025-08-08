@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import api from '../../services/api';
 
 // Interfaces
 interface Recommendation {
@@ -27,7 +27,7 @@ export const fetchRecommendations = createAsyncThunk(
   'ai/fetchRecommendations',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('/api/ai/recommendations');
+      const response = await api.get('/api/ai/recommendations');
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch recommendations');

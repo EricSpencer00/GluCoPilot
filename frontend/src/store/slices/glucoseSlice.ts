@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import api from '../../services/api';
 
 // Interfaces
 interface GlucoseReading {
@@ -45,9 +45,9 @@ export const fetchGlucoseData = createAsyncThunk(
       const days = Math.max(1, Math.ceil(hours / 24));
 
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        axios.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
-        axios.get('/api/v1/glucose/latest'),
-        axios.get('/api/v1/glucose/stats', { params: { days } }),
+        api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+        api.get('/api/v1/glucose/latest'),
+        api.get('/api/v1/glucose/stats', { params: { days } }),
       ]);
 
       return {
@@ -68,13 +68,13 @@ export const syncDexcomData = createAsyncThunk(
   async (_: void, { rejectWithValue }) => {
     try {
       // Trigger sync
-      await axios.post('/api/v1/glucose/sync');
+      await api.post('/api/v1/glucose/sync');
 
       // After sync, refresh data (default 24h)
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        axios.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
-        axios.get('/api/v1/glucose/latest'),
-        axios.get('/api/v1/glucose/stats', { params: { days: 1 } }),
+        api.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
+        api.get('/api/v1/glucose/latest'),
+        api.get('/api/v1/glucose/stats', { params: { days: 1 } }),
       ]);
 
       return {

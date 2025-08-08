@@ -7,8 +7,10 @@ from typing import Optional
 from core.database import get_db
 from models.user import User
 from schemas.auth import UserCreate, UserLogin, UserResponse, Token
+from schemas.dexcom import DexcomCredentials, DexcomResponse
 from services.auth import create_access_token, verify_password, get_password_hash, get_current_user
 from utils.logging import get_logger
+from utils.encryption import encrypt_password
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -112,3 +114,34 @@ async def refresh_token(
         "token_type": "bearer",
         "expires_in": 1800
     }
+
+@router.post("/connect-dexcom", response_model=DexcomResponse)
+async def connect_dexcom(
+    credentials: DexcomCredentials,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Connect Dexcom account to user profile"""
+    try:
+        # Encrypt password
+        encrypted_password = encrypt_password(credentials.password)
+        
+        # Update user's Dexcom credentials
+        current_user.dexcom_username = credentials.username
+        current_user.dexcom_password = encrypted_password
+        current_user.dexcom_ous = credentials.ous
+        
+        # Save to database
+        db.commit()
+        
+        logger.info(f"Dexcom account connected for user: {current_user.username}")
+        return {
+            "success": True,
+            "message": "Dexcom account connected successfully"
+        }
+    except Exception as e:
+        logger.error(f"Failed to connect Dexcom: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to connect Dexcom account"
+        )
