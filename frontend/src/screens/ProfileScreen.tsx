@@ -3,14 +3,15 @@ import { View, StyleSheet } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store/store';
+import { useNavigation } from '@react-navigation/native';
 
 const ProfileScreen: React.FC = () => {
   const dispatch = useDispatch();
+  const navigation = useNavigation();
   const { user } = useSelector((state: RootState) => state.auth);
 
   const handleDexcomIntegration = () => {
-    // Placeholder for Dexcom integration logic
-    alert('Dexcom integration coming soon!');
+    navigation.navigate('DexcomLogin');
   };
 
   return (

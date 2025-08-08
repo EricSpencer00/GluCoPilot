@@ -11,3 +11,12 @@ class DexcomResponse(BaseModel):
     """Dexcom response schema"""
     success: bool
     message: str
+
+class DexcomLoginRequest(BaseModel):
+    """Schema for Dexcom login request"""
+    username: str
+    password: str
+
+class DexcomLoginResponse(BaseModel):
+    """Schema for Dexcom login response"""
+    message: str

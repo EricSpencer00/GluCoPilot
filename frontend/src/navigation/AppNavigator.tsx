@@ -10,6 +10,7 @@ import { LoadingScreen } from '../components/common/LoadingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+import DexcomLoginScreen from '../screens/DexcomLoginScreen';
 
 // Simple placeholder screens for tabs
 import { View, Text } from 'react-native';
@@ -87,6 +88,7 @@ const AuthStackNavigator = () => {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="DexcomLogin" component={DexcomLoginScreen} />
     </Stack.Navigator>
   );
 };
