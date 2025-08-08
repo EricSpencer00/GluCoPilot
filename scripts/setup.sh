@@ -36,7 +36,9 @@ check_prerequisites() {
     fi
     
     python_version=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1-2)
-    if [[ $(echo "$python_version >= 3.9" | bc -l) -eq 0 ]]; then
+    major_version=$(echo "$python_version" | cut -d'.' -f1)
+    minor_version=$(echo "$python_version" | cut -d'.' -f2)
+    if [[ $major_version -lt 3 || ($major_version -eq 3 && $minor_version -lt 9) ]]; then
         print_error "Python 3.9+ is required, found $python_version"
         exit 1
     fi

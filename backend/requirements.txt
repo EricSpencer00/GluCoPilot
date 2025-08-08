@@ -22,7 +22,6 @@ lxml==4.9.3
 schedule==1.2.0
 python-dotenv==1.0.0
 cryptography==41.0.7
-sqlite3-fts4==1.0.3
 asyncpg==0.29.0
 redis==5.0.1
 celery==5.3.4
