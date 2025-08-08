@@ -21,7 +21,8 @@
         "NSCameraUsageDescription": "This app uses the camera to scan food barcodes for nutrition information.",
         "NSHealthShareUsageDescription": "This app needs access to your health data to provide glucose management insights.",
         "NSHealthUpdateUsageDescription": "This app needs to update your health data with glucose readings and insulin doses.",
-        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based health insights."
+        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based health insights.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone"
       }
     },
     "android": {
@@ -37,7 +38,9 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -56,8 +59,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "glucopilot-project-id"
+        "projectId": "f16e8675-cf9b-4b3d-a4ba-58b21d990311"
       }
-    }
+    },
+    "owner": "ericspencer00"
   }
 }
