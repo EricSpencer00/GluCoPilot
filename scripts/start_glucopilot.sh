@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set a higher ulimit to avoid "too many open files" error
-ulimit -n 4096
+ulimit -n 8192q
 
 # Check for python and required packages
 echo "Checking for required Python packages..."

@@ -12,10 +12,28 @@ import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { theme } from './src/theme/theme';
 import { NotificationManager } from './src/services/NotificationManager';
 
+// Set up axios defaults
+import axios from 'axios';
+axios.defaults.baseURL = 'http://localhost:8000'; // Update with your actual API URL
+
 export default function App() {
   React.useEffect(() => {
     // Initialize notification manager
     NotificationManager.initialize();
+    
+    // Set up axios interceptors for auth token
+    axios.interceptors.request.use(
+      async (config) => {
+        const token = store.getState().auth.token;
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
   }, []);
 
   return (
