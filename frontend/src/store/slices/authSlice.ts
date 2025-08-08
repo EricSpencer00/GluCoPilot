@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../config';
 
 // Interfaces
 interface User {
@@ -34,7 +35,7 @@ export const login = createAsyncThunk(
   ) => {
     try {
       // Backend expects username; map email to username for now
-      const tokenRes = await api.post('/api/v1/auth/login', {
+      const tokenRes = await api.post(`${API_BASE_URL}/auth/login`, {
         username: email,
         password,
       });
@@ -44,7 +45,7 @@ export const login = createAsyncThunk(
       await AsyncStorage.setItem('auth_token', token);
 
       // Fetch user profile
-      const userRes = await api.get('/api/v1/auth/me', {
+      const userRes = await api.get(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -72,7 +73,7 @@ export const register = createAsyncThunk(
       });
 
       // Auto login after registration
-      const loginRes = await api.post('/api/v1/auth/login', {
+      const loginRes = await api.post(`${API_BASE_URL}/auth/login`, {
         username: userData.email,
         password: userData.password,
       });
@@ -82,7 +83,7 @@ export const register = createAsyncThunk(
       await AsyncStorage.setItem('auth_token', token);
 
       // Fetch user profile
-      const userRes = await api.get('/api/v1/auth/me', {
+      const userRes = await api.get(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
