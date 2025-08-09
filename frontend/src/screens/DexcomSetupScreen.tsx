@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Switch, Text, Headline } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
-import api from '../../services/api';
+import api from '../services/api';
 
 const DexcomSetupScreen = ({ navigation }) => {
   const dispatch = useDispatch();

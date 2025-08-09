@@ -5,10 +5,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { AuthStackParamList } from '../navigation/types';
+import { ProfileStackParamList } from '../navigation/types';
 
 const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation<StackNavigationProp<AuthStackParamList, 'Profile'>>();
+  const navigation = useNavigation<StackNavigationProp<ProfileStackParamList, 'ProfileMain'>>();
   const user = useSelector((state: RootState) => state.auth.user);
 
   const handleDexcomIntegration = () => {

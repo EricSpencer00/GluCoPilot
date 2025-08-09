@@ -22,6 +22,11 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add /api/v1 prefix if not already present and not an absolute URL
+    if (config.url && !config.url.startsWith('http') && !config.url.startsWith('/api/v1/')) {
+      config.url = `/api/v1${config.url}`;
+    }
     
     // Log requests in development
     if (ENABLE_API_LOGS) {

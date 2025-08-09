@@ -79,6 +79,24 @@ import { RootState } from '../store/store';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Profile stack navigator
+const ProfileStackNavigator = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="ProfileMain" 
+        component={ProfileScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="DexcomLogin" 
+        component={DexcomLoginScreen} 
+        options={{ title: "Dexcom Integration" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 // Main tab navigator
 const MainTabNavigator = () => {
   return (
@@ -113,7 +131,7 @@ const MainTabNavigator = () => {
       <Tab.Screen name="Log" component={LogScreen} />
       <Tab.Screen name="Trends" component={TrendsScreen} />
       <Tab.Screen name="Insights" component={InsightsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
 };
