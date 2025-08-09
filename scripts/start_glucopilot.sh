@@ -32,6 +32,15 @@ rm -f "$ROOT_DIR/frontend/app.json.bak"
 
 echo "Updated app.json with API_BASE_URL: http://$IP_ADDRESS:8000"
 
+
+# Debug: Print PYTHONPATH and working directory
+echo "[DEBUG] PYTHONPATH is: $PYTHONPATH"
+echo "[DEBUG] Current working directory: $(pwd)"
+echo "[DEBUG] backend/api/ contents:"
+ls -l "$ROOT_DIR/backend/api/"
+echo "[DEBUG] backend/services/ contents:"
+ls -l "$ROOT_DIR/backend/services/"
+
 # Check for python and required packages
 echo "Checking for required Python packages..."
 cd "$ROOT_DIR/backend" || { echo "Failed to change to backend directory"; exit 1; }

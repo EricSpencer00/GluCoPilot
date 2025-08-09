@@ -1,3 +1,15 @@
+def get_dexcom_for_user(user):
+    """Return a Dexcom client for the given user, or None if not configured."""
+    from pydexcom import Dexcom
+    from utils.encryption import decrypt_password
+    if not getattr(user, 'dexcom_username', None) or not getattr(user, 'dexcom_password', None):
+        return None
+    password = decrypt_password(user.dexcom_password)
+    return Dexcom(
+        username=user.dexcom_username,
+        password=password,
+        ous=getattr(user, 'dexcom_ous', False) or False
+    )
 from typing import List, Optional
 from datetime import datetime, timedelta
 import asyncio

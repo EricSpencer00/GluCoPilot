@@ -1,18 +1,29 @@
 import React from 'react';
 import { View, ScrollView } from 'react-native';
 import { Card, Text, ActivityIndicator, Button } from 'react-native-paper';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
+import { fetchRecommendations } from '../store/slices/aiSlice';
 
 export const InsightsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { recommendations, isLoading } = useSelector((state: RootState) => state.ai);
+  const dispatch = useDispatch();
+
+  const handleRefresh = () => {
+    dispatch(fetchRecommendations() as any);
+  };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
       <Text variant="headlineMedium" style={{ margin: 16 }}>Insights</Text>
       <Card style={{ margin: 16 }}>
         <Card.Content>
-          <Text variant="titleMedium">AI Recommendations</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="titleMedium">AI Recommendations</Text>
+            <Button mode="outlined" onPress={handleRefresh} loading={isLoading} style={{ marginLeft: 8 }}>
+              Refresh
+            </Button>
+          </View>
           {isLoading ? (
             <ActivityIndicator style={{ marginTop: 16 }} />
           ) : recommendations.length === 0 ? (
