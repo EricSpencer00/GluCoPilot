@@ -18,7 +18,7 @@ export default function InsulinLogForm({ onSuccess, onCancel }: Props) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await api.post('/api/v1/insulin', {
+      await api.post('/api/v1/insulin/log', {
         units,
         insulin_type: isFast ? 'fast' : 'slow',
         timestamp: timestamp.toISOString(),
