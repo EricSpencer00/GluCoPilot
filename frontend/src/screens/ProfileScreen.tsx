@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Button, Text, List, Surface, Switch, Divider, Snackbar } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Platform, Linking } from 'react-native';
+import { Button, Text, List, Surface, Switch, Divider, Snackbar, Card, ActivityIndicator, Portal, Modal } from 'react-native-paper';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
@@ -26,26 +26,96 @@ const ProfileScreen: React.FC = () => {
   const [appleHealthConnected, setAppleHealthConnected] = useState(false);
   const [myFitnessPalConnected, setMyFitnessPalConnected] = useState(false);
   const [googleFitConnected, setGoogleFitConnected] = useState(false);
+  
+  // Stats loading state
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [userStats, setUserStats] = useState({
+    totalGlucoseReadings: 0,
+    totalInsulinDoses: 0,
+    totalFoodEntries: 0,
+    totalActivityLogs: 0
+  });
+  
+  // Fetch user data statistics
+  useEffect(() => {
+    if (user) {
+      fetchUserStats();
+    }
+  }, [user]);
+  
+  const fetchUserStats = async () => {
+    setIsLoadingStats(true);
+    try {
+      // In a real implementation, this would fetch from API
+      // For now, we'll use mock data
+      setTimeout(() => {
+        setUserStats({
+          totalGlucoseReadings: 287,
+          totalInsulinDoses: 14,
+          totalFoodEntries: 9,
+          totalActivityLogs: 12
+        });
+        setIsLoadingStats(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      setIsLoadingStats(false);
+    }
+  };
 
   const handleDexcomIntegration = () => {
     navigation.navigate('DexcomLogin');
   };
   
+  const hasDexcomConnected = () => {
+    return user && 'dexcom_username' in user && user.dexcom_username;
+  };
+  
   const handleAppleHealthIntegration = () => {
-    // This would be replaced with actual Apple HealthKit integration code
-    setAppleHealthConnected(!appleHealthConnected);
-    showSnackbar(appleHealthConnected ? 
-      'Apple Health disconnected' : 
-      'Apple Health connected - data will sync automatically');
+    if (appleHealthConnected) {
+      setAppleHealthConnected(false);
+      showSnackbar('Apple Health disconnected');
+    } else {
+      // Show instructions modal instead of just toggling
+      showInstructionsModal('apple_health');
+    }
   };
   
   const handleMyFitnessPalIntegration = () => {
-    // Navigate to MyFitnessPal login screen (would need to be implemented)
-    // For now, just toggle the state
-    setMyFitnessPalConnected(!myFitnessPalConnected);
-    showSnackbar(myFitnessPalConnected ? 
-      'MyFitnessPal disconnected' : 
-      'MyFitnessPal connected - food and activity data will sync');
+    if (myFitnessPalConnected) {
+      setMyFitnessPalConnected(false);
+      showSnackbar('MyFitnessPal disconnected');
+    } else {
+      // Show instructions modal instead of just toggling
+      showInstructionsModal('myfitnesspal');
+    }
+  };
+  
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructionType, setInstructionType] = useState<'apple_health' | 'myfitnesspal' | null>(null);
+  
+  const showInstructionsModal = (type: 'apple_health' | 'myfitnesspal') => {
+    setInstructionType(type);
+    setShowInstructions(true);
+  };
+  
+  const openAppStore = () => {
+    if (Platform.OS === 'ios') {
+      Linking.openURL('https://apps.apple.com/us/app/myfitnesspal/id341232718');
+    } else {
+      Linking.openURL('https://play.google.com/store/apps/details?id=com.myfitnesspal.android');
+    }
+  };
+  
+  const toggleConnectionAfterInstructions = () => {
+    if (instructionType === 'apple_health') {
+      setAppleHealthConnected(true);
+      showSnackbar('Apple Health connected - data will sync automatically');
+    } else if (instructionType === 'myfitnesspal') {
+      setMyFitnessPalConnected(true);
+      showSnackbar('MyFitnessPal connected - food and activity data will sync');
+    }
+    setShowInstructions(false);
   };
   
   const handleGoogleFitIntegration = () => {
@@ -86,6 +156,44 @@ const ProfileScreen: React.FC = () => {
           <Text>{user.email}</Text>
         </Surface>
         
+        {/* Data Dashboard */}
+        <Text variant="titleMedium" style={styles.sectionTitle}>Your Data</Text>
+        <Surface style={styles.card}>
+          {isLoadingStats ? (
+            <View style={styles.statsLoading}>
+              <ActivityIndicator size="small" />
+              <Text style={styles.loadingText}>Loading data...</Text>
+            </View>
+          ) : (
+            <View style={styles.statsGrid}>
+              <View style={styles.statItem}>
+                <Text variant="titleLarge">{userStats.totalGlucoseReadings}</Text>
+                <Text variant="bodySmall">Glucose Readings</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text variant="titleLarge">{userStats.totalInsulinDoses}</Text>
+                <Text variant="bodySmall">Insulin Doses</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text variant="titleLarge">{userStats.totalFoodEntries}</Text>
+                <Text variant="bodySmall">Food Entries</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text variant="titleLarge">{userStats.totalActivityLogs}</Text>
+                <Text variant="bodySmall">Activity Logs</Text>
+              </View>
+            </View>
+          )}
+          <Divider style={styles.divider} />
+          <Button 
+            mode="outlined" 
+            icon="trash-can-outline" 
+            onPress={() => showSnackbar('Data management coming soon!')}
+            style={styles.manageDataButton}>
+            Manage Data
+          </Button>
+        </Surface>
+        
         <Text variant="titleMedium" style={styles.sectionTitle}>Data Integrations</Text>
         <Text variant="bodySmall" style={styles.sectionDescription}>
           Connect to external services to enhance your glucose insights
@@ -98,7 +206,7 @@ const ProfileScreen: React.FC = () => {
             left={props => <List.Icon {...props} icon="chart-line" />}
             right={props => (
               <Button mode="outlined" onPress={handleDexcomIntegration}>
-                {user.dexcom_username ? 'Reconfigure' : 'Connect'}
+                {hasDexcomConnected() ? 'Reconfigure' : 'Connect'}
               </Button>
             )}
           />
@@ -204,6 +312,70 @@ const ProfileScreen: React.FC = () => {
         }}>
         {snackbarMessage}
       </Snackbar>
+
+      {/* Integration Instructions Modal */}
+      <Portal>
+        <Modal
+          visible={showInstructions}
+          onDismiss={() => setShowInstructions(false)}
+          contentContainerStyle={styles.modalContainer}>
+          <Text variant="headlineSmall" style={styles.modalTitle}>
+            {instructionType === 'apple_health' ? 'Connect Apple Health' : 'Connect MyFitnessPal'}
+          </Text>
+          
+          {instructionType === 'apple_health' && (
+            <>
+              <Text variant="bodyMedium" style={styles.modalText}>
+                To connect Apple Health with GluCoPilot:
+              </Text>
+              <Text variant="bodyMedium" style={styles.instructionText}>
+                1. Open the Apple Health app on your iPhone{'\n'}
+                2. Tap on your profile picture in the top right{'\n'}
+                3. Tap on "Privacy & Settings"{'\n'}
+                4. Select "Apps"{'\n'}
+                5. Find "GluCoPilot" and tap on it{'\n'}
+                6. Enable all categories you want to share{'\n'}
+                7. Come back to GluCoPilot and turn on the toggle
+              </Text>
+            </>
+          )}
+          
+          {instructionType === 'myfitnesspal' && (
+            <>
+              <Text variant="bodyMedium" style={styles.modalText}>
+                To connect MyFitnessPal with GluCoPilot:
+              </Text>
+              <Text variant="bodyMedium" style={styles.instructionText}>
+                1. Download the MyFitnessPal app if you don't have it{'\n'}
+                2. Create an account or log in{'\n'}
+                3. Go to "More" tab {`>`} "Settings" {`>`} "Diary Sharing"{'\n'}
+                4. Enable "Share My Food Diary"{'\n'}
+                5. For automatic syncing with Apple Health:{'\n'}
+                6. Go to "More" {`>`} "Apps & Devices"{'\n'}
+                7. Connect with Apple Health{'\n'}
+                8. Return to GluCoPilot and toggle on MyFitnessPal
+              </Text>
+              <Button 
+                mode="outlined" 
+                onPress={openAppStore}
+                style={styles.modalButton}>
+                Download MyFitnessPal
+              </Button>
+            </>
+          )}
+          
+          <Button 
+            mode="contained" 
+            onPress={toggleConnectionAfterInstructions}
+            style={styles.modalButton}>
+            I've Completed These Steps
+          </Button>
+          <Button 
+            onPress={() => setShowInstructions(false)}>
+            Cancel
+          </Button>
+        </Modal>
+      </Portal>
     </ScrollView>
   );
 };
@@ -241,6 +413,59 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 16,
+  },
+  // Stats styling
+  statsLoading: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    opacity: 0.7,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+  },
+  statItem: {
+    width: '50%',
+    padding: 12,
+    alignItems: 'center',
+  },
+  divider: {
+    marginVertical: 8,
+  },
+  manageDataButton: {
+    margin: 12,
+  },
+  // Modal styles
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    margin: 20,
+    borderRadius: 12,
+    elevation: 5,
+  },
+  modalTitle: {
+    marginBottom: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalText: {
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  instructionText: {
+    marginBottom: 20,
+    lineHeight: 24,
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+    borderRadius: 8,
+  },
+  modalButton: {
+    marginVertical: 12,
   },
 });
 

@@ -14,6 +14,7 @@ import { EnhancedRecommendationCard } from '../components/ai/EnhancedRecommendat
 import { QuickActionsCard } from '../components/common/QuickActionsCard';
 import { fetchGlucoseData, syncDexcomData } from '../store/slices/glucoseSlice';
 import { fetchRecommendations } from '../store/slices/aiSlice';
+import { clearNewRegistrationFlag } from '../store/slices/authSlice';
 import { styles } from '../styles/screens/DashboardScreen';
 
 interface DashboardScreenProps {
@@ -22,7 +23,7 @@ interface DashboardScreenProps {
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
   // Handler for DexcomStyleChart time range changes
-  const handleTimeRangeChange = (range: '1h' | '3h' | '6h' | '24h') => {
+  const handleTimeRangeChange = (range: '3h' | '6h' | '12h' | '24h') => {
     setTimeRange(range);
     // Optionally, fetch more data if needed for longer ranges
     // Example: dispatch(fetchGlucoseData({ hours: ... }) as any);
@@ -41,19 +42,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     isLoading: aiLoading 
   } = useSelector((state: RootState) => state.ai);
   
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, isNewRegistration } = useSelector((state: RootState) => state.auth);
   
   const [refreshing, setRefreshing] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [timeRange, setTimeRange] = useState<'1h' | '3h' | '6h' | '24h'>('3h');
+  const [timeRange, setTimeRange] = useState<'3h' | '6h' | '12h' | '24h'>('3h');
+  const [showDexcomModal, setShowDexcomModal] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
       loadDashboardData();
     }, [])
   );
+
+  // Check if this is a new registration and show Dexcom connection prompt
+  useEffect(() => {
+    if (isNewRegistration) {
+      setShowDexcomModal(true);
+    }
+  }, [isNewRegistration]);
 
   const loadDashboardData = async () => {
     try {
@@ -115,6 +124,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     const diffHours = Math.floor(diffMinutes / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${Math.floor(diffHours / 24)}d ago`;
+  };
+
+  const handleDexcomConnect = () => {
+    setShowDexcomModal(false);
+    dispatch(clearNewRegistrationFlag());
+    navigation.navigate('Profile', { screen: 'DexcomLogin', params: { fromRegistration: true } });
+  };
+
+  const skipDexcomConnect = () => {
+    setShowDexcomModal(false);
+    dispatch(clearNewRegistrationFlag());
+    showSnackbar('You can connect Dexcom later in your Profile');
   };
 
   return (
@@ -213,6 +234,35 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
       >
         {snackbarMessage}
       </Snackbar>
+
+      {/* Dexcom Connection Modal */}
+      <Portal>
+        <Modal
+          visible={showDexcomModal}
+          onDismiss={skipDexcomConnect}
+          contentContainerStyle={styles.modalContainer}>
+          <Text variant="headlineSmall" style={styles.modalTitle}>
+            Connect Your Dexcom
+          </Text>
+          <Text variant="bodyMedium" style={styles.modalText}>
+            To get the most out of GluCoPilot, please connect your Dexcom CGM account. 
+            This will allow us to automatically sync your glucose readings.
+          </Text>
+          <Text variant="bodyMedium" style={[styles.modalText, styles.warningText]}>
+            Without Dexcom connection, most features of the app will not work properly.
+          </Text>
+          <Button 
+            mode="contained" 
+            style={styles.modalButton}
+            onPress={handleDexcomConnect}>
+            Connect Dexcom
+          </Button>
+          <Button 
+            onPress={skipDexcomConnect}>
+            I'll do this later
+          </Button>
+        </Modal>
+      </Portal>
     </View>
   );
 };

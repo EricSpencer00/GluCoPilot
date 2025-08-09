@@ -17,6 +17,7 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   error: string | null;
+  isNewRegistration: boolean;
 }
 
 // Initial state
@@ -25,6 +26,7 @@ const initialState: AuthState = {
   token: null,
   isLoading: false,
   error: null,
+  isNewRegistration: false,
 };
 
 // Async thunks
@@ -115,6 +117,9 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearNewRegistrationFlag: (state) => {
+      state.isNewRegistration = false;
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -141,6 +146,7 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
+      state.isNewRegistration = true; // Set flag for new registration
     });
     builder.addCase(register.rejected, (state, action) => {
       state.isLoading = false;
@@ -163,5 +169,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, clearNewRegistrationFlag } = authSlice.actions;
 export default authSlice.reducer;
