@@ -11,21 +11,27 @@ A comprehensive, offline-first diabetes management application that combines rea
 
 ### 📊 Data Ingestion
 - **Real-time CGM Data**: Pulls glucose readings from Dexcom via `pydexcom`
-- **Apple Watch Integration**: Heart rate, activity rings, and workout data via HealthKit
+- **Health Integrations**: Apple HealthKit/Google Fit for activity, sleep, and heart rate data
+- **MyFitnessPal Integration**: Comprehensive food logging with detailed nutrition data
 - **Smart Food Logging**: Manual entry or barcode scanning with complete nutrition profiles
 - **Insulin Tracking**: Comprehensive logging of dosage, timing, and insulin types
+- **Comprehensive Health Data**: Mood tracking, sleep quality, medication, illness, and menstrual cycle data
 
 ### 🧠 AI-Powered Analysis
-- **Pattern Recognition**: Identifies post-meal spikes, exercise-induced lows, and delayed bolus effects
-- **Personalized Insights**: LLM-generated improvement suggestions based on individual patterns
+- **Multi-Stream Pattern Recognition**: Identifies correlations across glucose, food, insulin, activity, sleep, mood, and more
+- **Personalized Insights**: LLM-generated improvement suggestions based on comprehensive analysis
 - **Community Wisdom**: Curated advice from r/T1D relevant to detected issues
-- **Predictive Recommendations**: Actionable suggestions for timing and dosing optimization
+- **Predictive Recommendations**: Actionable suggestions with specific timing and personalized interventions
+- **Outlier Detection**: Identifies unusual patterns and potential health concerns across all data streams
+- **Correlation Analysis**: Shows how different factors (exercise, sleep, stress) affect glucose levels
 
 ### 📱 User Experience
 - **Interactive Dashboard**: Real-time glucose trends with time-in-range metrics
-- **Visual Analytics**: Comprehensive charts overlaying glucose, meals, insulin, and activity
+- **Multi-Data Visualization**: Comprehensive charts overlaying glucose, meals, insulin, activity, sleep, and mood
+- **Service Integration UI**: Simple toggles to connect external services like MyFitnessPal
 - **Offline-First**: Full functionality without internet connection
 - **Local Privacy**: All data stored and processed locally
+- **Actionable Insights**: Specific recommendations with timing and expected outcomes
 
 ## 🏗 Architecture
 
@@ -53,8 +59,9 @@ GluCoPilot/
 
 ### AI/ML Pipeline
 - **Local Models**: Privacy-focused on-device inference
-- **Pattern Detection**: Advanced glucose trend analysis
-- **Recommendation Engine**: Personalized advice generation
+- **Multi-Stream Pattern Detection**: Advanced correlation analysis across all health data
+- **Outlier Detection**: Identifies unusual patterns and potential health concerns
+- **Recommendation Engine**: Personalized advice with specific timing and actions
 - **Community Insights**: Relevant tip extraction and summarization
 
 ## 🚀 Quick Start
@@ -116,9 +123,17 @@ GluCoPilot/
 | Source | Data Type | Frequency | Format |
 |--------|-----------|-----------|---------|
 | Dexcom CGM | Glucose readings (mg/dL) | 5-minute intervals | JSON |
-| Apple Watch | Heart rate, steps, workouts | Real-time sync | JSON |
+| Apple HealthKit | Heart rate, steps, workouts, sleep | Real-time sync | JSON |
+| Google Fit | Activity, steps, workouts | Real-time sync | JSON |
+| MyFitnessPal | Detailed nutrition data | User entry & sync | JSON |
 | Food Log | Nutrition data (carbs, protein, fat) | User entry | JSON |
 | Insulin Log | Type, units, timestamp | User entry | JSON |
+| Activity Log | Type, duration, intensity | User entry & sync | JSON |
+| Sleep Log | Duration, quality, phases | User entry & sync | JSON |
+| Mood Log | Rating, description, tags | User entry | JSON |
+| Medication Log | Name, dosage, timing | User entry | JSON |
+| Illness Log | Type, severity, duration | User entry | JSON |
+| Menstrual Cycle | Dates, symptoms, flow | User entry | JSON |
 | Reddit r/T1D | Community tips and advice | Daily batch | JSON |
 
 ## 🔄 User Flow
