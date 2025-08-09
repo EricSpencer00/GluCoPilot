@@ -1,10 +1,12 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet, TextInput } from 'react-native';
 import InsulinLogForm from '../components/InsulinLogForm';
 import FoodLogForm from '../components/FoodLogForm';
 import OtherLogForm from '../components/OtherLogForm';
+import { cacheLog, getCachedLogs } from '../utils/logCache';
 
 const API_BASE = '/api/v1';
 
@@ -33,6 +35,7 @@ export default function LogsScreen() {
   const [showModal, setShowModal] = useState<null | 'food' | 'insulin' | 'other'>(null);
   const [search, setSearch] = useState('');
 
+
   useEffect(() => {
     fetchLogs();
   }, []);
@@ -48,10 +51,22 @@ export default function LogsScreen() {
       const foodLogs = foodRes.map((l: any) => ({ ...l, type: 'food' }));
       const insulinLogs = insulinRes.map((l: any) => ({ ...l, type: 'insulin' }));
       // TODO: fetch other logs when backend ready
-      setLogs([...foodLogs, ...insulinLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      const allLogs = [...foodLogs, ...insulinLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setLogs(allLogs);
+      // Cache logs locally
+      allLogs.forEach(log => cacheLog(log));
     } catch (e) {
-      setLogs([]);
+      // If fetch fails, fallback to cache
+      const cached = await getCachedLogs();
+      setLogs(cached);
     }
+  };
+
+  // When a log is created, cache it immediately
+  const handleLogSuccess = async (log: any) => {
+    await cacheLog(log);
+    fetchLogs();
+    setShowModal(null);
   };
 
   const handleDelete = async (item: any) => {
@@ -122,9 +137,9 @@ export default function LogsScreen() {
 
       {/* Modal Sheets for Logging */}
       <Modal visible={!!showModal} animationType="slide" onRequestClose={() => setShowModal(null)}>
-        {showModal === 'insulin' && <InsulinLogForm onSuccess={() => { setShowModal(null); fetchLogs(); }} onCancel={() => setShowModal(null)} />}
-        {showModal === 'food' && <FoodLogForm onSuccess={() => { setShowModal(null); fetchLogs(); }} onCancel={() => setShowModal(null)} />}
-        {showModal === 'other' && <OtherLogForm onSuccess={() => { setShowModal(null); fetchLogs(); }} onCancel={() => setShowModal(null)} />}
+        {showModal === 'insulin' && <InsulinLogForm onSuccess={log => handleLogSuccess({ ...log, type: 'insulin' })} onCancel={() => setShowModal(null)} />}
+        {showModal === 'food' && <FoodLogForm onSuccess={log => handleLogSuccess({ ...log, type: 'food' })} onCancel={() => setShowModal(null)} />}
+        {showModal === 'other' && <OtherLogForm onSuccess={log => handleLogSuccess({ ...log, type: 'other' })} onCancel={() => setShowModal(null)} />}
       </Modal>
     </View>
   );
