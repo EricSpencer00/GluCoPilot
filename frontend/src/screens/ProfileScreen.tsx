@@ -9,6 +9,8 @@ import { AuthStackParamList, ProfileStackParamList } from '../navigation/types';
 import { logout } from '../store/slices/authSlice';
 import { useAppDispatch } from '../hooks/useAppDispatch';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import axios from 'axios';
 
 type ProfileScreenNavigationProp = CompositeNavigationProp<
   StackNavigationProp<AuthStackParamList, 'Login'>,
@@ -35,6 +37,9 @@ const ProfileScreen: React.FC = () => {
     totalFoodEntries: 0,
     totalActivityLogs: 0
   });
+  
+  // Apple Health upload state
+  const [uploading, setUploading] = useState(false);
   
   // Fetch user data statistics
   useEffect(() => {
@@ -135,6 +140,36 @@ const ProfileScreen: React.FC = () => {
   const handleLogout = () => {
     console.log('User logged out');
     dispatch(logout());
+  };
+
+  // Apple Health file upload handler
+  const handleAppleHealthUpload = async () => {
+    try {
+      setUploading(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/xml',
+        copyToCacheDirectory: true,
+      });
+      if (result.type === 'success') {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: result.uri,
+          name: result.name || 'apple_health_export.xml',
+          type: 'application/xml',
+        });
+        const response = await axios.post('/api/apple-health/import', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          withCredentials: true,
+        });
+        showSnackbar(response.data.message || 'Apple Health data imported!');
+      }
+    } catch (e) {
+      showSnackbar('Failed to upload Apple Health file.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (!user) {
@@ -259,6 +294,19 @@ const ProfileScreen: React.FC = () => {
             )}
           />
         </Surface>
+        
+        {Platform.OS === 'ios' && appleHealthConnected && (
+          <Button
+            mode="contained"
+            onPress={handleAppleHealthUpload}
+            loading={uploading}
+            style={styles.button}
+            icon="upload"
+            disabled={uploading}
+          >
+            Upload Apple Health Export
+          </Button>
+        )}
         
         <Text variant="titleMedium" style={styles.sectionTitle}>AI Insights</Text>
         <Surface style={styles.card}>
