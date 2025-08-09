@@ -9,7 +9,7 @@ from models.food import Food
 from models.activity import Activity
 from models.sleep import Sleep
 from models.health_data import HealthData
-from schemas.auth import UserOut
+from schemas.auth import UserResponse
 from services.auth import get_current_active_user
 from utils.encryption import encrypt_password, decrypt_password
 
