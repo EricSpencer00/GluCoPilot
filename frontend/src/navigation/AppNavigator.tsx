@@ -55,10 +55,9 @@ const MainTabNavigator = () => {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
           let iconName;
-
           if (route.name === 'Dashboard') {
             iconName = 'view-dashboard';
-          } else if (route.name === 'Log') {
+          } else if (route.name === 'Logs') {
             iconName = 'plus-circle';
           } else if (route.name === 'Trends') {
             iconName = 'chart-line';
@@ -67,7 +66,6 @@ const MainTabNavigator = () => {
           } else if (route.name === 'Profile') {
             iconName = 'account';
           }
-
           return (
             <MaterialCommunityIcons
               name={iconName as any}
@@ -84,6 +82,16 @@ const MainTabNavigator = () => {
       <Tab.Screen name="Insights" component={InsightsScreen} />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
+  );
+};
+
+// Root app stack navigator to allow navigation to 'Log' from anywhere
+const AppStackNavigator = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="Log" component={LogsScreen} />
+    </Stack.Navigator>
   );
 };
 
@@ -109,7 +117,7 @@ export const AppNavigator = () => {
     return <LoadingScreen />;
   }
 
-  return <>{user ? <MainTabNavigator /> : <AuthStackNavigator />}</>;
+  return <>{user ? <AppStackNavigator /> : <AuthStackNavigator />}</>;
 };
 
 // Styles
