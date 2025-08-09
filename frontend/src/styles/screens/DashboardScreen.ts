@@ -29,4 +29,28 @@ export const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: 'bold',
   },
+  // Modal styles
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    margin: 20,
+    borderRadius: 12,
+    elevation: 5,
+  },
+  modalTitle: {
+    marginBottom: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalText: {
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  warningText: {
+    color: '#d32f2f',
+    fontWeight: 'bold',
+  },
+  modalButton: {
+    marginVertical: 12,
+  },
 });

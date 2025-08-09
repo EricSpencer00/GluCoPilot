@@ -1,34 +1,59 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, StyleSheet } from 'react-native';
+import { View, TextInput, Button, StyleSheet, Alert, Text, Switch } from 'react-native';
+import Slider from '@react-native-community/slider';
+import api from '../services/api';
+import TimePicker from './common/TimePicker';
+
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (log: any) => void;
   onCancel: () => void;
 }
 
 export default function InsulinLogForm({ onSuccess, onCancel }: Props) {
-  const [units, setUnits] = useState('');
-  const [insulinType, setInsulinType] = useState('');
-  const [timestamp, setTimestamp] = useState('');
+  const [units, setUnits] = useState(0);
+  const [isFast, setIsFast] = useState(true);
+  const [timestamp, setTimestamp] = useState(new Date());
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true);
-    await fetch('/api/insulin/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ units: parseFloat(units), insulin_type: insulinType, timestamp: timestamp || undefined }),
-    });
-    setLoading(false);
-    onSuccess();
+    try {
+      const res = await api.post('/api/v1/insulin/log', {
+        units,
+        insulin_type: isFast ? 'fast' : 'slow',
+        timestamp: timestamp.toISOString(),
+      });
+      setLoading(false);
+      onSuccess(res.data);
+    } catch (error: any) {
+      setLoading(false);
+      Alert.alert('Error', error?.response?.data?.detail || 'Failed to save insulin log.');
+    }
   };
 
   return (
     <View style={styles.form}>
-      <TextInput style={styles.input} placeholder="Units" value={units} onChangeText={setUnits} keyboardType="numeric" />
-      <TextInput style={styles.input} placeholder="Type (optional)" value={insulinType} onChangeText={setInsulinType} />
-      <TextInput style={styles.input} placeholder="Timestamp (optional, ISO)" value={timestamp} onChangeText={setTimestamp} />
-      <Button title={loading ? 'Saving...' : 'Save'} onPress={handleSubmit} disabled={loading || !units} />
+      <Text style={styles.label}>Units: {units}</Text>
+      <Slider
+        style={{ width: '100%', height: 40 }}
+        minimumValue={0}
+        maximumValue={25}
+        step={0.5}
+        value={units}
+        onValueChange={setUnits}
+        minimumTrackTintColor="#1fb28a"
+        maximumTrackTintColor="#d3d3d3"
+        thumbTintColor="#1fb28a"
+      />
+      <View style={styles.switchRow}>
+        <Text style={styles.label}>Fast-acting</Text>
+        <Switch value={isFast} onValueChange={setIsFast} />
+        <Text style={styles.label}>Slow-acting</Text>
+      </View>
+      <Text style={styles.label}>Time</Text>
+      <TimePicker value={timestamp} onChange={setTimestamp} mode="time" />
+      <Button title={loading ? 'Saving...' : 'Save'} onPress={handleSubmit} disabled={loading || units === 0} />
       <Button title="Cancel" onPress={onCancel} color="#888" />
     </View>
   );
@@ -36,5 +61,6 @@ export default function InsulinLogForm({ onSuccess, onCancel }: Props) {
 
 const styles = StyleSheet.create({
   form: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 10, marginBottom: 16, fontSize: 16 },
+  label: { fontSize: 16, marginBottom: 8 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
 });

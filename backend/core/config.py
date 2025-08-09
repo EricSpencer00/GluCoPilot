@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # Database
-    DATABASE_URL: str = "sqlite:///./glucopilot.db"
+    DATABASE_URL: str = "sqlite:///backend/glucopilot.db"
     DATABASE_ECHO: bool = False
     
     # Security
