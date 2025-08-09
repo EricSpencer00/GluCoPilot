@@ -1188,47 +1188,32 @@ to improve glucose management. For each recommendation:
     async def _generate_ai_recommendations(self, context: str) -> str:
         """Generate recommendations using AI model or Inference API"""
         prompt = f"{context}\n\nRecommendations:"
+        json_instructions = (
+            "Please provide exactly 5 personalized, actionable recommendations as a JSON array. "
+            "Each item must have: title (string), description (string), category (one of ['insulin','nutrition','activity','timing','monitoring','sleep','stress','general']), "
+            "priority ('high'|'medium'|'low'), action (string), and timing (string or null). "
+            "Respond ONLY with a valid JSON array, no extra text."
+        )
         try:
             if settings.MODEL_NAME == "openai/gpt-oss-20b":
-                # Use OpenAI-compatible API via Hugging Face router (Fireworks backend)
                 import os
                 from openai import OpenAI
-                
-                # Enhance the prompt with more specific instructions
-                enhanced_prompt = f"""
-{prompt}
-
-Please provide personalized, actionable recommendations based on the above data.
-For each recommendation:
-1. Title: A clear, concise title summarizing the recommendation (one sentence)
-2. Description: Detailed explanation with specific actions (2-3 sentences)
-3. Category: One of [insulin, nutrition, activity, monitoring, sleep, stress, general]
-4. Priority: [high, medium, low] based on potential impact
-5. Action: A specific, measurable action the user can take
-6. Timing: When this action should be taken (e.g., "before meals", "in the morning")
-
-Focus on personalized insights that directly address patterns in the data.
-"""
+                enhanced_prompt = f"{prompt}\n\n{json_instructions}"
                 try:
                     client = OpenAI(
                         base_url="https://router.huggingface.co/v1",
                         api_key=os.environ["HF_TOKEN"],
                     )
-                    
-                    # Add system message for better control
                     messages = [
-                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data."},
+                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data. Output only valid JSON."},
                         {"role": "user", "content": enhanced_prompt}
                     ]
-                    
-                    # Add parameters for better output
                     completion = client.chat.completions.create(
                         model="openai/gpt-oss-20b:fireworks-ai",
                         messages=messages,
                         temperature=0.7,
                         max_tokens=1024,
                     )
-                    
                     if completion.choices:
                         logger.info("Successfully generated AI recommendations")
                         return completion.choices[0].message.content.strip()
@@ -1241,17 +1226,15 @@ Focus on personalized insights that directly address patterns in the data.
             else:
                 # Use local/transformers pipeline
                 response = self.generator(
-                    prompt,
-                    max_new_tokens=256,
+                    f"{prompt}\n\n{json_instructions}",
+                    max_new_tokens=512,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.generator.tokenizer.eos_token_id
                 )
                 if isinstance(response, list) and len(response) > 0:
                     generated_text = response[0]['generated_text']
-                    recommendations_start = generated_text.find("Recommendations:")
-                    if recommendations_start != -1:
-                        return generated_text[recommendations_start + len("Recommendations:"):].strip()
+                    return generated_text.strip()
                 return response if isinstance(response, str) else ""
         except Exception as e:
             logger.error(f"Error generating AI recommendations: {str(e)}")
@@ -1287,46 +1270,91 @@ Priority: medium
 """
     
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
-        """Process AI-generated text into structured recommendations"""
+        """Process AI-generated text into structured recommendations, prefer JSON if possible. If markdown-style, split and extract fields."""
+        import json, re
         recommendations = []
-        
-        # Split by numbered points
+        # Try JSON parsing first
+        try:
+            parsed = json.loads(ai_text)
+            if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+                for item in parsed:
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': 0.8,
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': {
+                            'generated_at': datetime.utcnow().isoformat(),
+                            'ai_model': self.model_name
+                        }
+                    }
+                    recommendations.append(rec)
+                logger.info(f"Processed {len(recommendations)} recommendations from JSON output")
+                return recommendations[:5]
+        except Exception as e:
+            logger.warning(f"AI output was not valid JSON, falling back to text parsing: {e}")
+
+        # If the text is a single markdown-style string, split and extract fields
+        # Split on --- or numbered recommendations
+        items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
+        for item in items:
+            if not item.strip():
+                continue
+            # Extract fields using regex
+            title = re.search(r'\*\*\d+\. Title:\*\*\s*(.*)', item)
+            description = re.search(r'\*\*Description:\*\*\s*([\s\S]*?)\n\*\*Category:', item)
+            category = re.search(r'\*\*Category:\*\*\s*(.*)', item)
+            priority = re.search(r'\*\*Priority:\*\*\s*(.*)', item)
+            action = re.search(r'\*\*Action:\*\*\s*(.*)', item)
+            timing = re.search(r'\*\*Timing:\*\*\s*(.*)', item)
+            rec = {
+                'title': title.group(1).strip() if title else '',
+                'description': description.group(1).strip() if description else '',
+                'category': category.group(1).strip().lower() if category else 'general',
+                'priority': priority.group(1).strip().lower() if priority else 'medium',
+                'confidence': 0.8,
+                'action': action.group(1).strip() if action else '',
+                'timing': timing.group(1).strip() if timing else '',
+                'context': {
+                    'generated_at': datetime.utcnow().isoformat(),
+                    'ai_model': self.model_name
+                }
+            }
+            # Only add if at least a title or description is present
+            if rec['title'] or rec['description']:
+                recommendations.append(rec)
+        if recommendations:
+            logger.info(f"Processed {len(recommendations)} recommendations from markdown-style content")
+            return recommendations[:5]
+
+        # Fallback: original text parsing logic (numbered points)
         lines = ai_text.strip().split('\n')
         current_rec = ""
-        
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
-            # Check if this is a new numbered recommendation
             if line[0].isdigit() and ('.' in line[:5] or ')' in line[:5]):
-                # Process previous recommendation
                 if current_rec:
                     rec_data = self._parse_recommendation(current_rec, user_id)
                     if rec_data:
                         recommendations.append(rec_data)
-                
                 current_rec = line
             else:
-                # Use newline to preserve structure for parsing
                 current_rec += "\n" + line
-        
-        # Process the last recommendation
         if current_rec:
             rec_data = self._parse_recommendation(current_rec, user_id)
             if rec_data:
                 recommendations.append(rec_data)
-        
-        # If no recommendations were successfully parsed, use fallback
         if not recommendations:
             logger.warning("Failed to parse recommendations from AI output, using fallback")
             fallback_text = self._fallback_recommendations()
-            # Recursive call with fallback text
             return self._process_recommendations(fallback_text, user_id)
-            
-        logger.info(f"Successfully processed {len(recommendations)} recommendations")
-        return recommendations[:5]  # Limit to 5 recommendations
+        logger.info(f"Successfully processed {len(recommendations)} recommendations (text fallback)")
+        return recommendations[:5]
     
     def _parse_recommendation(self, rec_text: str, user_id: int) -> Optional[Dict[str, Any]]:
         """Parse a single recommendation text into structured data"""

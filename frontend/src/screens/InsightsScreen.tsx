@@ -19,18 +19,23 @@ export const InsightsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
             <Text style={{ marginTop: 8 }}>No recommendations available.</Text>
           ) : (
             recommendations.map((rec: any, idx: number) => (
-              <Card key={rec.id || idx} style={{ marginVertical: 8 }}>
+              <Card key={idx} style={{ marginVertical: 8 }}>
                 <Card.Content>
-                  <Text variant="titleMedium" style={{ marginBottom: 4 }}>{rec.title || rec.recommendation_type}</Text>
-                  <Text variant="bodyLarge">{rec.content}</Text>
+                  <Text variant="titleMedium" style={{ marginBottom: 4 }}>{rec.title}</Text>
+                  {rec.description ? (
+                    <Text variant="bodyLarge" style={{ marginBottom: 4 }}>{rec.description}</Text>
+                  ) : null}
+                  {rec.action ? (
+                    <Text variant="bodyMedium" style={{ marginBottom: 2 }}>Action: {rec.action}</Text>
+                  ) : null}
+                  {rec.timing ? (
+                    <Text variant="bodyMedium" style={{ marginBottom: 2 }}>Timing: {rec.timing}</Text>
+                  ) : null}
                   <Text variant="bodySmall" style={{ marginTop: 4, color: '#888' }}>
-                    Category: {rec.category || rec.recommendation_type} | Priority: {rec.priority || 'N/A'}
+                    Category: {rec.category} | Priority: {rec.priority}
                   </Text>
                   <Text variant="bodySmall" style={{ color: '#888' }}>
-                    Confidence: {rec.confidence_score ? (rec.confidence_score * 100).toFixed(0) + '%' : 'N/A'}
-                  </Text>
-                  <Text variant="bodySmall" style={{ color: '#888' }}>
-                    {new Date(rec.timestamp).toLocaleString()}
+                    Confidence: {rec.confidence ? (rec.confidence * 100).toFixed(0) + '%' : 'N/A'}
                   </Text>
                 </Card.Content>
               </Card>
