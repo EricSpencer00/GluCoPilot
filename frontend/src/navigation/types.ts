@@ -4,9 +4,12 @@ export type AuthStackParamList = {
   ForgotPassword: undefined;
 };
 
+
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   DexcomLogin: undefined;
+  Settings: undefined;
+  AiFeedback: undefined;
 };
 
 export type MainTabParamList = {
