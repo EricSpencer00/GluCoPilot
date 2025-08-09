@@ -9,7 +9,7 @@ from datetime import datetime
 from models.user import User
 from api.routers.auth import get_current_user
 
-router = APIRouter(prefix="/food", tags=["food"])
+router = APIRouter(tags=["food"])
 
 @router.post("/log", response_model=FoodOut, status_code=status.HTTP_201_CREATED)
 def log_food(
