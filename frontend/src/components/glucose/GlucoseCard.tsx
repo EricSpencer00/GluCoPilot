@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Card, Text, ActivityIndicator, Button, IconButton } from 'react-native-paper';
+import { Card, Text, ActivityIndicator, Button } from 'react-native-paper';
 
 // Interfaces
 interface GlucoseReading {
@@ -59,16 +59,20 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
       <Card.Content style={styles.content}>
         <View style={styles.headerRow}>
           <Text variant="titleMedium" style={styles.title}>Current Glucose</Text>
-          <IconButton
-            icon="sync"
-            size={20}
+          <Button
+            mode="text"
             onPress={onSync}
             disabled={isLoading}
-          />
+          >
+            Sync
+          </Button>
         </View>
         
         {isLoading ? (
-          <ActivityIndicator size="large" style={styles.loader} />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" style={styles.loader} />
+            <Text>Loading data...</Text>
+          </View>
         ) : reading ? (
           <View style={styles.readingContainer}>
             <View style={styles.valueContainer}>
@@ -121,8 +125,12 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: 'bold',
   },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
   loader: {
-    marginVertical: 24,
+    marginVertical: 12,
   },
   readingContainer: {
     alignItems: 'center',

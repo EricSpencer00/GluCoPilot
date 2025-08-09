@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from contextlib import asynccontextmanager
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 # Only import routers that exist
 from api.routers import auth, glucose
+from api.routers.recommendations import router as recommendations
 from core.database import get_db, create_tables
 from core.config import settings
 # Background tasks service will be implemented later
@@ -61,12 +62,24 @@ security = HTTPBearer()
 # Include routers
 app.include_router(auth, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(glucose, prefix="/api/v1/glucose", tags=["Glucose"])
+app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
 # Include other routers when they become available
 # app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 # app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 # app.include_router(analysis, prefix="/api/v1/analysis", tags=["Analysis"])
 # app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
 # app.include_router(health, prefix="/api/v1/health", tags=["Health"])
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Incoming request: {request.method} {request.url}")
+    logger.info(f"Headers: {request.headers}")
+    logger.info(f"Client: {request.client}")
+
+    response = await call_next(request)
+
+    logger.info(f"Response status: {response.status_code}")
+    return response
 
 @app.get("/")
 async def root():

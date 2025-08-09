@@ -23,7 +23,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
         <View style={styles.buttonsContainer}>
           <Button 
             mode="contained"
-            icon="food-apple"
             onPress={onLogFood}
             style={[styles.button, styles.foodButton]}
             contentStyle={styles.buttonContent}
@@ -33,7 +32,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           
           <Button 
             mode="contained"
-            icon="needle"
             onPress={onLogInsulin}
             style={[styles.button, styles.insulinButton]}
             contentStyle={styles.buttonContent}
@@ -43,7 +41,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           
           <Button 
             mode="contained"
-            icon="chart-line"
             onPress={onViewTrends}
             style={[styles.button, styles.trendsButton]}
             contentStyle={styles.buttonContent}

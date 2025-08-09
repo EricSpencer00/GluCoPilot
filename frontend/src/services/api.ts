@@ -1,13 +1,11 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Get the API base URL from Expo constants
-const API_BASE_URL = Constants.expoConfig?.extra?.API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api/v1`, // Ensure the correct API path
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -25,17 +23,46 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // Log requests in development
+    if (ENABLE_API_LOGS) {
+      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        headers: config.headers,
+        data: config.data,
+        params: config.params
+      });
+    }
+    
     return config;
   },
   (error) => {
+    if (ENABLE_API_LOGS) {
+      console.error('API Request Error:', error);
+    }
     return Promise.reject(error);
   }
 );
 
 // Add response interceptor to handle common errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log successful responses in development
+    if (ENABLE_API_LOGS) {
+      console.log(`API Response: ${response.status} ${response.config.url}`, {
+        data: response.data
+      });
+    }
+    return response;
+  },
   async (error) => {
+    if (ENABLE_API_LOGS) {
+      console.error('API Response Error:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+    }
+    
     const originalRequest = error.config;
     
     // Handle 401 Unauthorized errors

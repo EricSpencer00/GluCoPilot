@@ -11,28 +11,65 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import DexcomLoginScreen from '../screens/DexcomLoginScreen';
+import ProfileScreen from '../screens/ProfileScreen'; // Fixed import
 
-// Simple placeholder screens for tabs
-import { View, Text } from 'react-native';
+// Simple debug screens for tabs that aren't fully implemented yet
+import { View, Text, ScrollView, StyleSheet, Button } from 'react-native';
+import { Card } from 'react-native-paper';
+import { API_BASE_URL } from '../config';
+
 const TrendsScreen = () => (
-  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-    <Text>Trends</Text>
-  </View>
+  <ScrollView style={styles.container}>
+    <Card style={styles.card}>
+      <Card.Title title="Trends Debug View" />
+      <Card.Content>
+        <Text style={styles.infoText}>This screen is a placeholder.</Text>
+        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
+        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
+      </Card.Content>
+    </Card>
+  </ScrollView>
 );
+
 const LogScreen = () => (
-  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-    <Text>Log</Text>
-  </View>
+  <ScrollView style={styles.container}>
+    <Card style={styles.card}>
+      <Card.Title title="Log Debug View" />
+      <Card.Content>
+        <Text style={styles.infoText}>This screen is a placeholder.</Text>
+        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
+        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
+        
+        <View style={styles.buttonContainer}>
+          <Button 
+            title="Log Food (Debug)" 
+            onPress={() => console.log('Log Food pressed')} 
+          />
+          <Button 
+            title="Log Insulin (Debug)" 
+            onPress={() => console.log('Log Insulin pressed')} 
+          />
+          <Button 
+            title="Log Exercise (Debug)" 
+            onPress={() => console.log('Log Exercise pressed')} 
+          />
+        </View>
+      </Card.Content>
+    </Card>
+  </ScrollView>
 );
+
 const InsightsScreen = () => (
-  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-    <Text>Insights</Text>
-  </View>
-);
-const ProfileScreen = () => (
-  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-    <Text>Profile</Text>
-  </View>
+  <ScrollView style={styles.container}>
+    <Card style={styles.card}>
+      <Card.Title title="Insights Debug View" />
+      <Card.Content>
+        <Text style={styles.infoText}>This screen is a placeholder.</Text>
+        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
+        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
+      </Card.Content>
+    </Card>
+  </ScrollView>
 );
 
 // Import types
@@ -105,3 +142,24 @@ export const AppNavigator = () => {
 
   return <>{user ? <MainTabNavigator /> : <AuthStackNavigator />}</>;
 };
+
+// Styles
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+  },
+  card: {
+    marginVertical: 8,
+    borderRadius: 8,
+  },
+  infoText: {
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  buttonContainer: {
+    marginTop: 16,
+    gap: 12,
+  }
+});
