@@ -6,6 +6,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList, ProfileStackParamList } from '../navigation/types';
+import { logout } from '../store/slices/authSlice';
+import { useAppDispatch } from '../hooks/useAppDispatch';
 
 type ProfileScreenNavigationProp = CompositeNavigationProp<
   StackNavigationProp<AuthStackParamList, 'Login'>,
@@ -14,6 +16,7 @@ type ProfileScreenNavigationProp = CompositeNavigationProp<
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
 
   const handleDexcomIntegration = () => {
@@ -22,10 +25,7 @@ const ProfileScreen: React.FC = () => {
 
   const handleLogout = () => {
     console.log('User logged out');
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Login' }],
-    });
+    dispatch(logout());
   };
 
   if (!user) {
