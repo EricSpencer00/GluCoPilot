@@ -27,7 +27,7 @@ const getApiBaseUrl = () => {
 const CONFIG = {
   development: {
     API_BASE_URL: getApiBaseUrl(),
-    ENABLE_API_LOGS: true, // Enable API logging for debugging
+    ENABLE_API_LOGS: false, // Disable API logging by default
   },
   production: {
     API_BASE_URL: 'https://api.glucopilot.com', // Updated production URL
