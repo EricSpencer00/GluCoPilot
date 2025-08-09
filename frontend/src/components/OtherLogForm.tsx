@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, StyleSheet, Alert, Text, Picker } from 'react-native';
+import { View, TextInput, Button, StyleSheet, Alert, Text } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import TimePicker from './common/TimePicker';
 
 
