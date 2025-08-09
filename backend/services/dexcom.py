@@ -58,9 +58,8 @@ class DexcomService:
             end_time = datetime.utcnow()
             
             # Fetch glucose readings from Dexcom
-            bg_readings = dexcom.get_glucose_readings(
-                minutes=(end_time - start_time).total_seconds() / 60
-            )
+            minutes = int(max(1, min(1440, (end_time - start_time).total_seconds() / 60)))
+            bg_readings = dexcom.get_glucose_readings(minutes=minutes)
             
             new_readings = []
             
