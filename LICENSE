@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2025 Eric Spencer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Important Disclaimer
+
+This software is designed for personal health management and educational purposes only. 
+It is NOT intended for medical diagnosis, treatment, or to replace professional medical advice.
+
+### Health Data Disclaimer
+
+- Always consult with qualified healthcare professionals for medical decisions
+- This application provides insights based on patterns in your data, not medical advice
+- Do not make medication or treatment changes based solely on app recommendations
+- In case of medical emergencies, contact emergency services immediately
+- Verify all glucose readings with approved medical devices when making treatment decisions
+
+### Data Privacy
+
+- All health data is stored locally on your device
+- No health information is transmitted to external servers without explicit consent
+- Users are responsible for maintaining the security of their device and data
+- Regular backups are recommended to prevent data loss
+
+### Regulatory Compliance
+
+This software has not been evaluated by the FDA or other regulatory bodies for medical use.
+It is provided as a personal health management tool under the MIT License terms above.
