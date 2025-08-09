@@ -1,5 +1,6 @@
 import os
 import asyncio
+
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import json
@@ -9,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 import requests
 import numpy as np
 from sqlalchemy.orm import Session
+import random
+import math
 
 from core.config import settings
 from models.user import User
@@ -1294,6 +1297,27 @@ Priority: medium
                 return recommendations[:5]
         except Exception as e:
             logger.warning(f"AI output was not valid JSON, falling back to text parsing: {e}")
+            # Try to extract all JSON-like objects from the text (partial/truncated JSON array)
+            json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
+            for obj_str in json_objects:
+                try:
+                    item = json.loads(obj_str)
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': 0.8,
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item)
+                    }
+                    recommendations.append(rec)
+                except Exception:
+                    continue
+            if recommendations:
+                logger.info(f"Processed {len(recommendations)} recommendations from partial JSON objects in fallback")
+                return recommendations[:5]
 
         # Robustly extract multiple recommendations from markdown, numbered, or mixed text
         # Split on numbered points (e.g., 1. Title: ... or 1) Title: ...)
@@ -1389,11 +1413,11 @@ Priority: medium
         logger.info(f"Successfully processed {len(recommendations)} recommendations (text fallback)")
         return recommendations[:5]
 
+
     def _attach_examples_and_graph(self, rec: dict) -> dict:
         """Attach example events and graph data to the recommendation context for drill-down UI."""
         # This is a stub. In production, this would use the analyzed patterns and user data to find relevant events.
         # For now, we simulate with a placeholder example and graph data.
-        import random
         now = datetime.utcnow()
         # Example event: a glucose spike, meal, or insulin event
         example_event = {
@@ -1406,7 +1430,7 @@ Priority: medium
         graph_data = [
             {
                 'timestamp': (now - timedelta(hours=12) + timedelta(minutes=15*i)).isoformat(),
-                'value': 100 + 40 * random.sin(i/4.0) + random.randint(-10, 10)
+                'value': 100 + 40 * math.sin(i/4.0) + random.randint(-10, 10)
             }
             for i in range(48)
         ]
