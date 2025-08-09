@@ -4,8 +4,9 @@ import Slider from '@react-native-community/slider';
 import api from '../services/api';
 import TimePicker from './common/TimePicker';
 
+
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (log: any) => void;
   onCancel: () => void;
 }
 
@@ -18,13 +19,13 @@ export default function InsulinLogForm({ onSuccess, onCancel }: Props) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await api.post('/api/v1/insulin/log', {
+      const res = await api.post('/api/v1/insulin/log', {
         units,
         insulin_type: isFast ? 'fast' : 'slow',
         timestamp: timestamp.toISOString(),
       });
       setLoading(false);
-      onSuccess();
+      onSuccess(res.data);
     } catch (error: any) {
       setLoading(false);
       Alert.alert('Error', error?.response?.data?.detail || 'Failed to save insulin log.');

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { View, TextInput, Button, StyleSheet, Alert, Text, Picker } from 'react-native';
 import TimePicker from './common/TimePicker';
 
+
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (log: any) => void;
   onCancel: () => void;
 }
 
@@ -19,7 +20,13 @@ export default function OtherLogForm({ onSuccess, onCancel }: Props) {
     // TODO: Implement API call for 'other' log
     setTimeout(() => {
       setLoading(false);
-      onSuccess();
+      onSuccess({
+        id: Date.now(),
+        category,
+        duration,
+        notes: note,
+        timestamp: timestamp.toISOString(),
+      });
     }, 500);
   };
 
