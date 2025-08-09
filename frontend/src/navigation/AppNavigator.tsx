@@ -15,6 +15,8 @@ import { RegisterScreen } from '../screens/RegisterScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import DexcomLoginScreen from '../screens/DexcomLoginScreen';
 import ProfileScreen from '../screens/ProfileScreen'; // Fixed import
+import SettingsScreen from '../screens/SettingsScreen';
+import AiFeedbackScreen from '../screens/AiFeedbackScreen';
 
 // Simple debug screens for tabs that aren't fully implemented yet
 import { View, Text, ScrollView, StyleSheet, Button } from 'react-native';
@@ -43,6 +45,16 @@ const ProfileStackNavigator = () => {
         name="DexcomLogin" 
         component={DexcomLoginScreen} 
         options={{ title: "Dexcom Integration" }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
+      />
+      <Stack.Screen
+        name="AiFeedback"
+        component={AiFeedbackScreen}
+        options={{ title: 'AI Feedback' }}
       />
     </Stack.Navigator>
   );
