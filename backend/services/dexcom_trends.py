@@ -2,11 +2,27 @@ import statistics
 from datetime import datetime, timedelta
 from pydexcom import Dexcom
 
-def get_long_term_trends(dexcom, days=30, low_mgdl=70, high_mgdl=180):
-    # Fetch up to 30 days of readings (max_count is 288 per day)
-    readings = dexcom.get_glucose_readings(minutes=days*1440, max_count=days*288)
+def get_long_term_trends(dexcom, days=30, low_mgdl=70, high_mgdl=180, start_date=None, end_date=None):
+
+    # Dexcom API only allows 1-1440 minutes (1 day). Clamp to 1440.
+    minutes = min(max(1, days * 1440), 1440)
+    readings = dexcom.get_glucose_readings(minutes=minutes, max_count=288)
     if not readings:
         return {}
+
+    # Filter by date range if provided
+    if start_date or end_date:
+        filtered = []
+        for r in readings:
+            dt = r.datetime
+            if start_date and dt < start_date:
+                continue
+            if end_date and dt > end_date:
+                continue
+            filtered.append(r)
+        readings = filtered
+        if not readings:
+            return {}
 
     # Organize readings by week
     readings_by_week = {}
