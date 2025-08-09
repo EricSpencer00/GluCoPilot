@@ -290,32 +290,95 @@ class AIInsightsEngine:
             age = (datetime.now() - user.date_of_birth).days // 365
         else:
             age = 'Unknown'
+            
+        # Calculate time periods for different analyses
+        now = datetime.utcnow()
+        past_24h = now - timedelta(hours=24)
+        
+        # Get recent data within last 24 hours
+        recent_glucose = [g for g in glucose_data if g.timestamp >= past_24h]
+        recent_insulin = [i for i in insulin_data if i.timestamp >= past_24h]
+        recent_food = [f for f in food_data if f.timestamp >= past_24h]
+        
+        # Calculate correlation between insulin and glucose if possible
+        insulin_timing_issues = False
+        if recent_insulin and recent_glucose:
+            # Check for glucose rises shortly after insulin (possible timing issues)
+            for insulin_dose in recent_insulin:
+                post_insulin_glucose = [
+                    g for g in recent_glucose 
+                    if insulin_dose.timestamp < g.timestamp < insulin_dose.timestamp + timedelta(hours=2)
+                ]
+                if post_insulin_glucose and len(post_insulin_glucose) >= 3:
+                    if post_insulin_glucose[0].value < max(g.value for g in post_insulin_glucose[:3]):
+                        insulin_timing_issues = True
+                        break
+                        
+        # Check for post-meal spikes
+        meal_spike_issues = False
+        if recent_food and recent_glucose:
+            for meal in recent_food:
+                post_meal_glucose = [
+                    g for g in recent_glucose 
+                    if meal.timestamp < g.timestamp < meal.timestamp + timedelta(hours=3)
+                ]
+                if post_meal_glucose and len(post_meal_glucose) >= 2:
+                    max_rise = max(g.value for g in post_meal_glucose) - min(g.value for g in post_meal_glucose)
+                    if max_rise > 70:  # Significant spike of 70+ mg/dL
+                        meal_spike_issues = True
+                        break
+        
         context = f"""
 Patient Profile:
 - Age: {age}
-- Target Range: {getattr(user, 'target_glucose_min', 'Unknown')}-{getattr(user, 'target_glucose_max', 'Unknown')} mg/dL
+- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
 - Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
 - Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
 
-Current Glucose Patterns:
+Current Glucose Patterns (24-hour analysis):
 - Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
 - Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
 - Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-
-Recent Data Summary:
-- Glucose readings: {len(glucose_data)} in last 24 hours
-- Insulin doses: {len(insulin_data)} in last 24 hours
-- Meals logged: {len(food_data)} in last 24 hours
-
-Key Observations:
-- Dawn phenomenon present: {patterns['glucose_patterns'].get('dawn_phenomenon', False)}
 - Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
 - Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
 
-Please provide 3-5 specific, actionable recommendations to improve glucose control based on this data.
-Focus on timing, dosing, and lifestyle modifications. Keep recommendations concise and practical.
+Recent Data Analysis:
+- Glucose readings: {len(recent_glucose)} in last 24 hours
+- Insulin doses: {len(recent_insulin)} in last 24 hours
+- Meals logged: {len(recent_food)} in last 24 hours
+- Post-meal spike issues detected: {meal_spike_issues}
+- Insulin timing issues detected: {insulin_timing_issues}
+- Dawn phenomenon present: {patterns['glucose_patterns'].get('dawn_phenomenon', False)}
+
+Daily Patterns:
+- Morning (6am-12pm) avg glucose: {self._calculate_time_range_average(recent_glucose, 6, 12):.1f} mg/dL
+- Afternoon (12pm-6pm) avg glucose: {self._calculate_time_range_average(recent_glucose, 12, 18):.1f} mg/dL  
+- Evening (6pm-12am) avg glucose: {self._calculate_time_range_average(recent_glucose, 18, 24):.1f} mg/dL
+- Overnight (12am-6am) avg glucose: {self._calculate_time_range_average(recent_glucose, 0, 6):.1f} mg/dL
+
+Based on this comprehensive 24-hour analysis, please provide 5 specific, actionable recommendations 
+to improve glucose management. For each recommendation:
+1. Provide a clear, concise title (one short sentence)
+2. Include detailed explanation with specific actions (2-3 sentences)
+3. Categorize as: insulin, nutrition, activity, timing, monitoring, or general
+4. Indicate priority as: high, medium, or low
 """
         return context
+        
+    def _calculate_time_range_average(self, glucose_data: List[GlucoseReading], start_hour: int, end_hour: int) -> float:
+        """Calculate average glucose for a specific time range within a day"""
+        if not glucose_data:
+            return 0
+            
+        time_range_readings = [
+            reading.value for reading in glucose_data
+            if start_hour <= reading.timestamp.hour < end_hour
+        ]
+        
+        if not time_range_readings:
+            return 0
+            
+        return sum(time_range_readings) / len(time_range_readings)
     
     async def _generate_ai_recommendations(self, context: str) -> str:
         """Generate recommendations using AI model or Inference API"""
@@ -362,11 +425,30 @@ Focus on timing, dosing, and lifestyle modifications. Keep recommendations conci
     def _fallback_recommendations(self) -> str:
         """Provide fallback recommendations when AI generation fails"""
         return """
-1. Monitor glucose trends closely and look for patterns related to meals and insulin timing.
-2. Consider adjusting insulin-to-carb ratios if post-meal glucose spikes are frequent.
-3. Maintain consistent meal timing and carbohydrate intake to improve glucose stability.
-4. Review correction factor if high glucose readings persist despite correction doses.
-5. Consult with healthcare provider for personalized adjustment recommendations.
+1. Monitor post-meal glucose trends to identify patterns
+Title: Track glucose patterns after meals
+Category: monitoring
+Priority: medium
+
+2. Adjust insulin timing based on food composition
+Title: Consider pre-bolusing insulin before high-carb meals
+Category: insulin
+Priority: medium
+
+3. Be consistent with meal carbohydrate content
+Title: Maintain consistent carbohydrate intake between meals
+Category: nutrition
+Priority: low
+
+4. Review insulin correction factors with healthcare provider
+Title: Review insulin sensitivity factors for more accurate corrections
+Category: insulin
+Priority: low
+
+5. Balance physical activity with appropriate glucose management
+Title: Balance exercise with reduced insulin or added carbs
+Category: exercise
+Priority: medium
 """
     
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:

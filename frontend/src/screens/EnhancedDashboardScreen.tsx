@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
-import { Card, Text, Button, FAB, Portal, Modal, Snackbar } from 'react-native-paper';
+import { Card, Text, Button, FAB, Portal, Snackbar } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { RootState } from '../store/store';
 import { GlucoseCard } from '../components/glucose/GlucoseCard';
-import { TrendChart } from '../components/charts/TrendChart';
 import { DexcomStyleChart } from '../components/charts/DexcomStyleChart';
 import { TimeInRangeCard } from '../components/glucose/TimeInRangeCard';
-import { RecommendationCard } from '../components/ai/RecommendationCard';
 import { EnhancedRecommendationCard } from '../components/ai/EnhancedRecommendationCard';
 import { QuickActionsCard } from '../components/common/QuickActionsCard';
 import { fetchGlucoseData, syncDexcomData } from '../store/slices/glucoseSlice';
@@ -20,13 +18,7 @@ interface DashboardScreenProps {
   navigation: any;
 }
 
-export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
-  // Handler for DexcomStyleChart time range changes
-  const handleTimeRangeChange = (range: '1h' | '3h' | '6h' | '24h') => {
-    setTimeRange(range);
-    // Optionally, fetch more data if needed for longer ranges
-    // Example: dispatch(fetchGlucoseData({ hours: ... }) as any);
-  };
+export const EnhancedDashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
   const dispatch = useDispatch();
   const { 
     latestReading, 
@@ -117,6 +109,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     return `${Math.floor(diffHours / 24)}d ago`;
   };
 
+  const handleTimeRangeChange = (range: '1h' | '3h' | '6h' | '24h') => {
+    setTimeRange(range);
+    // If we're switching to a longer time range than we have data for, fetch more data
+    const hoursNeeded = range === '1h' ? 3 : 
+                      range === '3h' ? 6 : 
+                      range === '6h' ? 12 : 24;
+                      
+    if (readings.length < hoursNeeded * 12) { // Assuming readings every 5 mins, 12 per hour
+      dispatch(fetchGlucoseData({ hours: hoursNeeded }) as any);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -145,7 +149,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         {/* Time in Range */}
         <TimeInRangeCard stats={stats} isLoading={glucoseLoading} />
 
-        {/* Trend Chart */}
+        {/* Enhanced Dexcom-style Chart */}
         <Card style={styles.chartCard}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.cardTitle}>
@@ -161,7 +165,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           </Card.Content>
         </Card>
 
-        {/* AI Recommendations */}
+        {/* Enhanced AI Recommendations */}
         {recommendations.length > 0 && (
           <EnhancedRecommendationCard 
             recommendations={recommendations}
