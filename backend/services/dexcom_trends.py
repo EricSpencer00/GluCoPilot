@@ -14,7 +14,7 @@ def get_long_term_trends(dexcom, days=30, low_mgdl=70, high_mgdl=180, start_date
     if start_date or end_date:
         filtered = []
         for r in readings:
-            dt = r.datetime
+            dt = r.time
             if start_date and dt < start_date:
                 continue
             if end_date and dt > end_date:
@@ -27,7 +27,7 @@ def get_long_term_trends(dexcom, days=30, low_mgdl=70, high_mgdl=180, start_date
     # Organize readings by week
     readings_by_week = {}
     for r in readings:
-        week = r.datetime.isocalendar()[1]
+        week = r.time.isocalendar()[1]
         readings_by_week.setdefault(week, []).append(r)
 
     def compute_stats(readings):
