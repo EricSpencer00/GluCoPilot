@@ -1190,24 +1190,54 @@ to improve glucose management. For each recommendation:
         prompt = f"{context}\n\nRecommendations:"
         try:
             if settings.MODEL_NAME == "openai/gpt-oss-20b":
-                # Use Hugging Face Inference API
-                api_url = f"https://api-inference.huggingface.co/models/{settings.MODEL_NAME}"
-                headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_TOKEN}"}
-                payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256, "temperature": 0.7}}
-                response = requests.post(api_url, headers=headers, json=payload, timeout=60)
-                response.raise_for_status()
-                result = response.json()
-                if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
-                    generated_text = result[0]["generated_text"]
-                elif isinstance(result, dict) and "error" in result:
-                    logger.error(f"HF Inference API error: {result['error']}")
+                # Use OpenAI-compatible API via Hugging Face router (Fireworks backend)
+                import os
+                from openai import OpenAI
+                
+                # Enhance the prompt with more specific instructions
+                enhanced_prompt = f"""
+{prompt}
+
+Please provide personalized, actionable recommendations based on the above data.
+For each recommendation:
+1. Title: A clear, concise title summarizing the recommendation (one sentence)
+2. Description: Detailed explanation with specific actions (2-3 sentences)
+3. Category: One of [insulin, nutrition, activity, monitoring, sleep, stress, general]
+4. Priority: [high, medium, low] based on potential impact
+5. Action: A specific, measurable action the user can take
+6. Timing: When this action should be taken (e.g., "before meals", "in the morning")
+
+Focus on personalized insights that directly address patterns in the data.
+"""
+                try:
+                    client = OpenAI(
+                        base_url="https://router.huggingface.co/v1",
+                        api_key=os.environ["HF_TOKEN"],
+                    )
+                    
+                    # Add system message for better control
+                    messages = [
+                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data."},
+                        {"role": "user", "content": enhanced_prompt}
+                    ]
+                    
+                    # Add parameters for better output
+                    completion = client.chat.completions.create(
+                        model="openai/gpt-oss-20b:fireworks-ai",
+                        messages=messages,
+                        temperature=0.7,
+                        max_tokens=1024,
+                    )
+                    
+                    if completion.choices:
+                        logger.info("Successfully generated AI recommendations")
+                        return completion.choices[0].message.content.strip()
+                    else:
+                        logger.warning("No choices returned from model API")
+                        return self._fallback_recommendations()
+                except Exception as e:
+                    logger.error(f"Error with Fireworks API: {str(e)}")
                     return self._fallback_recommendations()
-                else:
-                    generated_text = str(result)
-                recommendations_start = generated_text.find("Recommendations:")
-                if recommendations_start != -1:
-                    return generated_text[recommendations_start + len("Recommendations:"):].strip()
-                return generated_text
             else:
                 # Use local/transformers pipeline
                 response = self.generator(
@@ -1279,7 +1309,8 @@ Priority: medium
                 
                 current_rec = line
             else:
-                current_rec += " " + line
+                # Use newline to preserve structure for parsing
+                current_rec += "\n" + line
         
         # Process the last recommendation
         if current_rec:
@@ -1287,6 +1318,14 @@ Priority: medium
             if rec_data:
                 recommendations.append(rec_data)
         
+        # If no recommendations were successfully parsed, use fallback
+        if not recommendations:
+            logger.warning("Failed to parse recommendations from AI output, using fallback")
+            fallback_text = self._fallback_recommendations()
+            # Recursive call with fallback text
+            return self._process_recommendations(fallback_text, user_id)
+            
+        logger.info(f"Successfully processed {len(recommendations)} recommendations")
         return recommendations[:5]  # Limit to 5 recommendations
     
     def _parse_recommendation(self, rec_text: str, user_id: int) -> Optional[Dict[str, Any]]:
@@ -1299,24 +1338,58 @@ Priority: medium
         if text[0].isdigit():
             text = text[text.find('.') + 1:].strip() if '.' in text else text[1:].strip()
         
-        # Determine category and priority based on keywords
-        category = self._categorize_recommendation(text)
-        priority = self._prioritize_recommendation(text)
-        
-        # Extract title (first sentence or up to 60 chars)
-        title = text.split('.')[0][:60] + ('...' if len(text.split('.')[0]) > 60 else '')
-        
-        return {
-            'title': title,
+        lines = text.split('\n')
+        result = {
             'description': text,
-            'category': category,
-            'priority': priority,
-            'confidence': 0.8,  # Default confidence score
+            'title': '',
+            'category': 'general',
+            'priority': 'medium',
+            'confidence': 0.8,
+            'action': '',
             'context': {
                 'generated_at': datetime.utcnow().isoformat(),
                 'ai_model': self.model_name
             }
         }
+        
+        # Try to extract structured information
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Look for labeled fields
+            if line.lower().startswith('title:'):
+                result['title'] = line[len('title:'):].strip()
+            elif line.lower().startswith('category:'):
+                category = line[len('category:'):].strip().lower()
+                # Normalize category values
+                if category in ['insulin', 'nutrition', 'activity', 'monitoring', 'sleep', 'stress', 'general']:
+                    result['category'] = category
+                else:
+                    result['category'] = self._categorize_recommendation(category)
+            elif line.lower().startswith('priority:'):
+                priority = line[len('priority:'):].strip().lower()
+                if priority in ['high', 'medium', 'low']:
+                    result['priority'] = priority
+                else:
+                    result['priority'] = self._prioritize_recommendation(priority)
+            elif line.lower().startswith('action:'):
+                result['action'] = line[len('action:'):].strip()
+            elif line.lower().startswith('timing:'):
+                result['timing'] = line[len('timing:'):].strip()
+        
+        # If no explicit title was found, extract it from the first line
+        if not result['title'] and lines:
+            result['title'] = lines[0].split('.')[0][:60] + ('...' if len(lines[0].split('.')[0]) > 60 else '')
+        
+        # If we couldn't extract much structure, fall back to our categorical methods
+        if result['category'] == 'general' and not any(k in result for k in ['action', 'timing']):
+            result['category'] = self._categorize_recommendation(text)
+            result['priority'] = self._prioritize_recommendation(text)
+            
+        logger.debug(f"Parsed recommendation: {result['title']}")
+        return result
     
     def _categorize_recommendation(self, text: str) -> str:
         """Categorize recommendation based on content"""
