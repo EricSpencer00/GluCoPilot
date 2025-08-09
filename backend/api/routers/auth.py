@@ -105,33 +105,47 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
     """Get current user profile"""
     return current_user
 
+
+from pydantic import BaseModel
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    refresh_token: str,
+    body: RefreshRequest,
     db: Session = Depends(get_db)
 ):
     """Refresh access token using refresh token"""
     from services.auth import verify_token
+    import logging
+    refresh_token = body.refresh_token
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid refresh token",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        logging.info(f"Refresh attempt with token: {refresh_token}")
         payload = verify_token(refresh_token, credentials_exception)
         username = payload.username
         user = db.query(User).filter(User.username == username).first()
+        if not user:
+            logging.warning(f"No user found for username: {username}")
         if not user or user.refresh_token != refresh_token:
+            logging.warning(f"Refresh token mismatch for user {username if user else 'unknown'}")
             raise credentials_exception
         # Issue new access token
         access_token = create_access_token(data={"sub": user.username})
+        logging.info(f"Refresh successful for user {username}")
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "expires_in": 1800
         }
-    except Exception:
+    except Exception as e:
+        logging.error(f"Refresh failed: {e}")
         raise credentials_exception
 
 @router.post("/connect-dexcom", response_model=DexcomResponse)
