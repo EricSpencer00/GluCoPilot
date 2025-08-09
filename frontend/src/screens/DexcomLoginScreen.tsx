@@ -2,15 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
 import { loginToDexcom, clearError } from '../store/slices/dexcomSlice';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppDispatch } from '../hooks/useAppDispatch';
 import { useAppSelector } from '../hooks/useAppSelector';
+import { syncDexcomData } from '../store/slices/glucoseSlice';
 
 const DexcomLoginScreen: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigation = useNavigation();
+  const route = useRoute();
+  const fromRegistration = route.params?.fromRegistration;
+  
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const { isLoading, error, isConnected } = useAppSelector(
     (state) => state.dexcom
@@ -33,10 +38,27 @@ const DexcomLoginScreen: React.FC = () => {
   useEffect(() => {
     // Navigate back if connection successful
     if (isConnected) {
-      Alert.alert('Success', 'Dexcom account connected successfully!');
-      navigation.goBack();
+      if (route.params && 'fromRegistration' in route.params && route.params.fromRegistration) {
+        // For new registrations, sync data automatically and then navigate to dashboard
+        setIsSyncing(true);
+        dispatch(syncDexcomData() as any)
+          .then(() => {
+            Alert.alert('Success', 'Dexcom account connected and initial data synced successfully!');
+            navigation.navigate('Dashboard' as never);
+          })
+          .catch(() => {
+            Alert.alert('Connection Success', 'Dexcom account connected successfully! Initial data sync failed, please try syncing manually.');
+            navigation.navigate('Dashboard' as never);
+          })
+          .finally(() => {
+            setIsSyncing(false);
+          });
+      } else {
+        Alert.alert('Success', 'Dexcom account connected successfully!');
+        navigation.goBack();
+      }
     }
-  }, [isConnected, navigation]);
+  }, [isConnected, navigation, dispatch, route.params]);
 
   const handleLogin = () => {
     if (!username || !password) {
@@ -68,7 +90,7 @@ const DexcomLoginScreen: React.FC = () => {
         onChangeText={setUsername}
         autoCapitalize="none"
         style={styles.input}
-        disabled={isLoading}
+        disabled={isLoading || isSyncing}
       />
       <TextInput
         label="Dexcom Password"
@@ -76,11 +98,16 @@ const DexcomLoginScreen: React.FC = () => {
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
-        disabled={isLoading}
+        disabled={isLoading || isSyncing}
       />
       
-      {isLoading ? (
-        <ActivityIndicator size="large" style={styles.loader} />
+      {isLoading || isSyncing ? (
+        <>
+          <ActivityIndicator size="large" style={styles.loader} />
+          <Text style={styles.syncText}>
+            {isLoading ? 'Connecting to Dexcom...' : 'Syncing glucose data...'}
+          </Text>
+        </>
       ) : (
         <>
           <Button 
@@ -134,6 +161,11 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 16
+  },
+  syncText: {
+    marginTop: 8,
+    textAlign: 'center',
+    color: '#0077cc'
   },
   disclaimer: {
     marginTop: 32,
