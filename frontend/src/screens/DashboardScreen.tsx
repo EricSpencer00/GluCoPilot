@@ -199,32 +199,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         />
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <Portal>
-        <FAB.Group
-          open={showQuickActions}
-          visible={true}
-          icon={showQuickActions ? 'close' : 'plus'}
-          actions={[
-            {
-              icon: 'food-apple',
-              label: 'Log Food',
-              onPress: () => navigateToLog('food'),
-            },
-            {
-              icon: 'needle',
-              label: 'Log Insulin',
-              onPress: () => navigateToLog('insulin'),
-            },
-            {
-              icon: 'sync',
-              label: 'Sync Data',
-              onPress: handleSyncDexcom,
-            },
-          ]}
-          onStateChange={({ open }) => setShowQuickActions(open)}
-        />
-      </Portal>
+
 
       {/* Snackbar */}
       <Snackbar
