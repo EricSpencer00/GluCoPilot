@@ -1270,11 +1270,12 @@ Priority: medium
 """
     
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
-        """Process AI-generated text into structured recommendations, prefer JSON if possible. If markdown-style, split and extract fields."""
+        """Process AI-generated text into structured recommendations, prefer JSON if possible. Attach example events and graph data for drill-down."""
         import json, re
         recommendations = []
         # Try JSON parsing first
         try:
+            logger.info(f"Raw AI output: {ai_text}")
             parsed = json.loads(ai_text)
             if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
                 for item in parsed:
@@ -1286,24 +1287,54 @@ Priority: medium
                         'confidence': 0.8,
                         'action': item.get('action', ''),
                         'timing': item.get('timing', ''),
-                        'context': {
-                            'generated_at': datetime.utcnow().isoformat(),
-                            'ai_model': self.model_name
-                        }
+                        'context': self._attach_examples_and_graph(item)
                     }
                     recommendations.append(rec)
-                logger.info(f"Processed {len(recommendations)} recommendations from JSON output")
+                logger.info(f"Processed {len(recommendations)} recommendations from JSON output: {recommendations}")
                 return recommendations[:5]
         except Exception as e:
             logger.warning(f"AI output was not valid JSON, falling back to text parsing: {e}")
 
-        # If the text is a single markdown-style string, split and extract fields
-        # Split on --- or numbered recommendations
+        # Robustly extract multiple recommendations from markdown, numbered, or mixed text
+        # Split on numbered points (e.g., 1. Title: ... or 1) Title: ...)
+        numbered_items = re.split(r'\n(?=\d+[\.)] )', ai_text.strip())
+        if len(numbered_items) > 1:
+            for item in numbered_items:
+                item = item.strip()
+                if not item:
+                    continue
+                # Try to extract fields from each item
+                title = re.search(r'Title:?\s*(.*)', item, re.IGNORECASE)
+                description = re.search(r'Description:?\s*([\s\S]*?)(?:\nCategory:|\nPriority:|\nAction:|\nTiming:|$)', item, re.IGNORECASE)
+                category = re.search(r'Category:?\s*(.*)', item, re.IGNORECASE)
+                priority = re.search(r'Priority:?\s*(.*)', item, re.IGNORECASE)
+                action = re.search(r'Action:?\s*(.*)', item, re.IGNORECASE)
+                timing = re.search(r'Timing:?\s*(.*)', item, re.IGNORECASE)
+                rec = {
+                    'title': title.group(1).strip() if title else '',
+                    'description': description.group(1).strip() if description else '',
+                    'category': category.group(1).strip().lower() if category else 'general',
+                    'priority': priority.group(1).strip().lower() if priority else 'medium',
+                    'confidence': 0.8,
+                    'action': action.group(1).strip() if action else '',
+                    'timing': timing.group(1).strip() if timing else '',
+                    'context': self._attach_examples_and_graph({
+                        'title': title.group(1).strip() if title else '',
+                        'description': description.group(1).strip() if description else '',
+                        'category': category.group(1).strip().lower() if category else 'general',
+                    })
+                }
+                if rec['title'] or rec['description']:
+                    recommendations.append(rec)
+            if recommendations:
+                logger.info(f"Processed {len(recommendations)} recommendations from numbered text content")
+                return recommendations[:5]
+
+        # Fallback: try to split on markdown-style (--- or **1. Title:**)
         items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
         for item in items:
             if not item.strip():
                 continue
-            # Extract fields using regex
             title = re.search(r'\*\*\d+\. Title:\*\*\s*(.*)', item)
             description = re.search(r'\*\*Description:\*\*\s*([\s\S]*?)\n\*\*Category:', item)
             category = re.search(r'\*\*Category:\*\*\s*(.*)', item)
@@ -1318,12 +1349,12 @@ Priority: medium
                 'confidence': 0.8,
                 'action': action.group(1).strip() if action else '',
                 'timing': timing.group(1).strip() if timing else '',
-                'context': {
-                    'generated_at': datetime.utcnow().isoformat(),
-                    'ai_model': self.model_name
-                }
+                'context': self._attach_examples_and_graph({
+                    'title': title.group(1).strip() if title else '',
+                    'description': description.group(1).strip() if description else '',
+                    'category': category.group(1).strip().lower() if category else 'general',
+                })
             }
-            # Only add if at least a title or description is present
             if rec['title'] or rec['description']:
                 recommendations.append(rec)
         if recommendations:
@@ -1341,6 +1372,7 @@ Priority: medium
                 if current_rec:
                     rec_data = self._parse_recommendation(current_rec, user_id)
                     if rec_data:
+                        rec_data['context'] = self._attach_examples_and_graph(rec_data)
                         recommendations.append(rec_data)
                 current_rec = line
             else:
@@ -1348,6 +1380,7 @@ Priority: medium
         if current_rec:
             rec_data = self._parse_recommendation(current_rec, user_id)
             if rec_data:
+                rec_data['context'] = self._attach_examples_and_graph(rec_data)
                 recommendations.append(rec_data)
         if not recommendations:
             logger.warning("Failed to parse recommendations from AI output, using fallback")
@@ -1355,6 +1388,36 @@ Priority: medium
             return self._process_recommendations(fallback_text, user_id)
         logger.info(f"Successfully processed {len(recommendations)} recommendations (text fallback)")
         return recommendations[:5]
+
+    def _attach_examples_and_graph(self, rec: dict) -> dict:
+        """Attach example events and graph data to the recommendation context for drill-down UI."""
+        # This is a stub. In production, this would use the analyzed patterns and user data to find relevant events.
+        # For now, we simulate with a placeholder example and graph data.
+        import random
+        now = datetime.utcnow()
+        # Example event: a glucose spike, meal, or insulin event
+        example_event = {
+            'timestamp': (now - timedelta(hours=random.randint(1, 24))).isoformat(),
+            'value': random.randint(60, 300),
+            'event_type': rec.get('category', 'general'),
+            'note': f"Example event for {rec.get('category', 'general')}"
+        }
+        # Graph data: a list of (timestamp, value) pairs for the last 12 hours
+        graph_data = [
+            {
+                'timestamp': (now - timedelta(hours=12) + timedelta(minutes=15*i)).isoformat(),
+                'value': 100 + 40 * random.sin(i/4.0) + random.randint(-10, 10)
+            }
+            for i in range(48)
+        ]
+        context = rec.get('context', {}) if 'context' in rec else {}
+        context.update({
+            'generated_at': now.isoformat(),
+            'ai_model': getattr(self, 'model_name', 'unknown'),
+            'example_event': example_event,
+            'graph_data': graph_data
+        })
+        return context
     
     def _parse_recommendation(self, rec_text: str, user_id: int) -> Optional[Dict[str, Any]]:
         """Parse a single recommendation text into structured data"""
