@@ -70,16 +70,32 @@ api.interceptors.response.use(
     
     const originalRequest = error.config;
     
-    // Handle 401 Unauthorized errors
+    // Handle 401 Unauthorized errors with refresh logic
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
-      // Clear tokens on auth error
-      await AsyncStorage.removeItem('auth_token');
-      
-      // You could add token refresh logic here
-      
-      // For now, just reject the promise
+      try {
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        if (refreshToken) {
+          // Attempt to refresh the access token
+          const refreshResponse = await api.post('/auth/refresh', { refresh_token: refreshToken });
+          const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
+          if (newToken) {
+            await AsyncStorage.setItem('auth_token', newToken);
+            if (newRefreshToken) {
+              await AsyncStorage.setItem('refresh_token', newRefreshToken);
+            }
+            // Update the Authorization header and retry the original request
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return api(originalRequest);
+          }
+        }
+        // If refresh fails, clear tokens
+        await AsyncStorage.removeItem('auth_token');
+        await AsyncStorage.removeItem('refresh_token');
+      } catch (refreshError) {
+        await AsyncStorage.removeItem('auth_token');
+        await AsyncStorage.removeItem('refresh_token');
+      }
       return Promise.reject(error);
     }
     
