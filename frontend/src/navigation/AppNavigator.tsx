@@ -7,7 +7,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 // Import screens
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { TrendsScreen } from '../screens/TrendsScreen';
-import { LogsScreen } from '../screens/LogsScreen';
+import LogsScreen from '../screens/LogsScreen';
 import { InsightsScreen } from '../screens/InsightsScreen';
 import { LoadingScreen } from '../components/common/LoadingScreen';
 import { LoginScreen } from '../screens/LoginScreen';

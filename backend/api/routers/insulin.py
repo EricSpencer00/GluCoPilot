@@ -28,9 +28,20 @@ def log_insulin(
     db.refresh(db_insulin)
     return db_insulin
 
+
 @router.get("/user", response_model=List[InsulinOut])
 def get_user_insulin(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     return db.query(Insulin).filter(Insulin.user_id == current_user.id).order_by(Insulin.timestamp.desc()).all()
+
+# DELETE endpoint for insulin log
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_insulin(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    insulin = db.query(Insulin).filter(Insulin.id == id, Insulin.user_id == current_user.id).first()
+    if not insulin:
+        raise HTTPException(status_code=404, detail="Insulin log not found")
+    db.delete(insulin)
+    db.commit()
+    return

@@ -13,8 +13,8 @@ interface DexcomStyleChartProps {
   data: GlucoseReading[];
   isLoading: boolean;
   height?: number;
-  timeRange?: '1h' | '3h' | '6h' | '24h';
-  onTimeRangeChange?: (range: '1h' | '3h' | '6h' | '24h') => void;
+  timeRange?: '3h' | '6h' | '12h' | '24h';
+  onTimeRangeChange?: (range: '3h' | '6h' | '12h' | '24h') => void;
 }
 
 interface TouchPoint {
@@ -45,15 +45,19 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
     if (!data || data.length === 0) return [];
 
     const now = new Date();
-    const hoursToShow = timeRange === '1h' ? 1 : 
-                        timeRange === '3h' ? 3 : 
-                        timeRange === '6h' ? 6 : 24;
+    let hoursToShow = 3;
+    if (timeRange === '6h') hoursToShow = 6;
+    else if (timeRange === '12h') hoursToShow = 12;
+    else if (timeRange === '24h') hoursToShow = 24;
 
     const cutoffTime = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
     const filteredData = data.filter(reading => new Date(reading.timestamp) > cutoffTime);
 
     // Take maximum of 288 readings for performance (5-minute intervals for 24 hours)
-    return filteredData.slice(-288);
+    // Sort by timestamp ascending so rightmost is most recent
+    return filteredData
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      .slice(-288);
   };
 
   // Format timestamps in a user-friendly way
@@ -72,22 +76,20 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
     return 30 + (percentage * chartHeight);
   };
 
-  // Generate chart points
-  const getChartPoints = (): { points: TouchPoint[], gridLines: number[] } => {
+  // Generate chart points and x-axis labels
+  const getChartPoints = (): { points: TouchPoint[], gridLines: number[], xLabels: { x: number, label: string }[] } => {
     const filteredData = getFilteredData();
-    
     if (filteredData.length === 0) {
-      return { points: [], gridLines: [] };
+      return { points: [], gridLines: [], xLabels: [] };
     }
 
     const points: TouchPoint[] = [];
     const chartWidth = screenWidth - 40; // Padding
 
-    // Calculate points
+    // Calculate points (left = oldest, right = most recent)
     filteredData.forEach((reading, index) => {
       const x = 20 + (index / (filteredData.length - 1 || 1)) * chartWidth;
       const y = valueToYCoordinate(reading.value);
-      
       points.push({
         x,
         y,
@@ -102,7 +104,17 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
       gridLines.push(value);
     }
 
-    return { points, gridLines };
+    // X-axis time labels (show 4 evenly spaced labels)
+    const xLabels: { x: number, label: string }[] = [];
+    const labelCount = 4;
+    for (let i = 0; i < labelCount; i++) {
+      const dataIdx = Math.round(i * (filteredData.length - 1) / (labelCount - 1));
+      const reading = filteredData[dataIdx];
+      const x = 20 + (dataIdx / (filteredData.length - 1 || 1)) * chartWidth;
+      xLabels.push({ x, label: formatTimestamp(reading.timestamp) });
+    }
+
+    return { points, gridLines, xLabels };
   };
 
   // Set up pan responder for touch interactions
@@ -154,7 +166,7 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
     return '#4CAF50'; // Green for in range
   };
 
-  const { points, gridLines } = getChartPoints();
+  const { points, gridLines, xLabels } = getChartPoints();
 
   return (
     <View style={styles.container}>
@@ -164,7 +176,7 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
         <View>
           {/* Time range selector */}
           <View style={styles.timeRangeSelector}>
-            {(['1h', '3h', '6h', '24h'] as const).map(range => (
+            {(['3h', '6h', '12h', '24h'] as const).map(range => (
               <TouchableOpacity 
                 key={range}
                 style={[
@@ -189,6 +201,19 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
           <Surface style={[styles.chartContainer, { height }]}>
             <View {...panResponder.panHandlers} style={{ flex: 1 }}>
               <Svg height={height} width={screenWidth}>
+                {/* X-axis time labels */}
+                {xLabels.map((labelObj, idx) => (
+                  <SvgText
+                    key={`x-label-${idx}`}
+                    x={labelObj.x}
+                    y={height - 2}
+                    fontSize="10"
+                    fill="#888"
+                    textAnchor="middle"
+                  >
+                    {labelObj.label}
+                  </SvgText>
+                ))}
                 {/* Grid lines */}
                 {gridLines.map(value => (
                   <Line

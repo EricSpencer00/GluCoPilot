@@ -1,10 +1,11 @@
+# Import all models so Alembic can discover all tables
+from models import user, glucose, insulin, food, recommendations, activity, sleep, mood, medication, health_data, menstrual_cycle
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from core.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,6 +19,8 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
+# Use Base.metadata for autogenerate
+from core.database import Base
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
