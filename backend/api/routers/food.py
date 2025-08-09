@@ -28,9 +28,20 @@ def log_food(
     db.refresh(db_food)
     return db_food
 
+
 @router.get("/user", response_model=List[FoodOut])
 def get_user_food(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     return db.query(Food).filter(Food.user_id == current_user.id).order_by(Food.timestamp.desc()).all()
+
+# DELETE endpoint for food log
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_food(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    food = db.query(Food).filter(Food.id == id, Food.user_id == current_user.id).first()
+    if not food:
+        raise HTTPException(status_code=404, detail="Food log not found")
+    db.delete(food)
+    db.commit()
+    return
