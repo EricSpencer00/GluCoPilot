@@ -1,6 +1,7 @@
 # Import all routers
 from .auth import router as auth_router
 from .glucose import router as glucose_router
+from .prediction import router as prediction_router
 
 # These will be needed when implemented
 try:
@@ -31,6 +32,7 @@ except ImportError:
 # Re-export for easier imports
 auth = auth_router
 glucose = glucose_router
+prediction = prediction_router
 # Set these to None or create placeholder routers if they don't exist
 insulin = insulin_router if 'insulin_router' in locals() else None
 food = food_router if 'food_router' in locals() else None

@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistor } from '../store';
+import * as Updates from 'expo-updates';
 
 // Interfaces
 interface User {
@@ -96,6 +98,12 @@ export const register = createAsyncThunk(
 export const logout = createAsyncThunk('auth/logout', async () => {
   // Clear token from AsyncStorage
   await AsyncStorage.removeItem('auth_token');
+  // Purge redux-persist state to fully clear auth
+  await persistor.purge();
+  // Force a hard reload of the app to clear all in-memory state and interceptors
+  if (Updates?.reloadAsync) {
+    await Updates.reloadAsync();
+  }
   return null;
 });
 

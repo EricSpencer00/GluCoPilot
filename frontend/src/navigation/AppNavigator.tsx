@@ -6,6 +6,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 // Import screens
 import { DashboardScreen } from '../screens/DashboardScreen';
+import { TrendsScreen } from '../screens/TrendsScreen';
+import { LogsScreen } from '../screens/LogsScreen';
+import { InsightsScreen } from '../screens/InsightsScreen';
 import { LoadingScreen } from '../components/common/LoadingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
@@ -18,59 +21,7 @@ import { View, Text, ScrollView, StyleSheet, Button } from 'react-native';
 import { Card } from 'react-native-paper';
 import { API_BASE_URL } from '../config';
 
-const TrendsScreen = () => (
-  <ScrollView style={styles.container}>
-    <Card style={styles.card}>
-      <Card.Title title="Trends Debug View" />
-      <Card.Content>
-        <Text style={styles.infoText}>This screen is a placeholder.</Text>
-        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
-        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
-      </Card.Content>
-    </Card>
-  </ScrollView>
-);
-
-const LogScreen = () => (
-  <ScrollView style={styles.container}>
-    <Card style={styles.card}>
-      <Card.Title title="Log Debug View" />
-      <Card.Content>
-        <Text style={styles.infoText}>This screen is a placeholder.</Text>
-        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
-        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
-        
-        <View style={styles.buttonContainer}>
-          <Button 
-            title="Log Food (Debug)" 
-            onPress={() => console.log('Log Food pressed')} 
-          />
-          <Button 
-            title="Log Insulin (Debug)" 
-            onPress={() => console.log('Log Insulin pressed')} 
-          />
-          <Button 
-            title="Log Exercise (Debug)" 
-            onPress={() => console.log('Log Exercise pressed')} 
-          />
-        </View>
-      </Card.Content>
-    </Card>
-  </ScrollView>
-);
-
-const InsightsScreen = () => (
-  <ScrollView style={styles.container}>
-    <Card style={styles.card}>
-      <Card.Title title="Insights Debug View" />
-      <Card.Content>
-        <Text style={styles.infoText}>This screen is a placeholder.</Text>
-        <Text style={styles.infoText}>API URL: {API_BASE_URL}</Text>
-        <Text style={styles.infoText}>Current Time: {new Date().toLocaleString()}</Text>
-      </Card.Content>
-    </Card>
-  </ScrollView>
-);
+// ...removed placeholder screens...
 
 // Import types
 import { RootState } from '../store/store';
@@ -104,10 +55,9 @@ const MainTabNavigator = () => {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
           let iconName;
-
           if (route.name === 'Dashboard') {
             iconName = 'view-dashboard';
-          } else if (route.name === 'Log') {
+          } else if (route.name === 'Logs') {
             iconName = 'plus-circle';
           } else if (route.name === 'Trends') {
             iconName = 'chart-line';
@@ -116,7 +66,6 @@ const MainTabNavigator = () => {
           } else if (route.name === 'Profile') {
             iconName = 'account';
           }
-
           return (
             <MaterialCommunityIcons
               name={iconName as any}
@@ -128,11 +77,21 @@ const MainTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Log" component={LogScreen} />
+      <Tab.Screen name="Logs" component={LogsScreen} />
       <Tab.Screen name="Trends" component={TrendsScreen} />
       <Tab.Screen name="Insights" component={InsightsScreen} />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
+  );
+};
+
+// Root app stack navigator to allow navigation to 'Log' from anywhere
+const AppStackNavigator = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="Log" component={LogsScreen} />
+    </Stack.Navigator>
   );
 };
 
@@ -158,7 +117,7 @@ export const AppNavigator = () => {
     return <LoadingScreen />;
   }
 
-  return <>{user ? <MainTabNavigator /> : <AuthStackNavigator />}</>;
+  return <>{user ? <AppStackNavigator /> : <AuthStackNavigator />}</>;
 };
 
 // Styles

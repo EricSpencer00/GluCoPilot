@@ -3,10 +3,15 @@ import api from '../../services/api';
 
 // Interfaces
 interface Recommendation {
-  id: string;
+  id: number;
+  recommendation_type: string;
   content: string;
-  created_at: string;
-  type: string;
+  title: string;
+  category: string;
+  priority: string;
+  confidence_score: number;
+  context_data: any;
+  timestamp: string;
 }
 
 interface AIState {
@@ -27,8 +32,9 @@ export const fetchRecommendations = createAsyncThunk(
   'ai/fetchRecommendations',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/api/v1/ai/recommendations');
-      return response.data;
+      const response = await api.get('/api/v1/recommendations/recommendations');
+      // The backend returns { recommendations: [...] }
+      return response.data.recommendations;
     } catch (error: any) {
       console.error('Error fetching AI recommendations:', error.message);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch recommendations');
