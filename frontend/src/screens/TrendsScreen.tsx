@@ -8,19 +8,36 @@ import { useDexcomTrends } from '../hooks/useDexcomTrends';
 import { A1cOverTimeChart } from '../components/charts/A1cOverTimeChart';
 
 export const TrendsScreen: React.FC = () => {
-  const [days, setDays] = useState(30);
-  const [showPicker, setShowPicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { trends, loading, error } = useDexcomTrends(days);
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const DEFAULT_DAYS = 30;
 
-  // Handler for date picker
-  const onChange = (event: any, date?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
+  // Fallback: if no dates selected, use last 30 days
+  let days = DEFAULT_DAYS;
+  if (startDate && endDate) {
+    const diff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    days = diff;
+  } else if (startDate) {
+    const diff = Math.max(1, Math.ceil((new Date().getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    days = diff;
+  }
+  const { trends, loading, error } = useDexcomTrends(days, startDate, endDate);
+
+  // Handlers for date pickers
+  const onChangeStart = (event: any, date?: Date) => {
+    setShowStartPicker(Platform.OS === 'ios');
     if (date) {
-      setSelectedDate(date);
-      // Calculate days from today to selected date
-      const diff = Math.max(1, Math.ceil((new Date().getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
-      setDays(diff);
+      setStartDate(date);
+      // If endDate is before startDate, reset endDate
+      if (endDate && date > endDate) setEndDate(null);
+    }
+  };
+  const onChangeEnd = (event: any, date?: Date) => {
+    setShowEndPicker(Platform.OS === 'ios');
+    if (date) {
+      setEndDate(date);
     }
   };
 
@@ -30,16 +47,31 @@ export const TrendsScreen: React.FC = () => {
 
       <Card style={styles.chartCard}>
         <Card.Content>
-          <Text variant="titleMedium" style={styles.cardTitle}>Select Start Date</Text>
-          <Button mode="outlined" onPress={() => setShowPicker(true)}>
-            {selectedDate.toLocaleDateString()}
-          </Button>
-          {showPicker && (
+          <Text variant="titleMedium" style={styles.cardTitle}>Select Date Range</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Button mode="outlined" onPress={() => setShowStartPicker(true)}>
+              {startDate ? startDate.toLocaleDateString() : 'Start Date'}
+            </Button>
+            <Button mode="outlined" onPress={() => setShowEndPicker(true)}>
+              {endDate ? endDate.toLocaleDateString() : 'End Date'}
+            </Button>
+          </View>
+          {showStartPicker && (
             <DateTimePicker
-              value={selectedDate}
+              value={startDate || new Date()}
               mode="date"
               display="default"
-              onChange={onChange}
+              onChange={onChangeStart}
+              maximumDate={endDate || new Date()}
+            />
+          )}
+          {showEndPicker && (
+            <DateTimePicker
+              value={endDate || new Date()}
+              mode="date"
+              display="default"
+              onChange={onChangeEnd}
+              minimumDate={startDate || undefined}
               maximumDate={new Date()}
             />
           )}
@@ -55,7 +87,7 @@ export const TrendsScreen: React.FC = () => {
           {/* Overall Stats */}
           <Card style={styles.chartCard}>
             <Card.Content>
-              <Text variant="titleMedium" style={styles.cardTitle}>Overall (Last {days} Days)</Text>
+              <Text variant="titleMedium" style={styles.cardTitle}>Overall ({startDate && endDate ? `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}` : `Last ${days} Days`})</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                 {Object.entries(trends.overall).map(([key, value]) => (
                   <View key={key} style={{ margin: 8, minWidth: 120 }}>

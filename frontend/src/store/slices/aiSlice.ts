@@ -5,15 +5,14 @@ import { AI_RECOMMENDATION_FETCH_INTERVAL } from '../../constants/ai';
 
 // Interfaces
 interface Recommendation {
-  id: number;
-  recommendation_type: string;
-  content: string;
   title: string;
+  description: string;
   category: string;
   priority: string;
-  confidence_score: number;
-  context_data: any;
-  timestamp: string;
+  confidence: number;
+  action: string;
+  timing: string;
+  context: any;
 }
 
 interface AIState {
@@ -49,10 +48,7 @@ export const fetchRecommendations = createAsyncThunk(
       await AsyncStorage.setItem('ai_recommendations_last_fetch', now.toString());
       // Format recommendations for frontend: split title/content if needed
       let recommendations = response.data.recommendations;
-      if (typeof recommendations === 'string') {
-        // If backend returns a single string, parse it into objects
-        recommendations = parseRecommendationsString(recommendations);
-      }
+      // No string fallback needed; backend always returns array of objects
       await AsyncStorage.setItem('ai_recommendations_cache', JSON.stringify(recommendations));
       return recommendations;
     } catch (error: any) {
@@ -67,29 +63,7 @@ export const fetchRecommendations = createAsyncThunk(
   }
 );
 
-// Helper to parse a single string of recommendations into array of objects
-function parseRecommendationsString(recommendationsString: string) {
-  // Split by double newlines or ** markers
-  const items = recommendationsString.split(/\n\n|(?=\*\*)/g).filter(Boolean);
-  let id = 1;
-  return items.map(item => {
-    // Extract title (between ** ** or at start)
-    const titleMatch = item.match(/\*\*(.*?)\*\*/);
-    const title = titleMatch ? titleMatch[1].trim() : item.split('\n')[0].trim();
-    const content = item.replace(/\*\*(.*?)\*\*/g, '').trim();
-    return {
-      id: id++,
-      recommendation_type: '',
-      content,
-      title,
-      category: '',
-      priority: 'medium',
-      confidence_score: 0,
-      context_data: null,
-      timestamp: new Date().toISOString(),
-    };
-  });
-}
+
 
 // Slice
 const aiSlice = createSlice({
