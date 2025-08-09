@@ -5,8 +5,8 @@ import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`, // Ensure the correct API path
-  timeout: 10000,
+  baseURL: API_BASE_URL, // Base URL without /api/v1 to allow more flexibility in paths
+  timeout: 15000, // Increased timeout for slower connections
   headers: {
     'Content-Type': 'application/json',
   },

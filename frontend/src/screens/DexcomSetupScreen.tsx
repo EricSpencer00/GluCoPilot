@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Switch, Text, Headline } from 'react-native-paper';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import api from '../../services/api';
 
 const DexcomSetupScreen = ({ navigation }) => {
@@ -16,31 +16,33 @@ const DexcomSetupScreen = ({ navigation }) => {
       Alert.alert('Error', 'Please provide both username and password');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
       // Connect Dexcom account
       const response = await api.post('/api/v1/auth/connect-dexcom', {
         username,
         password,
-        ous
+        ous,
       });
-      
+
       if (response.data.success) {
         Alert.alert('Success', 'Dexcom account connected successfully');
-        
+
         // Trigger data sync
         await api.post('/api/v1/glucose/sync');
-        
+
         // Navigate back
         navigation.goBack();
+      } else {
+        throw new Error('Unexpected response from server');
       }
     } catch (error) {
       console.error('Dexcom connection error:', error);
       Alert.alert(
         'Connection Failed',
-        error.response?.data?.detail || 'Could not connect to Dexcom'
+        error.response?.data?.detail || error.message || 'Could not connect to Dexcom'
       );
     } finally {
       setLoading(false);
@@ -50,12 +52,12 @@ const DexcomSetupScreen = ({ navigation }) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Headline style={styles.headline}>Connect Dexcom Account</Headline>
-      
+
       <Text style={styles.description}>
         Connect your Dexcom account to sync glucose readings automatically.
         Your credentials are encrypted and stored securely.
       </Text>
-      
+
       <TextInput
         label="Dexcom Username"
         value={username}
@@ -63,7 +65,7 @@ const DexcomSetupScreen = ({ navigation }) => {
         style={styles.input}
         autoCapitalize="none"
       />
-      
+
       <TextInput
         label="Dexcom Password"
         value={password}
@@ -71,12 +73,12 @@ const DexcomSetupScreen = ({ navigation }) => {
         secureTextEntry
         style={styles.input}
       />
-      
+
       <View style={styles.switchContainer}>
         <Text>Outside US (International)</Text>
         <Switch value={ous} onValueChange={setOus} />
       </View>
-      
+
       <Button
         mode="contained"
         onPress={handleConnect}
@@ -84,7 +86,7 @@ const DexcomSetupScreen = ({ navigation }) => {
         disabled={loading}
         style={styles.button}
       >
-        Connect Dexcom
+        {loading ? 'Connecting...' : 'Connect Dexcom'}
       </Button>
     </ScrollView>
   );

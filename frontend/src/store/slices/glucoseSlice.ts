@@ -46,9 +46,9 @@ export const fetchGlucoseData = createAsyncThunk(
       console.log(`Fetching glucose data for ${hours} hours (${days} days)`);
 
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
-        api.get('/glucose/latest'),
-        api.get('/glucose/stats', { params: { days } }),
+        api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+        api.get('/api/v1/glucose/latest'),
+        api.get('/api/v1/glucose/stats', { params: { days } }),
       ]);
 
       console.log(`Fetched ${readingsRes.data?.length || 0} readings`);
@@ -74,14 +74,14 @@ export const syncDexcomData = createAsyncThunk(
       console.log('Syncing Dexcom data...');
       
       // Trigger sync
-      await api.post('/glucose/sync');
+      await api.post('/api/v1/glucose/sync');
       console.log('Sync completed, fetching updated data');
 
       // After sync, refresh data (default 24h)
       const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/glucose/readings', { params: { limit: 24 * 12 } }),
-        api.get('/glucose/latest'),
-        api.get('/glucose/stats', { params: { days: 1 } }),
+        api.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
+        api.get('/api/v1/glucose/latest'),
+        api.get('/api/v1/glucose/stats', { params: { days: 1 } }),
       ]);
 
       return {
