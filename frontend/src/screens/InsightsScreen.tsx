@@ -21,9 +21,16 @@ export const InsightsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
             recommendations.map((rec: any, idx: number) => (
               <Card key={rec.id || idx} style={{ marginVertical: 8 }}>
                 <Card.Content>
+                  <Text variant="titleMedium" style={{ marginBottom: 4 }}>{rec.title || rec.recommendation_type}</Text>
                   <Text variant="bodyLarge">{rec.content}</Text>
                   <Text variant="bodySmall" style={{ marginTop: 4, color: '#888' }}>
-                    {rec.recommendation_type} • {new Date(rec.timestamp).toLocaleString()}
+                    Category: {rec.category || rec.recommendation_type} | Priority: {rec.priority || 'N/A'}
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: '#888' }}>
+                    Confidence: {rec.confidence_score ? (rec.confidence_score * 100).toFixed(0) + '%' : 'N/A'}
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: '#888' }}>
+                    {new Date(rec.timestamp).toLocaleString()}
                   </Text>
                 </Card.Content>
               </Card>

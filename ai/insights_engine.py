@@ -107,24 +107,34 @@ class AIInsightsEngine:
             # Process and validate recommendations
             processed_recommendations = self._process_recommendations(ai_recommendations, user.id)
             
-            # Store recommendations in database using only allowed fields
+            # Store recommendations in database with new fields
             stored_recommendations = []
             for rec_data in processed_recommendations:
                 recommendation = Recommendation(
                     user_id=user.id,
                     recommendation_type=rec_data.get('category', 'general'),
-                    content=rec_data.get('description', '')
+                    content=rec_data.get('description', ''),
+                    title=rec_data.get('title'),
+                    category=rec_data.get('category'),
+                    priority=rec_data.get('priority'),
+                    confidence_score=rec_data.get('confidence', 0.8),
+                    context_data=json.dumps(rec_data.get('context', {}))
                 )
                 db.add(recommendation)
                 stored_recommendations.append(recommendation)
             db.commit()
             logger.info(f"Generated {len(stored_recommendations)} recommendations")
-            # Return a simple dict for API response
+            # Return all fields for API response
             return [
                 {
                     'id': rec.id,
                     'recommendation_type': rec.recommendation_type,
                     'content': rec.content,
+                    'title': rec.title,
+                    'category': rec.category,
+                    'priority': rec.priority,
+                    'confidence_score': rec.confidence_score,
+                    'context_data': json.loads(rec.context_data) if rec.context_data else {},
                     'timestamp': rec.timestamp.isoformat() if rec.timestamp else None
                 }
                 for rec in stored_recommendations

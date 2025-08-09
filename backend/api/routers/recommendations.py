@@ -8,11 +8,12 @@ from models.glucose import GlucoseReading
 from models.insulin import Insulin
 from models.food import Food
 from ai.insights_engine import AIInsightsEngine
+from schemas.recommendations import RecommendationOut
 
 router = APIRouter()
 
 
-@router.get("/recommendations", tags=["Recommendations"])
+@router.get("/recommendations", tags=["Recommendations"], response_model=dict)
 async def get_recommendations(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -31,4 +32,5 @@ async def get_recommendations(
         food_data=food_data,
         db=db
     )
-    return {"recommendations": recommendations}
+    # Validate with Pydantic schema
+    return {"recommendations": [RecommendationOut(**rec) for rec in recommendations]}
