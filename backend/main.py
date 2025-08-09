@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 # Only import routers that exist
-from api.routers import auth, glucose
+from api.routers import auth, glucose, prediction
 from api.routers.recommendations import router as recommendations
 from core.database import get_db, create_tables
 from core.config import settings
@@ -63,11 +63,11 @@ security = HTTPBearer()
 app.include_router(auth, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(glucose, prefix="/api/v1/glucose", tags=["Glucose"])
 app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
+app.include_router(prediction, prefix="/api/v1/predict", tags=["Prediction"])
 # Include other routers when they become available
 # app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 # app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 # app.include_router(analysis, prefix="/api/v1/analysis", tags=["Analysis"])
-# app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
 # app.include_router(health, prefix="/api/v1/health", tags=["Health"])
 
 @app.middleware("http")

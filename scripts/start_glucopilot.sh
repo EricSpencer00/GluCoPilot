@@ -5,6 +5,7 @@ ulimit -n 8192
 
 # Define root directory
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+export PYTHONPATH="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Get the user's local IP address
 if [[ "$OSTYPE" == "darwin"* ]]; then
