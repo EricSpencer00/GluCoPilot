@@ -48,10 +48,10 @@ source venv/bin/activate
 # Install required packages
 pip install -r requirements.txt
 
-# Start the backend server
-echo "Starting GluCoPilot backend..."
+ # Start the backend server with auto-reload
+echo "Starting GluCoPilot backend (with auto-reload)..."
 cd "$ROOT_DIR/backend" || { echo "Failed to change to backend directory"; exit 1; }
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Check if backend started successfully
@@ -72,8 +72,10 @@ echo "Fixing dependencies..."
 npm install
 npx expo install --fix
 
+
 # Start the frontend
 echo "Starting GluCoPilot frontend..."
+echo "To use Expo shortcuts (like 'r' to reload JS), focus the terminal running Expo."
 npx expo start --clear &
 FRONTEND_PID=$!
 
