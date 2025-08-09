@@ -6,14 +6,15 @@ import json
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from sentence_transformers import SentenceTransformer
+import requests
 import numpy as np
 from sqlalchemy.orm import Session
 
 from core.config import settings
 from models.user import User
 from models.glucose import GlucoseReading
-from models.insulin import InsulinDose
-from models.food import FoodEntry
+from models.insulin import Insulin
+from models.food import Food
 from models.recommendations import Recommendation
 from utils.logging import get_logger
 
@@ -34,22 +35,18 @@ class AIInsightsEngine:
         """Initialize AI models"""
         if self.initialized:
             return
-        
         try:
             logger.info("Initializing AI models...")
-            
-            # Initialize text generation model
-            if settings.USE_LOCAL_MODEL and os.path.exists(settings.LOCAL_MODEL_PATH):
+            if settings.MODEL_NAME == "openai/gpt-oss-20b":
+                # No local pipeline, will use Inference API
+                self.generator = None
+            elif settings.USE_LOCAL_MODEL and os.path.exists(settings.LOCAL_MODEL_PATH):
                 self._load_local_model()
             else:
                 self._load_huggingface_model()
-            
-            # Initialize embedding model for similarity search
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            
             self.initialized = True
             logger.info("AI models initialized successfully")
-            
         except Exception as e:
             logger.error(f"Error initializing AI models: {str(e)}")
             raise
@@ -86,8 +83,8 @@ class AIInsightsEngine:
         self,
         user: User,
         glucose_data: List[GlucoseReading],
-        insulin_data: List[InsulinDose],
-        food_data: List[FoodEntry],
+        insulin_data: List[Insulin],
+        food_data: List[Food],
         db: Session
     ) -> List[Dict[str, Any]]:
         """Generate personalized recommendations based on user data"""
@@ -138,8 +135,8 @@ class AIInsightsEngine:
     async def _analyze_patterns(
         self,
         glucose_data: List[GlucoseReading],
-        insulin_data: List[InsulinDose],
-        food_data: List[FoodEntry]
+        insulin_data: List[Insulin],
+        food_data: List[Food]
     ) -> Dict[str, Any]:
         """Analyze data patterns"""
         
@@ -169,7 +166,7 @@ class AIInsightsEngine:
             'dawn_phenomenon': self._check_dawn_phenomenon(glucose_data)
         }
     
-    def _analyze_meal_patterns(self, glucose_data: List[GlucoseReading], food_data: List[FoodEntry]) -> Dict[str, Any]:
+    def _analyze_meal_patterns(self, glucose_data: List[GlucoseReading], food_data: List[Food]) -> Dict[str, Any]:
         """Analyze meal-related glucose patterns"""
         patterns = {}
         
@@ -193,7 +190,7 @@ class AIInsightsEngine:
         
         return patterns
     
-    def _analyze_insulin_patterns(self, glucose_data: List[GlucoseReading], insulin_data: List[InsulinDose]) -> Dict[str, Any]:
+    def _analyze_insulin_patterns(self, glucose_data: List[GlucoseReading], insulin_data: List[Insulin]) -> Dict[str, Any]:
         """Analyze insulin effectiveness patterns"""
         patterns = {}
         
@@ -270,17 +267,22 @@ class AIInsightsEngine:
         user: User,
         patterns: Dict[str, Any],
         glucose_data: List[GlucoseReading],
-        insulin_data: List[InsulinDose],
-        food_data: List[FoodEntry]
+        insulin_data: List[Insulin],
+        food_data: List[Food]
     ) -> str:
         """Create context string for AI model"""
         
+        # Handle missing date_of_birth gracefully
+        if hasattr(user, "date_of_birth") and user.date_of_birth:
+            age = (datetime.now() - user.date_of_birth).days // 365
+        else:
+            age = 'Unknown'
         context = f"""
 Patient Profile:
-- Age: {(datetime.now() - user.date_of_birth).days // 365 if user.date_of_birth else 'Unknown'}
-- Target Range: {user.target_glucose_min}-{user.target_glucose_max} mg/dL
-- Insulin-to-Carb Ratio: 1:{user.insulin_carb_ratio}
-- Correction Factor: {user.insulin_sensitivity_factor}
+- Age: {age}
+- Target Range: {getattr(user, 'target_glucose_min', 'Unknown')}-{getattr(user, 'target_glucose_max', 'Unknown')} mg/dL
+- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
+- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
 
 Current Glucose Patterns:
 - Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
@@ -300,33 +302,46 @@ Key Observations:
 Please provide 3-5 specific, actionable recommendations to improve glucose control based on this data.
 Focus on timing, dosing, and lifestyle modifications. Keep recommendations concise and practical.
 """
-        
         return context
     
     async def _generate_ai_recommendations(self, context: str) -> str:
-        """Generate recommendations using AI model"""
+        """Generate recommendations using AI model or Inference API"""
+        prompt = f"{context}\n\nRecommendations:"
         try:
-            prompt = f"{context}\n\nRecommendations:"
-            
-            # Generate response using the loaded model
-            response = self.generator(
-                prompt,
-                max_new_tokens=256,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=self.generator.tokenizer.eos_token_id
-            )
-            
-            # Extract generated text
-            if isinstance(response, list) and len(response) > 0:
-                generated_text = response[0]['generated_text']
-                # Extract only the recommendations part
+            if settings.MODEL_NAME == "openai/gpt-oss-20b":
+                # Use Hugging Face Inference API
+                api_url = f"https://api-inference.huggingface.co/models/{settings.MODEL_NAME}"
+                headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_TOKEN}"}
+                payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256, "temperature": 0.7}}
+                response = requests.post(api_url, headers=headers, json=payload, timeout=60)
+                response.raise_for_status()
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
+                    generated_text = result[0]["generated_text"]
+                elif isinstance(result, dict) and "error" in result:
+                    logger.error(f"HF Inference API error: {result['error']}")
+                    return self._fallback_recommendations()
+                else:
+                    generated_text = str(result)
                 recommendations_start = generated_text.find("Recommendations:")
                 if recommendations_start != -1:
                     return generated_text[recommendations_start + len("Recommendations:"):].strip()
-            
-            return response if isinstance(response, str) else ""
-        
+                return generated_text
+            else:
+                # Use local/transformers pipeline
+                response = self.generator(
+                    prompt,
+                    max_new_tokens=256,
+                    temperature=0.7,
+                    do_sample=True,
+                    pad_token_id=self.generator.tokenizer.eos_token_id
+                )
+                if isinstance(response, list) and len(response) > 0:
+                    generated_text = response[0]['generated_text']
+                    recommendations_start = generated_text.find("Recommendations:")
+                    if recommendations_start != -1:
+                        return generated_text[recommendations_start + len("Recommendations:"):].strip()
+                return response if isinstance(response, str) else ""
         except Exception as e:
             logger.error(f"Error generating AI recommendations: {str(e)}")
             return self._fallback_recommendations()
