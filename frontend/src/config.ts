@@ -27,3 +27,6 @@ const CONFIG = {
 
 export const API_BASE_URL = CONFIG[ENV].API_BASE_URL;
 export const ENABLE_API_LOGS = CONFIG[ENV].ENABLE_API_LOGS;
+
+// For debugging
+console.log(`API configured to connect to: ${API_BASE_URL}`);

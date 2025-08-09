@@ -27,9 +27,10 @@ export const fetchRecommendations = createAsyncThunk(
   'ai/fetchRecommendations',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/api/ai/recommendations');
+      const response = await api.get('/api/v1/ai/recommendations');
       return response.data;
     } catch (error: any) {
+      console.error('Error fetching AI recommendations:', error.message);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch recommendations');
     }
   }
