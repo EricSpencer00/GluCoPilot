@@ -1,3 +1,4 @@
+from backend.services.auth import get_current_active_user
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from core.database import get_db

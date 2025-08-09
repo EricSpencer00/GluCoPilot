@@ -58,12 +58,12 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate user and return access token"""
+    """Authenticate user and return access and refresh tokens"""
     logger.info(f"Login attempt: {user_credentials.username}")
-    
+
     # Find user by username
     user = db.query(User).filter(User.username == user_credentials.username).first()
-    
+
     # Verify credentials
     if not user or not verify_password(user_credentials.password, user.hashed_password):
         logger.warning(f"Login failed - invalid credentials: {user_credentials.username}")
@@ -72,24 +72,30 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.is_active:
         logger.warning(f"Login failed - inactive user: {user_credentials.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Inactive user account"
         )
-    
+
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
-    
-    # Create access token
+
+    # Create access and refresh tokens
     access_token = create_access_token(data={"sub": user.username})
-    
+    refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
+
+    # Store refresh token in user model (add field if not present)
+    user.refresh_token = refresh_token
+    db.commit()
+
     logger.info(f"User logged in successfully: {user.username}")
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": 1800  # 30 minutes
     }
@@ -101,19 +107,32 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    refresh_token: str,
     db: Session = Depends(get_db)
 ):
-    """Refresh access token"""
-    # Verify current token and create new one
-    current_user = await get_current_user(credentials.credentials, db)
-    access_token = create_access_token(data={"sub": current_user.username})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": 1800
-    }
+    """Refresh access token using refresh token"""
+    from services.auth import verify_token
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = verify_token(refresh_token, credentials_exception)
+        username = payload.username
+        user = db.query(User).filter(User.username == username).first()
+        if not user or user.refresh_token != refresh_token:
+            raise credentials_exception
+        # Issue new access token
+        access_token = create_access_token(data={"sub": user.username})
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 1800
+        }
+    except Exception:
+        raise credentials_exception
 
 @router.post("/connect-dexcom", response_model=DexcomResponse)
 async def connect_dexcom(
