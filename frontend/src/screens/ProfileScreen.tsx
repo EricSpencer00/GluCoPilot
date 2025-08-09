@@ -1,18 +1,31 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Button, Text } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ProfileStackParamList } from '../navigation/types';
+import { AuthStackParamList, ProfileStackParamList } from '../navigation/types';
+
+type ProfileScreenNavigationProp = CompositeNavigationProp<
+  StackNavigationProp<AuthStackParamList, 'Login'>,
+  StackNavigationProp<ProfileStackParamList, 'ProfileMain'>
+>;
 
 const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation<StackNavigationProp<ProfileStackParamList, 'ProfileMain'>>();
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const user = useSelector((state: RootState) => state.auth.user);
 
   const handleDexcomIntegration = () => {
     navigation.navigate('DexcomLogin');
+  };
+
+  const handleLogout = () => {
+    console.log('User logged out');
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
   };
 
   if (!user) {
@@ -33,6 +46,9 @@ const ProfileScreen: React.FC = () => {
       </View>
       <Button mode="contained" onPress={handleDexcomIntegration} style={styles.button}>
         Integrate with Dexcom
+      </Button>
+      <Button mode="outlined" onPress={handleLogout} style={styles.button}>
+        Logout
       </Button>
     </View>
   );

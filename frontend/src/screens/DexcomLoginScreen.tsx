@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
-import { useDispatch, useSelector } from 'react-redux';
 import { loginToDexcom, clearError } from '../store/slices/dexcomSlice';
-import { RootState } from '../store/store';
 import { useNavigation } from '@react-navigation/native';
+import { useAppDispatch } from '../hooks/useAppDispatch';
+import { useAppSelector } from '../hooks/useAppSelector';
 
 const DexcomLoginScreen: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const navigation = useNavigation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   
-  const { isLoading, error, isConnected } = useSelector(
-    (state: RootState) => state.dexcom
+  const { isLoading, error, isConnected } = useAppSelector(
+    (state) => state.dexcom
   );
 
   useEffect(() => {
@@ -44,7 +44,14 @@ const DexcomLoginScreen: React.FC = () => {
       return;
     }
 
-    dispatch(loginToDexcom({ username, password }) as any);
+    console.log("Dispatching loginToDexcom action");
+    dispatch(loginToDexcom({ username, password }));
+  };
+
+  const handleLogout = () => {
+    setUsername('');
+    setPassword('');
+    dispatch(clearError());
   };
 
   return (
@@ -75,13 +82,22 @@ const DexcomLoginScreen: React.FC = () => {
       {isLoading ? (
         <ActivityIndicator size="large" style={styles.loader} />
       ) : (
-        <Button 
-          mode="contained" 
-          onPress={handleLogin} 
-          style={styles.button}
-        >
-          Connect Account
-        </Button>
+        <>
+          <Button 
+            mode="contained" 
+            onPress={handleLogin} 
+            style={styles.button}
+          >
+            Connect Account
+          </Button>
+          <Button 
+            mode="outlined" 
+            onPress={handleLogout} 
+            style={styles.button}
+          >
+            Logout
+          </Button>
+        </>
       )}
       
       <Text variant="bodySmall" style={styles.disclaimer}>

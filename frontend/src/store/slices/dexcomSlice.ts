@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import api from '../../services/api';
 
 interface DexcomState {
@@ -20,7 +20,7 @@ export const loginToDexcom = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await api.post('/api/v1/auth/connect-dexcom', {
+      const response = await api.post('/auth/connect-dexcom', {
         username,
         password,
         ous: false // Default to US servers
@@ -28,6 +28,7 @@ export const loginToDexcom = createAsyncThunk(
       
       return response.data;
     } catch (error: any) {
+      console.error("Dexcom connection error:", error);
       return rejectWithValue(error.response?.data?.detail || 'Dexcom connection failed');
     }
   }
@@ -40,6 +41,9 @@ const dexcomSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    setConnected: (state, action: PayloadAction<boolean>) => {
+      state.isConnected = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(loginToDexcom.pending, (state) => {
@@ -49,6 +53,7 @@ const dexcomSlice = createSlice({
     builder.addCase(loginToDexcom.fulfilled, (state) => {
       state.isLoading = false;
       state.isConnected = true;
+      state.error = null;
     });
     builder.addCase(loginToDexcom.rejected, (state, action) => {
       state.isLoading = false;
@@ -57,5 +62,5 @@ const dexcomSlice = createSlice({
   },
 });
 
-export const { clearError } = dexcomSlice.actions;
+export const { clearError, setConnected } = dexcomSlice.actions;
 export default dexcomSlice.reducer;
