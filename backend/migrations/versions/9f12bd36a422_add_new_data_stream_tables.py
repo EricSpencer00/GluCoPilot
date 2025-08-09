@@ -43,7 +43,7 @@ def upgrade():
     op.add_column('food_entries', sa.Column('serving_size', sa.Float(), nullable=True))
     op.add_column('food_entries', sa.Column('serving_unit', sa.String(), nullable=True))
     op.add_column('food_entries', sa.Column('source', sa.String(), default='manual'))
-    op.add_column('food_entries', sa.Column('metadata', postgresql.JSON(), nullable=True))
+    op.add_column('food_entries', sa.Column('meta_data', postgresql.JSON(), nullable=True))
     
     # Update recommendations table with feedback fields
     op.add_column('recommendations', sa.Column('is_helpful', sa.Boolean(), nullable=True))
@@ -69,7 +69,7 @@ def upgrade():
         sa.Column('heart_rate_avg', sa.Integer(), nullable=True),
         sa.Column('timestamp', sa.DateTime(), default=sa.func.now()),
         sa.Column('source', sa.String(), default='manual'),
-        sa.Column('metadata', postgresql.JSON(), nullable=True)
+        sa.Column('meta_data', postgresql.JSON(), nullable=True)
     )
     
     # Create mood_logs table
@@ -98,7 +98,7 @@ def upgrade():
         sa.Column('awake_minutes', sa.Integer(), nullable=True),
         sa.Column('heart_rate_avg', sa.Integer(), nullable=True),
         sa.Column('source', sa.String(), default='manual'),
-        sa.Column('metadata', postgresql.JSON(), nullable=True)
+        sa.Column('meta_data', postgresql.JSON(), nullable=True)
     )
     
     # Create medication_logs table
@@ -163,7 +163,7 @@ def downgrade():
     op.drop_column('recommendations', 'is_helpful')
     
     # Remove columns from food_entries table
-    op.drop_column('food_entries', 'metadata')
+    op.drop_column('food_entries', 'meta_data')
     op.drop_column('food_entries', 'source')
     op.drop_column('food_entries', 'serving_unit')
     op.drop_column('food_entries', 'serving_size')
