@@ -116,6 +116,9 @@ const authSlice = createSlice({
     clearNewRegistrationFlag: (state) => {
       state.isNewRegistration = false;
     },
+    setToken: (state, action) => {
+      state.token = action.payload;
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -165,5 +168,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, clearNewRegistrationFlag } = authSlice.actions;
+export const { clearError, clearNewRegistrationFlag, setToken } = authSlice.actions;
 export default authSlice.reducer;
