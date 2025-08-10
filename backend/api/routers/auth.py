@@ -6,9 +6,10 @@ from typing import Optional
 
 from core.database import get_db
 from models.user import User
-from schemas.auth import UserCreate, UserLogin, UserResponse, Token
+from schemas.auth import UserCreate, UserLogin, UserResponse, Token, UserUpdate
 from schemas.dexcom import DexcomCredentials, DexcomResponse
 from services.auth import create_access_token, verify_password, get_password_hash, get_current_user
+from fastapi import Body
 from utils.logging import get_logger
 from utils.encryption import encrypt_password
 
@@ -103,6 +104,24 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """Get current user profile"""
+    return current_user
+
+
+# PATCH /me endpoint to update current user profile
+@router.patch("/me", response_model=UserResponse)
+async def update_current_user_profile(
+    update: UserUpdate = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update current user profile"""
+    # Only update fields present in the request
+    update_data = update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    logger.info(f"User profile updated: {current_user.username}")
     return current_user
 
 

@@ -16,6 +16,7 @@ import { fetchGlucoseData, syncDexcomData } from '../store/slices/glucoseSlice';
 import { fetchRecommendations } from '../store/slices/aiSlice';
 import { clearNewRegistrationFlag } from '../store/slices/authSlice';
 import { styles } from '../styles/screens/DashboardScreen';
+import type { Recommendation } from '../types/Recommendation';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -185,7 +186,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         {/* AI Recommendations */}
         {recommendations.length > 0 && (
           <EnhancedRecommendationCard 
-            recommendations={recommendations}
+            recommendations={recommendations as Recommendation[]}
             isLoading={aiLoading}
             onViewAll={() => navigation.navigate('Insights')}
           />

@@ -1,16 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { User } from '../../types/User';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persistor } from '../store';
 import * as Updates from 'expo-updates';
 
 // Interfaces
-interface User {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-}
+
 
 interface AuthState {
   user: User | null;
@@ -120,6 +116,9 @@ const authSlice = createSlice({
     clearNewRegistrationFlag: (state) => {
       state.isNewRegistration = false;
     },
+    setToken: (state, action) => {
+      state.token = action.payload;
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -169,5 +168,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, clearNewRegistrationFlag } = authSlice.actions;
+export const { clearError, clearNewRegistrationFlag, setToken } = authSlice.actions;
 export default authSlice.reducer;

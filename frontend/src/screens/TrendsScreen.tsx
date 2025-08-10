@@ -1,11 +1,11 @@
-
 import React, { useState } from 'react';
 import { View, ScrollView, Platform } from 'react-native';
-import { Card, Text, ActivityIndicator, Button } from 'react-native-paper';
+import { Card, Text, Button } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from '../styles/screens/TrendsScreen';
 import { useDexcomTrends } from '../hooks/useDexcomTrends';
 import { A1cOverTimeChart } from '../components/charts/A1cOverTimeChart';
+import { LoadingScreen } from '../components/common/LoadingScreen';
 
 export const TrendsScreen: React.FC = () => {
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -40,6 +40,14 @@ export const TrendsScreen: React.FC = () => {
       setEndDate(date);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
+        <LoadingScreen />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -78,9 +86,7 @@ export const TrendsScreen: React.FC = () => {
         </Card.Content>
       </Card>
 
-      {loading ? (
-        <ActivityIndicator size="large" style={{ margin: 24 }} />
-      ) : error ? (
+      {error ? (
         <Text style={{ color: 'red', margin: 16 }}>{error}</Text>
       ) : trends ? (
         <>
@@ -89,7 +95,7 @@ export const TrendsScreen: React.FC = () => {
             <Card.Content>
               <Text variant="titleMedium" style={styles.cardTitle}>Overall ({startDate && endDate ? `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}` : `Last ${days} Days`})</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                {Object.entries(trends.overall).map(([key, value]) => (
+                {trends && trends.overall && typeof trends.overall === 'object' && Object.entries(trends.overall).map(([key, value]) => (
                   <View key={key} style={{ margin: 8, minWidth: 120 }}>
                     <Text style={{ fontWeight: 'bold' }}>{key.replace(/_/g, ' ').toUpperCase()}</Text>
                     <Text>{String(value)}</Text>
@@ -114,15 +120,15 @@ export const TrendsScreen: React.FC = () => {
                 <View>
                   <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#eee' }}>
                     <Text style={{ width: 80, fontWeight: 'bold' }}>Week</Text>
-                    {trends.overall && Object.keys(trends.overall).map((stat, idx) => (
-                      <Text key={stat} style={{ width: 100, fontWeight: 'bold', textAlign: 'center' }}>{stat.replace(/_/g, ' ').toUpperCase()}</Text>
+                    {trends && trends.overall && Object.keys(trends.overall).map((stat) => (
+                      <Text key={`header-${stat}`} style={{ width: 100, fontWeight: 'bold', textAlign: 'center' }}>{stat.replace(/_/g, ' ').toUpperCase()}</Text>
                     ))}
                   </View>
-                  {Object.entries(trends.weeks).map(([week, stats]: any) => (
+                  {trends && trends.weeks && Object.entries(trends.weeks).map(([week, stats]: any) => (
                     <View key={week} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#f5f5f5' }}>
                       <Text style={{ width: 80 }}>{week.replace('week_', 'Week ')}</Text>
-                      {trends.overall && Object.keys(trends.overall).map((stat, idx) => (
-                        <Text key={stat} style={{ width: 100, textAlign: 'center' }}>{stats[stat]}</Text>
+                      {trends.overall && Object.keys(trends.overall).map((stat) => (
+                        <Text key={`${week}-${stat}`} style={{ width: 100, textAlign: 'center' }}>{stats[stat]}</Text>
                       ))}
                     </View>
                   ))}
@@ -130,8 +136,9 @@ export const TrendsScreen: React.FC = () => {
               </ScrollView>
             </Card.Content>
           </Card>
+
         </>
       ) : null}
     </ScrollView>
   );
-};
+}

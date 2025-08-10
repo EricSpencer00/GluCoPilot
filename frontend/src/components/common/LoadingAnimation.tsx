@@ -1,15 +1,13 @@
-
-
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Dimensions, Image } from 'react-native';
-import { Text } from 'react-native-paper';
 
 const { width } = Dimensions.get('window');
 
-const loadingSmall = require('../../../assets/loading-small.gif');
-const loadingMedium = require('../../../assets/loading-medium.gif');
 
-export const LoadingScreen: React.FC = () => {
+import loadingSmall from '../../../assets/loading-small.gif';
+import loadingMedium from '../../../assets/loading-medium.gif';
+
+export const LoadingAnimation: React.FC = () => {
   const [showMedium, setShowMedium] = useState(false);
 
   useEffect(() => {
@@ -24,23 +22,14 @@ export const LoadingScreen: React.FC = () => {
         style={{ width: width * 0.7, height: width * 0.7 }}
         resizeMode="contain"
       />
-      <Text style={styles.text}>Loading...</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
-  },
-  text: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#b34d4d',
-    fontWeight: '600',
-    letterSpacing: 0.5,
   },
 });
