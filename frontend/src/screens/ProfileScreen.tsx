@@ -219,43 +219,6 @@ const ProfileScreen: React.FC = () => {
           <Text variant="bodySmall">Notification Preferences: {user.notification_preferences ? JSON.stringify(user.notification_preferences) : 'N/A'}</Text>
           <Text variant="bodySmall">Privacy Preferences: {user.privacy_preferences ? JSON.stringify(user.privacy_preferences) : 'N/A'}</Text>
         </Surface>
-        {/* Data Dashboard */}
-        <Text variant="titleMedium" style={styles.sectionTitle}>Your Data</Text>
-        <Surface style={styles.card}>
-          {isLoadingStats ? (
-            <View style={styles.statsLoading}>
-              <ActivityIndicator size="small" />
-              <Text style={styles.loadingText}>Loading data...</Text>
-            </View>
-          ) : (
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalGlucoseReadings}</Text>
-                <Text variant="bodySmall">Glucose Readings</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalInsulinDoses}</Text>
-                <Text variant="bodySmall">Insulin Doses</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalFoodEntries}</Text>
-                <Text variant="bodySmall">Food Entries</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalActivityLogs}</Text>
-                <Text variant="bodySmall">Activity Logs</Text>
-              </View>
-            </View>
-          )}
-          <Divider style={styles.divider} />
-          <Button 
-            mode="outlined" 
-            icon="trash-can-outline" 
-            onPress={() => showSnackbar('Data management coming soon!')}
-            style={styles.manageDataButton}>
-            Manage Data
-          </Button>
-        </Surface>
         
         <Text variant="titleMedium" style={styles.sectionTitle}>Data Integrations</Text>
         <Text variant="bodySmall" style={styles.sectionDescription}>
