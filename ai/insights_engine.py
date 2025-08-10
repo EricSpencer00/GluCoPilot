@@ -30,6 +30,105 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 class AIInsightsEngine:
+    def __init__(self):
+        """Initialize the AI insights engine with models if local generation is needed."""
+        self.model_name = "openai/gpt-oss-20b"  # Default model name
+        # Load local model if needed (when not using remote APIs)
+        if not settings.USE_REMOTE_MODEL:
+            try:
+                logger.info("Initializing local models for insights generation...")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    settings.MODEL_PATH or "DialoGPT-medium",
+                    local_files_only=True
+                )
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    settings.MODEL_PATH or "DialoGPT-medium",
+                    local_files_only=True
+                )
+                self.generator = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+                # Initialize sentence transformer for semantic search
+                self.sentence_model = SentenceTransformer(
+                    settings.SENTENCE_TRANSFORMER_PATH or "sentence-transformer",
+                    device="cpu"
+                )
+                logger.info("Models loaded successfully")
+            except Exception as e:
+                logger.error(f"Error loading models: {str(e)}")
+                self.generator = None
+                self.sentence_model = None
+    
+    async def generate_recommendations(
+        self,
+        user: User,
+        glucose_data: List[GlucoseReading],
+        insulin_data: List[Insulin],
+        food_data: List[Food],
+        db: Session,
+        activity_data=None,
+        sleep_data=None,
+        mood_data=None,
+        medication_data=None,
+        illness_data=None,
+        menstrual_cycle_data=None,
+        health_data=None
+    ) -> List[Dict[str, Any]]:
+        """Generate AI recommendations based on user data and patterns."""
+        logger.info(f"Generating recommendations for user {user.id}")
+        try:
+            # Default empty lists for optional params
+            activity_data = activity_data or []
+            sleep_data = sleep_data or []
+            mood_data = mood_data or []
+            medication_data = medication_data or []
+            illness_data = illness_data or []
+            menstrual_cycle_data = menstrual_cycle_data or []
+            health_data = health_data or []
+            
+            # Analyze patterns in all data streams
+            patterns = await self._analyze_all_patterns(
+                glucose_data, insulin_data, food_data, 
+                activity_data, sleep_data, mood_data,
+                medication_data, illness_data, menstrual_cycle_data, health_data
+            )
+            
+            # Create comprehensive context with all analyzed patterns
+            context = self._create_comprehensive_context(
+                user, patterns, glucose_data, insulin_data, food_data,
+                activity_data, sleep_data, mood_data, medication_data,
+                illness_data, menstrual_cycle_data, health_data
+            )
+            
+            # Generate AI recommendations
+            ai_text = await self._generate_ai_recommendations(context)
+            
+            # Process into structured format
+            recommendations = self._process_recommendations(ai_text, user.id)
+            
+            # Determine suggested implementation times
+            now = datetime.utcnow()
+            for rec in recommendations:
+                # If timing not provided by AI, calculate a reasonable time
+                if not rec.get('timing'):
+                    rec['timing'] = self._calculate_suggested_time(rec, now).isoformat()
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Error generating recommendations: {str(e)}")
+            return [{
+                'title': "Error generating recommendations",
+                'description': "An error occurred while analyzing your data. Please try again later.",
+                'category': 'general',
+                'priority': 'medium',
+                'confidence': 0.5,
+                'action': "Try again later or contact support if the problem persists.",
+                'timing': (datetime.utcnow() + timedelta(hours=1)).isoformat()
+            }]
 
     def _find_meal_insulin_spike_events(self, glucose_data, insulin_data, food_data):
         """Find meal+insulin+glucose spike patterns in the last 24h."""
@@ -64,21 +163,6 @@ class AIInsightsEngine:
                     'peak_time': peak.timestamp,
                     'spike': spike
                 })
-# Find and summarize meal-insulin-glucose spike events
-spike_events = self._find_meal_insulin_spike_events(glucose_data, insulin_data, food_data)
-spike_summaries = ""
-if spike_events:
-    spike_summaries += "\nRecent meal-insulin-glucose spike events detected:\n"
-    for e in spike_events:
-        spike_summaries += (
-            f"- At {e['meal_time'].strftime('%Y-%m-%d %H:%M')}, user took {e['insulin']}u insulin at {e['insulin_time'].strftime('%H:%M')}, "
-            f"ate {e['carbs']}g carbs, glucose rose from {e['pre_glucose']} to {e['peak_glucose']} mg/dL in 3h (spike: {e['spike']} mg/dL).\n"
-        )
-    spike_summaries += "For each event, suggest a more optimal insulin:carb ratio or action to prevent the spike.\n"
-
-# This block appears to be misplaced and duplicated, so it should be removed.
-# The correct context string is built in the _create_comprehensive_context method below.
-# Remove this erroneous block to fix the syntax error.
             
     def _calculate_suggested_time(self, recommendation_data, now):
         """Calculate a suggested time for when this recommendation should be implemented"""
@@ -840,309 +924,82 @@ if spike_events:
         morning_values = [reading.value for reading in morning_readings]
         return np.mean(morning_values) > 140  # Simple heuristic
     
-        def _create_comprehensive_context(
-            self,
-            user: User,
-            patterns: Dict[str, Any],
-            glucose_data: List[GlucoseReading],
-            insulin_data: List[Insulin],
-            food_data: List[Food],
-            activity_data: List[Activity],
-            sleep_data: List[Sleep],
-            mood_data: List[Mood],
-            medication_data: List[Medication],
-            illness_data: List[Illness],
-            menstrual_cycle_data: List[MenstrualCycle],
-            health_data: List[HealthData]
-        ) -> str:
-            """Build a comprehensive context string for AI recommendations."""
-            # Calculate age if possible
-            age = getattr(user, 'age', 'Unknown')
-            # Recent data for summary
-            now = datetime.utcnow()
-            recent_glucose = [g for g in glucose_data if g.timestamp >= now - timedelta(hours=24)]
-            recent_insulin = [i for i in insulin_data if i.timestamp >= now - timedelta(hours=24)]
-            recent_food = [f for f in food_data if f.timestamp >= now - timedelta(hours=24)]
-            recent_activity = [a for a in activity_data if a.timestamp >= now - timedelta(hours=24)]
-            recent_sleep = [s for s in sleep_data if s.start_time >= now - timedelta(days=7)]
-            recent_mood = [m for m in mood_data if m.timestamp >= now - timedelta(days=7)]
-    
-            # Find and summarize meal-insulin-glucose spike events
-            spike_events = self._find_meal_insulin_spike_events(glucose_data, insulin_data, food_data)
-            spike_summaries = ""
-            if spike_events:
-                spike_summaries += "\nRecent meal-insulin-glucose spike events detected:\n"
-                for e in spike_events:
-                    spike_summaries += (
-                        f"- At {e['meal_time'].strftime('%Y-%m-%d %H:%M')}, user took {e['insulin']}u insulin at {e['insulin_time'].strftime('%H:%M')}, "
-                        f"ate {e['carbs']}g carbs, glucose rose from {e['pre_glucose']} to {e['peak_glucose']} mg/dL in 3h (spike: {e['spike']} mg/dL).\n"
-                    )
-                spike_summaries += "For each event, suggest a more optimal insulin:carb ratio or action to prevent the spike.\n"
-    
-            context = f"""
-    Patient Profile:
-    - Age: {age}
-    - Gender: {getattr(user, 'gender', 'Unknown')}
-    - Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-    - Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-    - Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-    - Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-    {spike_summaries}
-    
-    Current Glucose Patterns (24-hour analysis):
-    - Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown') if patterns['glucose_patterns'].get('average') is not None else 'Unknown'} mg/dL
-    - Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0) if patterns['glucose_patterns'].get('time_in_range') is not None else 0:.1f}%
-    - Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0) if patterns['variability'].get('coefficient_of_variation') is not None else 0:.1f}%
-    - Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0) if patterns['glucose_patterns'].get('frequent_highs') is not None else 0:.1f}%
-    - Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0) if patterns['glucose_patterns'].get('frequent_lows') is not None else 0:.1f}%
-    
-    Recent Data Summary:
-    - Glucose readings: {len(recent_glucose)} in last 24 hours
-    - Insulin doses: {len(recent_insulin)} in last 24 hours
-    - Meals logged: {len(recent_food)} in last 24 hours
-    - Activity sessions: {len(recent_activity)} in last 24 hours
-    - Sleep logs: {len(recent_sleep)} in last week
-    - Mood logs: {len(recent_mood)} in last week
-    
-    Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-    to improve glucose management. For each recommendation:
-    1. Provide a clear, concise title (one short sentence)
-    2. Include detailed explanation with specific actions (2-3 sentences)
-    3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-    4. Indicate priority as: high, medium, or low
-    5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-    6. If possible, suggest a specific time when this action should be taken
-    """
-            return context
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
+    def _create_comprehensive_context(
+        self,
+        user: User,
+        patterns: Dict[str, Any],
+        glucose_data: List[GlucoseReading],
+        insulin_data: List[Insulin],
+        food_data: List[Food],
+        activity_data: List[Activity],
+        sleep_data: List[Sleep],
+        mood_data: List[Mood],
+        medication_data: List[Medication],
+        illness_data: List[Illness],
+        menstrual_cycle_data: List[MenstrualCycle],
+        health_data: List[HealthData]
+    ) -> str:
+        """Build a comprehensive context string for AI recommendations."""
+        # Calculate age if possible
+        age = getattr(user, 'age', 'Unknown')
+        # Recent data for summary
+        now = datetime.utcnow()
+        recent_glucose = [g for g in glucose_data if g.timestamp >= now - timedelta(hours=24)]
+        recent_insulin = [i for i in insulin_data if i.timestamp >= now - timedelta(hours=24)]
+        recent_food = [f for f in food_data if f.timestamp >= now - timedelta(hours=24)]
+        recent_activity = [a for a in activity_data if a.timestamp >= now - timedelta(hours=24)]
+        recent_sleep = [s for s in sleep_data if s.start_time >= now - timedelta(days=7)]
+        recent_mood = [m for m in mood_data if m.timestamp >= now - timedelta(days=7)]
 
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
+        # Find and summarize meal-insulin-glucose spike events
+        spike_events = self._find_meal_insulin_spike_events(glucose_data, insulin_data, food_data)
+        spike_summaries = ""
+        if spike_events:
+            spike_summaries += "\nRecent meal-insulin-glucose spike events detected:\n"
+            for e in spike_events:
+                spike_summaries += (
+                    f"- At {e['meal_time'].strftime('%Y-%m-%d %H:%M')}, user took {e['insulin']}u insulin at {e['insulin_time'].strftime('%H:%M')}, "
+                    f"ate {e['carbs']}g carbs, glucose rose from {e['pre_glucose']} to {e['peak_glucose']} mg/dL in 3h (spike: {e['spike']} mg/dL).\n"
+                )
+            spike_summaries += "For each event, suggest a more optimal insulin:carb ratio or action to prevent the spike.\n"
 
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
+        def _fmt(val):
+            return f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
 
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
-"""
--        context = f"""
-Patient Profile:
-  - Age: {age}
-  - Gender: {getattr(user, 'gender', 'Unknown')}
-  - Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-  - Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-  - Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-  - Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
-
-Current Glucose Patterns (24-hour analysis):
-  - Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown') if patterns['glucose_patterns'].get('average') is not None else 'Unknown'} mg/dL
-  - Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0) if patterns['glucose_patterns'].get('time_in_range') is not None else 0:.1f}%
-  - Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0) if patterns['variability'].get('coefficient_of_variation') is not None else 0:.1f}%
-  - Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0) if patterns['glucose_patterns'].get('frequent_highs') is not None else 0:.1f}%
-  - Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0) if patterns['glucose_patterns'].get('frequent_lows') is not None else 0:.1f}%
-
-Recent Data Summary:
-  - Glucose readings: {len(recent_glucose)} in last 24 hours
-  - Insulin doses: {len(recent_insulin)} in last 24 hours
-  - Meals logged: {len(recent_food)} in last 24 hours
-  - Activity sessions: {len(recent_activity)} in last 24 hours
-  - Sleep logs: {len(recent_sleep)} in last week
-  - Mood logs: {len(recent_mood)} in last week
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
-"""
-        return context
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
-
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
-
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
-"""
-        return context
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
-
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
-
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
-"""
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
-
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
-
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
         context = f"""
-Patient Profile:
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
+            Patient Profile:
+            - Age: {age}
+            - Gender: {getattr(user, 'gender', 'Unknown')}
+            - Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
+            - Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
+            - Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
+            - Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
+            {spike_summaries}
 
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
+            Current Glucose Patterns (24-hour analysis):
+            - Average Glucose: {_fmt(patterns['glucose_patterns'].get('average', 'Unknown'))} mg/dL
+            - Time in Range: {_fmt(patterns['glucose_patterns'].get('time_in_range', 'Unknown'))}%
+            - Glucose Variability: {_fmt(patterns['variability'].get('coefficient_of_variation', 'Unknown'))}%
+            - Frequent highs (>250): {_fmt(patterns['glucose_patterns'].get('frequent_highs', 'Unknown'))}%
+            - Frequent lows (<70): {_fmt(patterns['glucose_patterns'].get('frequent_lows', 'Unknown'))}%
 
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
+            Recent Data Summary:
+            - Glucose readings: {len(recent_glucose)} in last 24 hours
+            - Insulin doses: {len(recent_insulin)} in last 24 hours
+            - Meals logged: {len(recent_food)} in last 24 hours
+            - Activity sessions: {len(recent_activity)} in last 24 hours
+            - Sleep logs: {len(recent_sleep)} in last week
+            - Mood logs: {len(recent_mood)} in last week
 
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
-6. If possible, suggest a specific time when this action should be taken
-"""
-        return context
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
-{spike_summaries}
-
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
-
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations 
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., "Try taking insulin 20 minutes before your next meal")
-6. If possible, suggest a specific time when this action should be taken
-"""
+            Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
+            to improve glucose management. For each recommendation:
+            1. Provide a clear, concise title (one short sentence)
+            2. Include detailed explanation with specific actions (2-3 sentences)
+            3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
+            4. Indicate priority as: high, medium, or low
+            5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
+            6. If possible, suggest a specific time when this action should be taken
+            """
         return context
         
     def _calculate_time_range_average(self, glucose_data: List[GlucoseReading], start_hour: int, end_hour: int) -> float:
