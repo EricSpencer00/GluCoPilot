@@ -4,11 +4,11 @@ import { Text } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 
 interface A1cOverTimeChartProps {
-  weeks: { [week: string]: { estimated_a1c: number } };
+  weeks?: { [week: string]: { estimated_a1c: number } };
   height?: number;
 }
 
-export const A1cOverTimeChart: React.FC<A1cOverTimeChartProps> = ({ weeks, height = 200 }) => {
+export const A1cOverTimeChart: React.FC<A1cOverTimeChartProps> = ({ weeks = {}, height = 200 }) => {
   const screenWidth = Dimensions.get('window').width - 32;
   const weekLabels = Object.keys(weeks);
   const a1cValues = weekLabels.map(week => weeks[week]?.estimated_a1c ?? null);
