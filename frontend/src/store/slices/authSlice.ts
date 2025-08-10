@@ -1,16 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { User } from '../../types/User';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persistor } from '../store';
 import * as Updates from 'expo-updates';
 
 // Interfaces
-interface User {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-}
+
 
 interface AuthState {
   user: User | null;
