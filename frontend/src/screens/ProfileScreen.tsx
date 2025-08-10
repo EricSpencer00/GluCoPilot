@@ -151,13 +151,14 @@ const ProfileScreen: React.FC = () => {
         type: 'application/xml',
         copyToCacheDirectory: true,
       });
-      if (result.type === 'success') {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
         const formData = new FormData();
         formData.append('file', {
-          uri: result.uri,
-          name: result.name || 'apple_health_export.xml',
-          type: 'application/xml',
-        });
+          uri: file.uri,
+          name: file.name || 'apple_health_export.xml',
+          type: file.mimeType || 'application/xml',
+        } as any);
         const response = await axios.post('/api/apple-health/import', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',

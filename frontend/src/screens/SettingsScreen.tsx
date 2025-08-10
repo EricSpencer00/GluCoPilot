@@ -18,7 +18,30 @@ const SettingsScreen = () => {
   const navigation = useNavigation<StackNavigationProp<ProfileStackParamList, 'Settings'>>();
   const dispatch = useDispatch();
   const user: User | null = useSelector((state: RootState) => state.auth.user);
-  const [form, setForm] = useState<User>({ ...(user || {}) });
+  const emptyUser: User = {
+    id: 0,
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+    is_active: false,
+    is_verified: false,
+    created_at: '',
+    last_login: '',
+    dexcom_username: '',
+    birthdate: '',
+    gender: '',
+    height_cm: 0,
+    weight_kg: 0,
+    diabetes_type: 1,
+    diagnosis_date: '',
+    target_glucose_min: 0,
+    target_glucose_max: 0,
+    insulin_carb_ratio: 0,
+    insulin_sensitivity_factor: 0,
+    privacy_preferences: {},
+  };
+  const [form, setForm] = useState<User>(user ? user : emptyUser);
   // Local state for lbs/inches
   const [weightLbs, setWeightLbs] = useState(form.weight_kg ? Math.round(form.weight_kg * 2.20462).toString() : '');
   const [heightInches, setHeightInches] = useState(form.height_cm ? Math.round(form.height_cm / 2.54).toString() : '');
@@ -52,7 +75,7 @@ const SettingsScreen = () => {
       // Use custom API instance so base URL and token are handled automatically
       const res = await api.patch('/auth/me', updated);
       setSnackbar({visible: true, message: 'Profile updated!'});
-      dispatch(login({ email: form.email, password: '' }));
+      dispatch(login({ email: form.email, password: '' }) as any);
     } catch (e: any) {
       setSnackbar({visible: true, message: 'Failed to update profile.'});
     } finally {
