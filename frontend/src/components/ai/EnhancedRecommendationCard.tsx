@@ -103,7 +103,9 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
                     titleStyle={styles.recommendationTitle}
                     descriptionStyle={styles.recommendationText}
                   />
-                  {index < recommendations.length - 1 && <Divider style={styles.divider} />}
+                  {index < recommendations.length - 1 && (
+                    <Divider key={`divider-${recommendation.id}`} style={styles.divider} />
+                  )}
                 </View>
               </Surface>
             ))}
