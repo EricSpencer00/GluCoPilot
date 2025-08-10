@@ -42,14 +42,28 @@ class UserResponse(UserBase):
         from_attributes = True
 
 class UserUpdate(BaseModel):
-    """User update schema"""
+    """User update schema (all editable fields)"""
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
-    target_glucose_min: Optional[int] = Field(None, ge=50, le=120)
-    target_glucose_max: Optional[int] = Field(None, ge=120, le=300)
+    target_glucose_min: Optional[int] = Field(None, ge=50, le=120) # unsure if we can increase this
+    target_glucose_max: Optional[int] = Field(None, ge=120, le=300) # unsure if this is a good limit or minima
     insulin_carb_ratio: Optional[int] = Field(None, ge=5, le=50)
     insulin_sensitivity_factor: Optional[int] = Field(None, ge=20, le=200)
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    birthdate: Optional[datetime] = None
+    gender: Optional[str] = None
+    diabetes_type: Optional[int] = Field(None, ge=1, le=2)
+    diagnosis_date: Optional[datetime] = None
+    dexcom_username: Optional[str] = None
+    dexcom_ous: Optional[bool] = None
+    myfitnesspal_username: Optional[str] = None
+    apple_health_authorized: Optional[bool] = None
+    google_fit_authorized: Optional[bool] = None
+    fitbit_authorized: Optional[bool] = None
+    notification_preferences: Optional[dict] = None
+    privacy_preferences: Optional[dict] = None
 
 class Token(BaseModel):
     """JWT token schema"""
