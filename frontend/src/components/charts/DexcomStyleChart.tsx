@@ -330,21 +330,24 @@ const styles = StyleSheet.create({
   chartContainer: {
     marginVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#fff',
-    elevation: 2,
+    backgroundColor: '#FFFFFF',
+    elevation: 4,
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   noDataContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#E0E0E0',
     borderRadius: 16,
   },
   timeRangeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#E0E0E0',
     borderRadius: 8,
     padding: 2,
   },
@@ -355,15 +358,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   activeTimeRange: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FF8A65',
     elevation: 2,
   },
   timeRangeText: {
     fontSize: 12,
-    color: '#666',
+    color: '#757575',
   },
   activeTimeRangeText: {
-    color: '#000',
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
 });

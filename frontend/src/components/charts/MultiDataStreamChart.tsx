@@ -349,9 +349,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chartContainer: {
-    borderRadius: 8,
-    elevation: 2,
-    backgroundColor: '#fff',
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   legendContainer: {
     flexDirection: 'row',
@@ -370,6 +373,8 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     marginRight: 4,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   legendText: {
     fontSize: 12,
