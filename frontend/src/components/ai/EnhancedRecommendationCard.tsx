@@ -40,16 +40,17 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
     return 'lightbulb-outline';
   };
   
-  const getPriorityColor = (priority: string) => {
+  // Priority chip background and text color
+  const getPriorityChipStyle = (priority: string) => {
     switch(priority.toLowerCase()) {
       case 'high':
-        return '#E53935'; // Red
+        return { backgroundColor: '#E53935', borderColor: '#E53935', textColor: '#FFFFFF' };
       case 'medium':
-        return '#FB8C00'; // Orange
+        return { backgroundColor: '#FFB74D', borderColor: '#FFB74D', textColor: '#FFFFFF' };
       case 'low':
-        return '#4CAF50'; // Green
+        return { backgroundColor: '#81C784', borderColor: '#81C784', textColor: '#FFFFFF' };
       default:
-        return '#757575'; // Gray
+        return { backgroundColor: '#FFFFFF', borderColor: '#757575', textColor: '#757575' };
     }
   };
   
@@ -77,32 +78,45 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
           <View>
             {recommendations.map((recommendation, index) => (
               <Surface key={recommendation.id} style={styles.itemSurface}>
-                <List.Item
-                  title={truncateTitle(recommendation.title || recommendation.content)}
-                  description={truncateTitle(recommendation.content, 100)}
-                  left={props => (
-                    <List.Icon 
-                      {...props} 
-                      icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)} 
-                      color={getPriorityColor(recommendation.priority)}
-                    />
+                <View style={styles.overflowClipView}>
+                  <List.Item
+                    title={truncateTitle(recommendation.title || recommendation.content)}
+                    description={truncateTitle(recommendation.content, 100)}
+                    left={props => {
+                      const chipStyle = getPriorityChipStyle(recommendation.priority);
+                      return (
+                        <List.Icon
+                          {...props}
+                          icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)}
+                          color={chipStyle.backgroundColor}
+                        />
+                      );
+                    }}
+                    right={props => {
+                      const chipStyle = getPriorityChipStyle(recommendation.priority);
+                      return (
+                        <Chip
+                          mode="flat"
+                          style={[
+                            styles.priorityChip,
+                            { backgroundColor: chipStyle.backgroundColor, borderColor: chipStyle.borderColor }
+                          ]}
+                          textStyle={{ color: chipStyle.textColor, fontSize: 12, fontWeight: 'bold' }}
+                        >
+                          {recommendation.priority}
+                        </Chip>
+                      );
+                    }}
+                    style={styles.listItem}
+                    titleNumberOfLines={1}
+                    descriptionNumberOfLines={2}
+                    titleStyle={styles.recommendationTitle}
+                    descriptionStyle={styles.recommendationText}
+                  />
+                  {index < recommendations.length - 1 && (
+                    <Divider key={`divider-${recommendation.id}`} style={styles.divider} />
                   )}
-                  right={props => (
-                    <Chip 
-                      mode="outlined" 
-                      style={[styles.priorityChip, { borderColor: getPriorityColor(recommendation.priority) }]}
-                      textStyle={{ color: getPriorityColor(recommendation.priority), fontSize: 10 }}
-                    >
-                      {recommendation.priority}
-                    </Chip>
-                  )}
-                  style={styles.listItem}
-                  titleNumberOfLines={1}
-                  descriptionNumberOfLines={2}
-                  titleStyle={styles.recommendationTitle}
-                  descriptionStyle={styles.recommendationText}
-                />
-                {index < recommendations.length - 1 && <Divider style={styles.divider} />}
+                </View>
               </Surface>
             ))}
             <Button 
@@ -131,8 +145,11 @@ const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
     borderRadius: 16,
-    elevation: 3,
-    backgroundColor: '#fff',
+    elevation: 5,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   headerRow: {
     flexDirection: 'row',
@@ -142,54 +159,72 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
+    color: '#00796B',
+    fontSize: 18,
   },
   count: {
-    opacity: 0.7,
+    color: '#757575',
+    fontSize: 14,
   },
   loader: {
     marginVertical: 24,
   },
   itemSurface: {
     marginVertical: 4,
-    borderRadius: 8,
-    elevation: 1,
-    backgroundColor: '#fafafa',
+    borderRadius: 12,
+    elevation: 2,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  overflowClipView: {
     overflow: 'hidden',
+    borderRadius: 12,
   },
   listItem: {
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   recommendationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    color: '#212121',
+    fontWeight: 'bold',
   },
   recommendationText: {
-    fontSize: 12,
+    fontSize: 13,
+    color: '#757575',
   },
   divider: {
     height: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#E0E0E0',
   },
   priorityChip: {
-    height: 24,
+    height: 26,
     alignSelf: 'center',
     marginRight: 8,
+    borderRadius: 12,
   },
   viewAllButton: {
     marginTop: 16,
     borderRadius: 8,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    backgroundColor: '#FF8A65',
+    elevation: 2,
   },
   buttonLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   noDataContainer: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
   },
   noDataSubtext: {
-    color: '#888',
+    color: '#757575',
     marginTop: 8,
   },
 });

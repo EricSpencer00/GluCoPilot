@@ -108,7 +108,7 @@ export const TrendsScreen: React.FC = () => {
           {/* A1C Over Time Chart */}
           <Card style={styles.chartCard}>
             <Card.Content>
-              <A1cOverTimeChart weeks={trends.weeks} />
+              <A1cOverTimeChart weeks={trends && trends.weeks ? trends.weeks : {}} />
             </Card.Content>
           </Card>
 

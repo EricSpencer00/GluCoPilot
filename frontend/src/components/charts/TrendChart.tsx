@@ -61,23 +61,23 @@ export const TrendChart: React.FC<TrendChartProps> = ({
           width={screenWidth}
           height={height}
           chartConfig={{
-            backgroundColor: '#fff',
-            backgroundGradientFrom: '#fff',
-            backgroundGradientTo: '#fff',
+            backgroundColor: '#FFFFFF',
+            backgroundGradientFrom: '#FFFFFF',
+            backgroundGradientTo: '#FFFFFF',
             decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
-            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            color: (opacity = 1) => `rgba(0, 121, 107, ${opacity})`, // Deep Teal
+            labelColor: (opacity = 1) => `rgba(33, 33, 33, ${opacity})`, // Dark Gray
             style: {
               borderRadius: 16,
             },
             propsForDots: {
               r: '4',
               strokeWidth: '1',
-              stroke: '#4285F4',
+              stroke: '#FF8A65', // Vibrant Coral
             },
             propsForBackgroundLines: {
               strokeDasharray: '',
-              stroke: '#e0e0e0',
+              stroke: '#E0E0E0',
             },
           }}
           bezier
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#E0E0E0',
     borderRadius: 16,
   },
 });

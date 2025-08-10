@@ -34,12 +34,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#00796B', // Deep Teal for GlucoPilot brand
   },
   text: {
     marginTop: 16,
     fontSize: 16,
-    color: '#b34d4d',
+    color: '#FFFFFF', // White text for contrast
     fontWeight: '600',
     letterSpacing: 0.5,
   },

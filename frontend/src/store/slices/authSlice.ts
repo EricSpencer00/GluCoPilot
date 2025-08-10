@@ -42,6 +42,8 @@ export const login = createAsyncThunk(
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem('auth_token', token);
+      const savedToken = await AsyncStorage.getItem('auth_token');
+      console.log('Token saved to AsyncStorage:', savedToken); // DEBUG LOG
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
