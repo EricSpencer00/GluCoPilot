@@ -1244,10 +1244,26 @@ Priority: medium
 
 
     def _attach_examples_and_graph(self, rec: dict) -> dict:
-        """Attach example events and graph data to the recommendation context for drill-down UI."""
-        # This is a stub. In production, this would use the analyzed patterns and user data to find relevant events.
-        # For now, we simulate with a placeholder example and graph data.
+        """Attach example events, graph data, and supporting data points for drill-down UI."""
+        import uuid
         now = datetime.utcnow()
+        # Generate a unique recommendation_id for drill-down
+        recommendation_id = str(uuid.uuid4())
+        # Example: supporting data points (simulate with random for now)
+        supporting_data_points = [
+            {
+                'timestamp': (now - timedelta(hours=3)).isoformat(),
+                'value': 250,
+                'event_type': rec.get('category', 'general'),
+                'note': 'Example spike before meal'
+            },
+            {
+                'timestamp': (now - timedelta(hours=2, minutes=30)).isoformat(),
+                'value': 180,
+                'event_type': rec.get('category', 'general'),
+                'note': 'Glucose after insulin'
+            }
+        ]
         # Example event: a glucose spike, meal, or insulin event
         example_event = {
             'timestamp': (now - timedelta(hours=random.randint(1, 24))).isoformat(),
@@ -1267,10 +1283,41 @@ Priority: medium
         context.update({
             'generated_at': now.isoformat(),
             'ai_model': getattr(self, 'model_name', 'unknown'),
+            'recommendation_id': recommendation_id,
             'example_event': example_event,
-            'graph_data': graph_data
+            'graph_data': graph_data,
+            'supporting_data_points': supporting_data_points
         })
         return context
+    async def explain_recommendation_drilldown(self, recommendation: dict, user: 'User', patterns: dict = None) -> str:
+        """
+        Generate a focused AI explanation for why a specific recommendation was made, using supporting data points.
+        """
+        # Build a focused context window
+        context = f"""
+        Patient Profile:
+        - Age: {getattr(user, 'age', 'Unknown')}
+        - Gender: {getattr(user, 'gender', 'Unknown')}
+        - Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
+        - Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
+        
+        Recommendation to explain:
+        - Title: {recommendation.get('title', '')}
+        - Description: {recommendation.get('description', '')}
+        - Category: {recommendation.get('category', '')}
+        - Priority: {recommendation.get('priority', '')}
+        - Action: {recommendation.get('action', '')}
+        - Timing: {recommendation.get('timing', '')}
+        
+        Supporting data points:
+        """
+        supporting = recommendation.get('context', {}).get('supporting_data_points', [])
+        for dp in supporting:
+            context += f"- {dp.get('timestamp', '')}: {dp.get('event_type', '')} value {dp.get('value', '')} ({dp.get('note', '')})\n"
+        context += "\nPlease explain, using the above data, why this recommendation is appropriate for the user. Be specific and reference the supporting data points."
+        # Call the AI model for explanation
+        ai_explanation = await self._generate_ai_recommendations(context)
+        return ai_explanation
     
     def _parse_recommendation(self, rec_text: str, user_id: int) -> Optional[Dict[str, Any]]:
         """Parse a single recommendation text into structured data"""
