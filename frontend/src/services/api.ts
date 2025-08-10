@@ -19,10 +19,12 @@ api.interceptors.request.use(
   async (config) => {
     // Get token from secure storage
     const token = await AsyncStorage.getItem('auth_token');
-    
+    console.log('Token used for API:', token); // DEBUG LOG
     // If token exists, add to headers
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.error('No auth token found for API request');
     }
 
     // Add /api/v1 prefix if not already present and not an absolute URL
