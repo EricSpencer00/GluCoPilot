@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     # AI/ML
     HUGGINGFACE_TOKEN: str = ""
     LOCAL_MODEL_PATH: str = "./models/"
-    USE_LOCAL_MODEL: bool = True
+    USE_LOCAL_MODEL: bool = False
+    USE_REMOTE_MODEL: bool = True
     MODEL_NAME: str = "microsoft/DialoGPT-medium"
     
     # Reddit
