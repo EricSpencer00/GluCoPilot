@@ -42,6 +42,14 @@ export const TrendsScreen: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
+        <LoadingScreen />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <Text variant="headlineMedium" style={styles.header}>Trends</Text>
@@ -79,9 +87,7 @@ export const TrendsScreen: React.FC = () => {
         </Card.Content>
       </Card>
 
-      {loading ? (
-        <LoadingScreen />
-      ) : error ? (
+      {error ? (
         <Text style={{ color: 'red', margin: 16 }}>{error}</Text>
       ) : trends ? (
         <>
