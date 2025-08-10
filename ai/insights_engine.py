@@ -1,5 +1,6 @@
 import os
 import asyncio
+
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import json
@@ -9,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 import requests
 import numpy as np
 from sqlalchemy.orm import Session
+import random
+import math
 
 from core.config import settings
 from models.user import User
@@ -27,63 +30,37 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 class AIInsightsEngine:
-    """Core AI engine for generating diabetes management insights"""
-    
     def __init__(self):
-        self.model_name = settings.MODEL_NAME
-        self.tokenizer = None
-        self.model = None
-        self.embedding_model = None
-        self.generator = None
-        self.initialized = False
-    
-    async def initialize(self):
-        """Initialize AI models"""
-        if self.initialized:
-            return
-        try:
-            logger.info("Initializing AI models...")
-            if settings.MODEL_NAME == "openai/gpt-oss-20b":
-                # No local pipeline, will use Inference API
+        """Initialize the AI insights engine with models if local generation is needed."""
+        self.model_name = "openai/gpt-oss-20b"  # Default model name
+        # Load local model if needed (when not using remote APIs)
+        if not settings.USE_REMOTE_MODEL:
+            try:
+                logger.info("Initializing local models for insights generation...")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    settings.MODEL_PATH or "DialoGPT-medium",
+                    local_files_only=True
+                )
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    settings.MODEL_PATH or "DialoGPT-medium",
+                    local_files_only=True
+                )
+                self.generator = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+                # Initialize sentence transformer for semantic search
+                self.sentence_model = SentenceTransformer(
+                    settings.SENTENCE_TRANSFORMER_PATH or "sentence-transformer",
+                    device="cpu"
+                )
+                logger.info("Models loaded successfully")
+            except Exception as e:
+                logger.error(f"Error loading models: {str(e)}")
                 self.generator = None
-            elif settings.USE_LOCAL_MODEL and os.path.exists(settings.LOCAL_MODEL_PATH):
-                self._load_local_model()
-            else:
-                self._load_huggingface_model()
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            self.initialized = True
-            logger.info("AI models initialized successfully")
-        except Exception as e:
-            logger.error(f"Error initializing AI models: {str(e)}")
-            raise
-    
-    def _load_local_model(self):
-        """Load local model"""
-        logger.info(f"Loading local model from {settings.LOCAL_MODEL_PATH}")
-        self.tokenizer = AutoTokenizer.from_pretrained(settings.LOCAL_MODEL_PATH)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            settings.LOCAL_MODEL_PATH,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
-        )
-        self.generator = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            max_length=512,
-            temperature=0.7,
-            do_sample=True
-        )
-    
-    def _load_huggingface_model(self):
-        """Load model from Hugging Face"""
-        logger.info(f"Loading Hugging Face model: {self.model_name}")
-        self.generator = pipeline(
-            "text-generation",
-            model=self.model_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
-        )
+                self.sentence_model = None
     
     async def generate_recommendations(
         self,
@@ -91,118 +68,101 @@ class AIInsightsEngine:
         glucose_data: List[GlucoseReading],
         insulin_data: List[Insulin],
         food_data: List[Food],
-        activity_data: List[Activity] = None,
-        sleep_data: List[Sleep] = None,
-        mood_data: List[Mood] = None,
-        medication_data: List[Medication] = None,
-        illness_data: List[Illness] = None,
-        menstrual_cycle_data: List[MenstrualCycle] = None,
-        health_data: List[HealthData] = None,
-        db: Session = None
+        db: Session,
+        activity_data=None,
+        sleep_data=None,
+        mood_data=None,
+        medication_data=None,
+        illness_data=None,
+        menstrual_cycle_data=None,
+        health_data=None
     ) -> List[Dict[str, Any]]:
-        """Generate personalized recommendations based on user data from multiple streams"""
-        
-        if not self.initialized:
-            await self.initialize()
-        
-        logger.info(f"Generating comprehensive recommendations for user {user.id}")
-        
-        # Initialize empty lists for any missing data
-        activity_data = activity_data or []
-        sleep_data = sleep_data or []
-        mood_data = mood_data or []
-        medication_data = medication_data or []
-        illness_data = illness_data or []
-        menstrual_cycle_data = menstrual_cycle_data or []
-        health_data = health_data or []
-        
+        """Generate AI recommendations based on user data and patterns."""
+        logger.info(f"Generating recommendations for user {user.id}")
         try:
-            # Analyze patterns from all data streams
+            # Default empty lists for optional params
+            activity_data = activity_data or []
+            sleep_data = sleep_data or []
+            mood_data = mood_data or []
+            medication_data = medication_data or []
+            illness_data = illness_data or []
+            menstrual_cycle_data = menstrual_cycle_data or []
+            health_data = health_data or []
+            
+            # Analyze patterns in all data streams
             patterns = await self._analyze_all_patterns(
-                glucose_data, 
-                insulin_data, 
-                food_data,
-                activity_data,
-                sleep_data,
-                mood_data,
-                medication_data,
-                illness_data,
-                menstrual_cycle_data,
-                health_data
+                glucose_data, insulin_data, food_data, 
+                activity_data, sleep_data, mood_data,
+                medication_data, illness_data, menstrual_cycle_data, health_data
             )
             
-            # Create comprehensive context for AI model
+            # Create comprehensive context with all analyzed patterns
             context = self._create_comprehensive_context(
-                user, 
-                patterns, 
-                glucose_data, 
-                insulin_data, 
-                food_data,
-                activity_data,
-                sleep_data,
-                mood_data,
-                medication_data,
-                illness_data,
-                menstrual_cycle_data,
-                health_data
+                user, patterns, glucose_data, insulin_data, food_data,
+                activity_data, sleep_data, mood_data, medication_data,
+                illness_data, menstrual_cycle_data, health_data
             )
             
-            # Generate recommendations using AI
-            ai_recommendations = await self._generate_ai_recommendations(context)
+            # Generate AI recommendations
+            ai_text = await self._generate_ai_recommendations(context)
             
-            # Process and validate recommendations
-            processed_recommendations = self._process_recommendations(ai_recommendations, user.id)
+            # Process into structured format
+            recommendations = self._process_recommendations(ai_text, user.id)
             
-            # Store recommendations in database with enhanced fields
-            stored_recommendations = []
+            # Determine suggested implementation times
             now = datetime.utcnow()
+            for rec in recommendations:
+                # If timing not provided by AI, calculate a reasonable time
+                if not rec.get('timing'):
+                    rec['timing'] = self._calculate_suggested_time(rec, now).isoformat()
             
-            for rec_data in processed_recommendations:
-                # Calculate a suggested time for this recommendation if possible
-                suggested_time = self._calculate_suggested_time(rec_data, now)
-                
-                recommendation = Recommendation(
-                    user_id=user.id,
-                    recommendation_type=rec_data.get('category', 'general'),
-                    content=rec_data.get('description', ''),
-                    title=rec_data.get('title'),
-                    category=rec_data.get('category'),
-                    priority=rec_data.get('priority'),
-                    confidence_score=rec_data.get('confidence', 0.8),
-                    context_data=json.dumps(rec_data.get('context', {})),
-                    suggested_time=suggested_time,
-                    suggested_action=rec_data.get('action', '')
-                )
-                db.add(recommendation)
-                stored_recommendations.append(recommendation)
+            return recommendations
             
-            db.commit()
-            logger.info(f"Generated {len(stored_recommendations)} comprehensive recommendations")
-            
-            # Return all fields for API response
-            return [
-                {
-                    'id': rec.id,
-                    'recommendation_type': rec.recommendation_type,
-                    'content': rec.content,
-                    'title': rec.title,
-                    'category': rec.category,
-                    'priority': rec.priority,
-                    'confidence_score': rec.confidence_score,
-                    'context_data': json.loads(rec.context_data) if rec.context_data else {},
-                    'timestamp': rec.timestamp.isoformat() if rec.timestamp else None,
-                    'suggested_time': rec.suggested_time.isoformat() if rec.suggested_time else None,
-                    'suggested_action': rec.suggested_action,
-                    'action_taken': rec.action_taken
-                }
-                for rec in stored_recommendations
-            ]
-        
         except Exception as e:
-            logger.error(f"Error generating comprehensive recommendations: {str(e)}")
-            if db:
-                db.rollback()
+            logger.error(f"Error generating recommendations: {str(e)}")
+            return [{
+                'title': "Error generating recommendations",
+                'description': "An error occurred while analyzing your data. Please try again later.",
+                'category': 'general',
+                'priority': 'medium',
+                'confidence': 0.5,
+                'action': "Try again later or contact support if the problem persists.",
+                'timing': (datetime.utcnow() + timedelta(hours=1)).isoformat()
+            }]
+
+    def _find_meal_insulin_spike_events(self, glucose_data, insulin_data, food_data):
+        """Find meal+insulin+glucose spike patterns in the last 24h."""
+        if not glucose_data or not insulin_data or not food_data:
             return []
+        events = []
+        for food in food_data:
+            meal_time = food.timestamp
+            # Find insulin within 1h before to 15m after meal
+            relevant_insulin = [i for i in insulin_data if meal_time - timedelta(hours=1) <= i.timestamp <= meal_time + timedelta(minutes=15)]
+            if not relevant_insulin:
+                continue
+            insulin = min(relevant_insulin, key=lambda i: abs((i.timestamp - meal_time).total_seconds()))
+            # Glucose before meal
+            pre_meal = [g for g in glucose_data if meal_time - timedelta(minutes=30) <= g.timestamp <= meal_time]
+            pre_val = pre_meal[-1].value if pre_meal else None
+            # Glucose 1-3h after meal
+            post_meal = [g for g in glucose_data if meal_time < g.timestamp <= meal_time + timedelta(hours=3)]
+            if not post_meal or pre_val is None:
+                continue
+            peak = max(post_meal, key=lambda g: g.value)
+            spike = peak.value - pre_val
+            # Only consider significant spikes
+            if spike > 40 and food.total_carbs >= 20:
+                events.append({
+                    'meal_time': meal_time,
+                    'carbs': food.total_carbs,
+                    'insulin': insulin.units,
+                    'insulin_time': insulin.timestamp,
+                    'pre_glucose': pre_val,
+                    'peak_glucose': peak.value,
+                    'peak_time': peak.timestamp,
+                    'spike': spike
+                })
             
     def _calculate_suggested_time(self, recommendation_data, now):
         """Calculate a suggested time for when this recommendation should be implemented"""
@@ -979,195 +939,67 @@ class AIInsightsEngine:
         menstrual_cycle_data: List[MenstrualCycle],
         health_data: List[HealthData]
     ) -> str:
-        """Create comprehensive context string for AI model using all data streams"""
-        
-        # Handle missing date_of_birth gracefully
-        if hasattr(user, "birthdate") and user.birthdate:
-            age = (datetime.now() - user.birthdate).days // 365
-        elif hasattr(user, "date_of_birth") and user.date_of_birth:
-            age = (datetime.now() - user.date_of_birth).days // 365
-        else:
-            age = 'Unknown'
-            
-        # Calculate time periods for different analyses
+        """Build a comprehensive context string for AI recommendations."""
+        # Calculate age if possible
+        age = getattr(user, 'age', 'Unknown')
+        # Recent data for summary
         now = datetime.utcnow()
-        past_24h = now - timedelta(hours=24)
-        past_week = now - timedelta(days=7)
-        
-        # Get recent data
-        recent_glucose = [g for g in glucose_data if g.timestamp >= past_24h]
-        recent_insulin = [i for i in insulin_data if i.timestamp >= past_24h]
-        recent_food = [f for f in food_data if f.timestamp >= past_24h]
-        recent_activity = [a for a in activity_data if a.timestamp >= past_24h]
-        recent_sleep = [s for s in sleep_data if s.start_time >= past_week]
-        recent_mood = [m for m in mood_data if m.timestamp >= past_week]
-        
-        # Active illnesses
-        active_illnesses = [
-            i for i in illness_data 
-            if not i.end_date or i.end_date >= past_week
-        ]
-        
-        # Medication adherence
-        scheduled_meds = len(medication_data)
-        taken_meds = len([m for m in medication_data if m.taken])
-        med_adherence = taken_meds / scheduled_meds * 100 if scheduled_meds > 0 else 0
-        
-        # Current menstrual cycle phase (if relevant)
-        current_cycle = None
-        if menstrual_cycle_data:
-            current_cycle = menstrual_cycle_data[-1]
-        
-        # Check for correlation insights
-        correlation_insights = []
-        
-        # Food & activity correlations
-        if 'correlations' in patterns and 'food_activity' in patterns['correlations']:
-            food_activity = patterns['correlations']['food_activity']
-            for key, data in food_activity.items():
-                if 'percent_reduction' in data and data['percent_reduction'] > 15:
-                    correlation_insights.append(
-                        f"Post-meal {data['activity_type']} reduced glucose spike by {data['percent_reduction']:.1f}%"
-                    )
-        
-        # Sleep correlations
-        if 'correlations' in patterns and 'sleep_morning_glucose' in patterns['correlations']:
-            sleep_data = patterns['correlations']['sleep_morning_glucose'].get('overall', {})
-            if sleep_data:
-                # Compare short vs normal sleep
-                if sleep_data.get('short_sleep_morning_avg') and sleep_data.get('normal_sleep_morning_avg'):
-                    diff = sleep_data['short_sleep_morning_avg'] - sleep_data['normal_sleep_morning_avg']
-                    if abs(diff) > 15:
-                        direction = "increased" if diff > 0 else "decreased"
-                        correlation_insights.append(
-                            f"Short sleep (<6h) {direction} morning glucose by {abs(diff):.1f} mg/dL compared to normal sleep"
-                        )
-                
-                # Compare sleep quality
-                if sleep_data.get('poor_quality_morning_avg') and sleep_data.get('good_quality_morning_avg'):
-                    diff = sleep_data['poor_quality_morning_avg'] - sleep_data['good_quality_morning_avg']
-                    if abs(diff) > 15:
-                        correlation_insights.append(
-                            f"Poor sleep quality increased morning glucose by {abs(diff):.1f} mg/dL"
-                        )
-        
-        # Mood correlations
-        if 'correlations' in patterns and 'mood_glucose' in patterns['correlations']:
-            mood_data = patterns['correlations']['mood_glucose'].get('overall', {})
-            if mood_data:
-                if mood_data.get('low_mood_variability') and mood_data.get('high_mood_variability'):
-                    diff = mood_data['low_mood_variability'] - mood_data['high_mood_variability']
-                    if abs(diff) > 10:
-                        correlation_insights.append(
-                            f"Lower mood ratings correlate with {abs(diff):.1f}% higher glucose variability"
-                        )
-        
-        # Insulin timing correlations
-        if 'correlations' in patterns and 'insulin_timing' in patterns['correlations']:
-            timing_impacts = patterns['correlations']['insulin_timing'].get('timing_impacts', {})
-            if timing_impacts and 'long_prebolus' in timing_impacts and 'no_prebolus' in timing_impacts:
-                prebolus_impact = timing_impacts['long_prebolus']['avg_spike'] - timing_impacts['no_prebolus']['avg_spike']
-                if prebolus_impact < -15:  # Negative means lower spike with prebolus
-                    correlation_insights.append(
-                        f"Pre-bolusing insulin 30+ minutes before meals reduced post-meal spikes by {abs(prebolus_impact):.1f} mg/dL"
-                    )
-        
-        # Build the comprehensive context
+        recent_glucose = [g for g in glucose_data if g.timestamp >= now - timedelta(hours=24)]
+        recent_insulin = [i for i in insulin_data if i.timestamp >= now - timedelta(hours=24)]
+        recent_food = [f for f in food_data if f.timestamp >= now - timedelta(hours=24)]
+        recent_activity = [a for a in activity_data if a.timestamp >= now - timedelta(hours=24)]
+        recent_sleep = [s for s in sleep_data if s.start_time >= now - timedelta(days=7)]
+        recent_mood = [m for m in mood_data if m.timestamp >= now - timedelta(days=7)]
+
+        # Find and summarize meal-insulin-glucose spike events
+        spike_events = self._find_meal_insulin_spike_events(glucose_data, insulin_data, food_data)
+        spike_summaries = ""
+        if spike_events:
+            spike_summaries += "\nRecent meal-insulin-glucose spike events detected:\n"
+            for e in spike_events:
+                spike_summaries += (
+                    f"- At {e['meal_time'].strftime('%Y-%m-%d %H:%M')}, user took {e['insulin']}u insulin at {e['insulin_time'].strftime('%H:%M')}, "
+                    f"ate {e['carbs']}g carbs, glucose rose from {e['pre_glucose']} to {e['peak_glucose']} mg/dL in 3h (spike: {e['spike']} mg/dL).\n"
+                )
+            spike_summaries += "For each event, suggest a more optimal insulin:carb ratio or action to prevent the spike.\n"
+
+        def _fmt(val):
+            return f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
+
         context = f"""
-Patient Profile:
-- Age: {age}
-- Gender: {getattr(user, 'gender', 'Unknown')}
-- Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
-- Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
-- Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
-- Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
+            Patient Profile:
+            - Age: {age}
+            - Gender: {getattr(user, 'gender', 'Unknown')}
+            - Diabetes Type: {getattr(user, 'diabetes_type', 'Unknown')}
+            - Target Range: {getattr(user, 'target_glucose_min', 70)}-{getattr(user, 'target_glucose_max', 180)} mg/dL
+            - Insulin-to-Carb Ratio: 1:{getattr(user, 'insulin_carb_ratio', 'Unknown')}
+            - Correction Factor: {getattr(user, 'insulin_sensitivity_factor', 'Unknown')}
+            {spike_summaries}
 
-Current Glucose Patterns (24-hour analysis):
-- Average Glucose: {patterns['glucose_patterns'].get('average', 'Unknown'):.1f} mg/dL
-- Time in Range: {patterns['glucose_patterns'].get('time_in_range', 0):.1f}%
-- Glucose Variability: {patterns['variability'].get('coefficient_of_variation', 0):.1f}%
-- Frequent highs (>250): {patterns['glucose_patterns'].get('frequent_highs', 0):.1f}%
-- Frequent lows (<70): {patterns['glucose_patterns'].get('frequent_lows', 0):.1f}%
+            Current Glucose Patterns (24-hour analysis):
+            - Average Glucose: {_fmt(patterns['glucose_patterns'].get('average', 'Unknown'))} mg/dL
+            - Time in Range: {_fmt(patterns['glucose_patterns'].get('time_in_range', 'Unknown'))}%
+            - Glucose Variability: {_fmt(patterns['variability'].get('coefficient_of_variation', 'Unknown'))}%
+            - Frequent highs (>250): {_fmt(patterns['glucose_patterns'].get('frequent_highs', 'Unknown'))}%
+            - Frequent lows (<70): {_fmt(patterns['glucose_patterns'].get('frequent_lows', 'Unknown'))}%
 
-Recent Data Summary:
-- Glucose readings: {len(recent_glucose)} in last 24 hours
-- Insulin doses: {len(recent_insulin)} in last 24 hours
-- Meals logged: {len(recent_food)} in last 24 hours
-- Activity sessions: {len(recent_activity)} in last 24 hours
-- Sleep logs: {len(recent_sleep)} in last week
-- Mood logs: {len(recent_mood)} in last week
-- Medication adherence: {med_adherence:.1f}%
-- Active illnesses: {len(active_illnesses)}
-"""
+            Recent Data Summary:
+            - Glucose readings: {len(recent_glucose)} in last 24 hours
+            - Insulin doses: {len(recent_insulin)} in last 24 hours
+            - Meals logged: {len(recent_food)} in last 24 hours
+            - Activity sessions: {len(recent_activity)} in last 24 hours
+            - Sleep logs: {len(recent_sleep)} in last week
+            - Mood logs: {len(recent_mood)} in last week
 
-        # Add activity insights if available
-        if 'activity_patterns' in patterns and patterns['activity_patterns']:
-            activity_impacts = patterns['activity_patterns'].get('activity_impacts', {})
-            context += "\nActivity Impact on Glucose:\n"
-            
-            for activity_type, impact in activity_impacts.items():
-                context += f"- {activity_type}: Avg glucose drop of {impact['avg_glucose_drop']:.1f} mg/dL ({impact['count']} sessions)\n"
-        
-        # Add sleep insights if available
-        if 'sleep_patterns' in patterns and patterns['sleep_patterns']:
-            sleep_impacts = patterns['sleep_patterns'].get('sleep_impacts', {})
-            if sleep_impacts:
-                context += "\nSleep Impact on Glucose:\n"
-                context += f"- Short sleep (<6h) avg glucose: {sleep_impacts.get('short_sleep_avg_glucose', 0):.1f} mg/dL\n"
-                context += f"- Normal sleep (6-8h) avg glucose: {sleep_impacts.get('normal_sleep_avg_glucose', 0):.1f} mg/dL\n"
-                context += f"- Dawn phenomenon frequency: {sleep_impacts.get('dawn_phenomenon_frequency', 0) * 100:.1f}%\n"
-        
-        # Add mood insights if available
-        if 'mood_patterns' in patterns and patterns['mood_patterns']:
-            mood_impacts = patterns['mood_patterns'].get('mood_impacts', {})
-            if mood_impacts and len(mood_impacts) > 1:
-                context += "\nMood Impact on Glucose:\n"
-                for rating, impact in mood_impacts.items():
-                    if rating.isdigit():
-                        context += f"- Mood rating {rating}: Avg glucose {impact['avg_glucose']:.1f} mg/dL ({impact['count']} logs)\n"
-        
-        # Add illness insights if available
-        if 'illness_patterns' in patterns and patterns['illness_patterns']:
-            active_illness_data = [data for key, data in patterns['illness_patterns'].items() if key.startswith('illness_')]
-            if active_illness_data:
-                context += "\nIllness Impact on Glucose:\n"
-                for illness in active_illness_data[:3]:  # Show up to 3 illnesses
-                    context += f"- {illness['name']}: Glucose increase of {illness['glucose_increase']:.1f} mg/dL (severity: {illness['severity']})\n"
-        
-        # Add menstrual cycle insights if available
-        if 'menstrual_patterns' in patterns and patterns['menstrual_patterns'] and current_cycle:
-            context += "\nMenstrual Cycle Impact:\n"
-            cycle_data = patterns['menstrual_patterns'].get(f"cycle_{current_cycle.id}", {})
-            if cycle_data:
-                context += f"- Period glucose: {cycle_data.get('period_avg_glucose', 0):.1f} mg/dL\n"
-                context += f"- Luteal phase glucose: {cycle_data.get('luteal_avg_glucose', 0):.1f} mg/dL\n"
-                if 'glucose_change' in cycle_data:
-                    direction = "increased" if cycle_data['glucose_change'] > 0 else "decreased"
-                    context += f"- Glucose {direction} by {abs(cycle_data['glucose_change']):.1f} mg/dL in luteal phase\n"
-        
-        # Add correlation insights
-        if correlation_insights:
-            context += "\nKey Correlations Detected:\n"
-            for insight in correlation_insights[:5]:  # Show up to 5 correlations
-                context += f"- {insight}\n"
-        
-        # Daily patterns section
-        context += f"""
-Daily Patterns:
-- Morning (6am-12pm) avg glucose: {self._calculate_time_range_average(recent_glucose, 6, 12):.1f} mg/dL
-- Afternoon (12pm-6pm) avg glucose: {self._calculate_time_range_average(recent_glucose, 12, 18):.1f} mg/dL  
-- Evening (6pm-12am) avg glucose: {self._calculate_time_range_average(recent_glucose, 18, 24):.1f} mg/dL
-- Overnight (12am-6am) avg glucose: {self._calculate_time_range_average(recent_glucose, 0, 6):.1f} mg/dL
-
-Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations 
-to improve glucose management. For each recommendation:
-1. Provide a clear, concise title (one short sentence)
-2. Include detailed explanation with specific actions (2-3 sentences)
-3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
-4. Indicate priority as: high, medium, or low
-5. Suggest a specific action the user can take (e.g., "Try taking insulin 20 minutes before your next meal")
-6. If possible, suggest a specific time when this action should be taken
-"""
+            Based on this comprehensive analysis of multiple data streams, please provide 5 specific, actionable recommendations
+            to improve glucose management. For each recommendation:
+            1. Provide a clear, concise title (one short sentence)
+            2. Include detailed explanation with specific actions (2-3 sentences)
+            3. Categorize as: insulin, nutrition, activity, timing, monitoring, sleep, stress, or general
+            4. Indicate priority as: high, medium, or low
+            5. Suggest a specific action the user can take (e.g., 'Try taking insulin 20 minutes before your next meal')
+            6. If possible, suggest a specific time when this action should be taken
+            """
         return context
         
     def _calculate_time_range_average(self, glucose_data: List[GlucoseReading], start_hour: int, end_hour: int) -> float:
@@ -1188,47 +1020,32 @@ to improve glucose management. For each recommendation:
     async def _generate_ai_recommendations(self, context: str) -> str:
         """Generate recommendations using AI model or Inference API"""
         prompt = f"{context}\n\nRecommendations:"
+        json_instructions = (
+            "Please provide exactly 5 personalized, actionable recommendations as a JSON array. "
+            "Each item must have: title (string), description (string), category (one of ['insulin','nutrition','activity','timing','monitoring','sleep','stress','general']), "
+            "priority ('high'|'medium'|'low'), action (string), and timing (string or null). "
+            "Respond ONLY with a valid JSON array, no extra text."
+        )
         try:
             if settings.MODEL_NAME == "openai/gpt-oss-20b":
-                # Use OpenAI-compatible API via Hugging Face router (Fireworks backend)
                 import os
                 from openai import OpenAI
-                
-                # Enhance the prompt with more specific instructions
-                enhanced_prompt = f"""
-{prompt}
-
-Please provide personalized, actionable recommendations based on the above data.
-For each recommendation:
-1. Title: A clear, concise title summarizing the recommendation (one sentence)
-2. Description: Detailed explanation with specific actions (2-3 sentences)
-3. Category: One of [insulin, nutrition, activity, monitoring, sleep, stress, general]
-4. Priority: [high, medium, low] based on potential impact
-5. Action: A specific, measurable action the user can take
-6. Timing: When this action should be taken (e.g., "before meals", "in the morning")
-
-Focus on personalized insights that directly address patterns in the data.
-"""
+                enhanced_prompt = f"{prompt}\n\n{json_instructions}"
                 try:
                     client = OpenAI(
                         base_url="https://router.huggingface.co/v1",
                         api_key=os.environ["HF_TOKEN"],
                     )
-                    
-                    # Add system message for better control
                     messages = [
-                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data."},
+                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data. Output only valid JSON."},
                         {"role": "user", "content": enhanced_prompt}
                     ]
-                    
-                    # Add parameters for better output
                     completion = client.chat.completions.create(
                         model="openai/gpt-oss-20b:fireworks-ai",
                         messages=messages,
                         temperature=0.7,
                         max_tokens=1024,
                     )
-                    
                     if completion.choices:
                         logger.info("Successfully generated AI recommendations")
                         return completion.choices[0].message.content.strip()
@@ -1241,17 +1058,15 @@ Focus on personalized insights that directly address patterns in the data.
             else:
                 # Use local/transformers pipeline
                 response = self.generator(
-                    prompt,
-                    max_new_tokens=256,
+                    f"{prompt}\n\n{json_instructions}",
+                    max_new_tokens=512,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.generator.tokenizer.eos_token_id
                 )
                 if isinstance(response, list) and len(response) > 0:
                     generated_text = response[0]['generated_text']
-                    recommendations_start = generated_text.find("Recommendations:")
-                    if recommendations_start != -1:
-                        return generated_text[recommendations_start + len("Recommendations:"):].strip()
+                    return generated_text.strip()
                 return response if isinstance(response, str) else ""
         except Exception as e:
             logger.error(f"Error generating AI recommendations: {str(e)}")
@@ -1287,46 +1102,175 @@ Priority: medium
 """
     
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
-        """Process AI-generated text into structured recommendations"""
+        """Process AI-generated text into structured recommendations, prefer JSON if possible. Attach example events and graph data for drill-down."""
+        import json, re
         recommendations = []
-        
-        # Split by numbered points
+        # Try JSON parsing first
+        try:
+            logger.info(f"Raw AI output: {ai_text}")
+            parsed = json.loads(ai_text)
+            if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+                for item in parsed:
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': 0.8,
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item)
+                    }
+                    recommendations.append(rec)
+                logger.info(f"Processed {len(recommendations)} recommendations from JSON output: {recommendations}")
+                return recommendations[:5]
+        except Exception as e:
+            logger.warning(f"AI output was not valid JSON, falling back to text parsing: {e}")
+            # Try to extract all JSON-like objects from the text (partial/truncated JSON array)
+            json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
+            for obj_str in json_objects:
+                try:
+                    item = json.loads(obj_str)
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': 0.8,
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item)
+                    }
+                    recommendations.append(rec)
+                except Exception:
+                    continue
+            if recommendations:
+                logger.info(f"Processed {len(recommendations)} recommendations from partial JSON objects in fallback")
+                return recommendations[:5]
+
+        # Robustly extract multiple recommendations from markdown, numbered, or mixed text
+        # Split on numbered points (e.g., 1. Title: ... or 1) Title: ...)
+        numbered_items = re.split(r'\n(?=\d+[\.)] )', ai_text.strip())
+        if len(numbered_items) > 1:
+            for item in numbered_items:
+                item = item.strip()
+                if not item:
+                    continue
+                # Try to extract fields from each item
+                title = re.search(r'Title:?\s*(.*)', item, re.IGNORECASE)
+                description = re.search(r'Description:?\s*([\s\S]*?)(?:\nCategory:|\nPriority:|\nAction:|\nTiming:|$)', item, re.IGNORECASE)
+                category = re.search(r'Category:?\s*(.*)', item, re.IGNORECASE)
+                priority = re.search(r'Priority:?\s*(.*)', item, re.IGNORECASE)
+                action = re.search(r'Action:?\s*(.*)', item, re.IGNORECASE)
+                timing = re.search(r'Timing:?\s*(.*)', item, re.IGNORECASE)
+                rec = {
+                    'title': title.group(1).strip() if title else '',
+                    'description': description.group(1).strip() if description else '',
+                    'category': category.group(1).strip().lower() if category else 'general',
+                    'priority': priority.group(1).strip().lower() if priority else 'medium',
+                    'confidence': 0.8,
+                    'action': action.group(1).strip() if action else '',
+                    'timing': timing.group(1).strip() if timing else '',
+                    'context': self._attach_examples_and_graph({
+                        'title': title.group(1).strip() if title else '',
+                        'description': description.group(1).strip() if description else '',
+                        'category': category.group(1).strip().lower() if category else 'general',
+                    })
+                }
+                if rec['title'] or rec['description']:
+                    recommendations.append(rec)
+            if recommendations:
+                logger.info(f"Processed {len(recommendations)} recommendations from numbered text content")
+                return recommendations[:5]
+
+        # Fallback: try to split on markdown-style (--- or **1. Title:**)
+        items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
+        for item in items:
+            if not item.strip():
+                continue
+            title = re.search(r'\*\*\d+\. Title:\*\*\s*(.*)', item)
+            description = re.search(r'\*\*Description:\*\*\s*([\s\S]*?)\n\*\*Category:', item)
+            category = re.search(r'\*\*Category:\*\*\s*(.*)', item)
+            priority = re.search(r'\*\*Priority:\*\*\s*(.*)', item)
+            action = re.search(r'\*\*Action:\*\*\s*(.*)', item)
+            timing = re.search(r'\*\*Timing:\*\*\s*(.*)', item)
+            rec = {
+                'title': title.group(1).strip() if title else '',
+                'description': description.group(1).strip() if description else '',
+                'category': category.group(1).strip().lower() if category else 'general',
+                'priority': priority.group(1).strip().lower() if priority else 'medium',
+                'confidence': 0.8,
+                'action': action.group(1).strip() if action else '',
+                'timing': timing.group(1).strip() if timing else '',
+                'context': self._attach_examples_and_graph({
+                    'title': title.group(1).strip() if title else '',
+                    'description': description.group(1).strip() if description else '',
+                    'category': category.group(1).strip().lower() if category else 'general',
+                })
+            }
+            if rec['title'] or rec['description']:
+                recommendations.append(rec)
+        if recommendations:
+            logger.info(f"Processed {len(recommendations)} recommendations from markdown-style content")
+            return recommendations[:5]
+
+        # Fallback: original text parsing logic (numbered points)
         lines = ai_text.strip().split('\n')
         current_rec = ""
-        
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
-            # Check if this is a new numbered recommendation
             if line[0].isdigit() and ('.' in line[:5] or ')' in line[:5]):
-                # Process previous recommendation
                 if current_rec:
                     rec_data = self._parse_recommendation(current_rec, user_id)
                     if rec_data:
+                        rec_data['context'] = self._attach_examples_and_graph(rec_data)
                         recommendations.append(rec_data)
-                
                 current_rec = line
             else:
-                # Use newline to preserve structure for parsing
                 current_rec += "\n" + line
-        
-        # Process the last recommendation
         if current_rec:
             rec_data = self._parse_recommendation(current_rec, user_id)
             if rec_data:
+                rec_data['context'] = self._attach_examples_and_graph(rec_data)
                 recommendations.append(rec_data)
-        
-        # If no recommendations were successfully parsed, use fallback
         if not recommendations:
             logger.warning("Failed to parse recommendations from AI output, using fallback")
             fallback_text = self._fallback_recommendations()
-            # Recursive call with fallback text
             return self._process_recommendations(fallback_text, user_id)
-            
-        logger.info(f"Successfully processed {len(recommendations)} recommendations")
-        return recommendations[:5]  # Limit to 5 recommendations
+        logger.info(f"Successfully processed {len(recommendations)} recommendations (text fallback)")
+        return recommendations[:5]
+
+
+    def _attach_examples_and_graph(self, rec: dict) -> dict:
+        """Attach example events and graph data to the recommendation context for drill-down UI."""
+        # This is a stub. In production, this would use the analyzed patterns and user data to find relevant events.
+        # For now, we simulate with a placeholder example and graph data.
+        now = datetime.utcnow()
+        # Example event: a glucose spike, meal, or insulin event
+        example_event = {
+            'timestamp': (now - timedelta(hours=random.randint(1, 24))).isoformat(),
+            'value': random.randint(60, 300),
+            'event_type': rec.get('category', 'general'),
+            'note': f"Example event for {rec.get('category', 'general')}"
+        }
+        # Graph data: a list of (timestamp, value) pairs for the last 12 hours
+        graph_data = [
+            {
+                'timestamp': (now - timedelta(hours=12) + timedelta(minutes=15*i)).isoformat(),
+                'value': 100 + 40 * math.sin(i/4.0) + random.randint(-10, 10)
+            }
+            for i in range(48)
+        ]
+        context = rec.get('context', {}) if 'context' in rec else {}
+        context.update({
+            'generated_at': now.isoformat(),
+            'ai_model': getattr(self, 'model_name', 'unknown'),
+            'example_event': example_event,
+            'graph_data': graph_data
+        })
+        return context
     
     def _parse_recommendation(self, rec_text: str, user_id: int) -> Optional[Dict[str, Any]]:
         """Parse a single recommendation text into structured data"""
