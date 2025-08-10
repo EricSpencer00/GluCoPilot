@@ -1075,31 +1075,31 @@ class AIInsightsEngine:
     def _fallback_recommendations(self) -> str:
         """Provide fallback recommendations when AI generation fails"""
         return """
-1. Monitor post-meal glucose trends to identify patterns
-Title: Track glucose patterns after meals
-Category: monitoring
-Priority: medium
+            1. Monitor post-meal glucose trends to identify patterns
+            Title: Track glucose patterns after meals
+            Category: monitoring
+            Priority: medium
 
-2. Adjust insulin timing based on food composition
-Title: Consider pre-bolusing insulin before high-carb meals
-Category: insulin
-Priority: medium
+            2. Adjust insulin timing based on food composition
+            Title: Consider pre-bolusing insulin before high-carb meals
+            Category: insulin
+            Priority: medium
 
-3. Be consistent with meal carbohydrate content
-Title: Maintain consistent carbohydrate intake between meals
-Category: nutrition
-Priority: low
+            3. Be consistent with meal carbohydrate content
+            Title: Maintain consistent carbohydrate intake between meals
+            Category: nutrition
+            Priority: low
 
-4. Review insulin correction factors with healthcare provider
-Title: Review insulin sensitivity factors for more accurate corrections
-Category: insulin
-Priority: low
+            4. Review insulin correction factors with healthcare provider
+            Title: Review insulin sensitivity factors for more accurate corrections
+            Category: insulin
+            Priority: low
 
-5. Balance physical activity with appropriate glucose management
-Title: Balance exercise with reduced insulin or added carbs
-Category: exercise
-Priority: medium
-"""
+            5. Balance physical activity with appropriate glucose management
+            Title: Balance exercise with reduced insulin or added carbs
+            Category: exercise
+            Priority: medium
+            """
     
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
         """Process AI-generated text into structured recommendations, prefer JSON if possible. Attach example events and graph data for drill-down."""
