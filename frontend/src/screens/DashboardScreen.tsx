@@ -23,6 +23,7 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
+  // ...existing code...
   // Handler for DexcomStyleChart time range changes
   const handleTimeRangeChange = (range: '3h' | '6h' | '12h' | '24h') => {
     setTimeRange(range);
