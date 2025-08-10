@@ -77,7 +77,7 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
         ) : recommendations.length > 0 ? (
           <View>
             {recommendations.map((recommendation, index) => (
-              <Surface key={recommendation.id} style={styles.itemSurface}>
+              <Surface key={`${recommendation.id}-${index}`} style={styles.itemSurface}>
                 <View style={styles.overflowClipView}>
                   <List.Item
                     title={truncateTitle(recommendation.title || recommendation.content)}
@@ -114,7 +114,7 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
                     descriptionStyle={styles.recommendationText}
                   />
                   {index < recommendations.length - 1 && (
-                    <Divider key={`divider-${recommendation.id}`} style={styles.divider} />
+                    <Divider key={`divider-${recommendation.id}-${index}`} style={styles.divider} />
                   )}
                 </View>
               </Surface>
