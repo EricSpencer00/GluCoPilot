@@ -42,6 +42,10 @@ const ProfileScreen: React.FC = () => {
   // Apple Health upload state
   const [uploading, setUploading] = useState(false);
   
+
+  // Dropdown state for profile info
+  const [showProfileDetails, setShowProfileDetails] = useState(true);
+
   // Fetch user data statistics
   useEffect(() => {
     if (user) {
@@ -187,74 +191,52 @@ const ProfileScreen: React.FC = () => {
     <ScrollView style={styles.scrollContainer}>
       <View style={styles.container}>
         <Text variant="headlineSmall" style={styles.title}>Profile</Text>
-        {/* User Info Card with all fields */}
+        {/* User Info Card with dropdown */}
         <Surface style={styles.userInfoCard}>
-          <Text variant="titleMedium">{user.first_name} {user.last_name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text variant="titleMedium">{user.first_name} {user.last_name}</Text>
+            <Button
+              mode="text"
+              icon={showProfileDetails ? 'chevron-up' : 'chevron-down'}
+              onPress={() => setShowProfileDetails((prev) => !prev)}
+              compact
+              style={{ marginLeft: 8 }}
+            >
+              {showProfileDetails ? 'Hide' : 'Show'}
+            </Button>
+          </View>
           <Text>{user.email}</Text>
-          <Divider style={{marginVertical: 8}} />
-          <Text variant="bodySmall">Username: {user.username}</Text>
-          <Text variant="bodySmall">Active: {user.is_active ? 'Yes' : 'No'}</Text>
-          <Text variant="bodySmall">Verified: {user.is_verified ? 'Yes' : 'No'}</Text>
-          <Text variant="bodySmall">Created: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</Text>
-          <Text variant="bodySmall">Last Login: {user.last_login ? new Date(user.last_login).toLocaleString() : 'N/A'}</Text>
-          <Divider style={{marginVertical: 8}} />
-          <Text variant="bodySmall">Gender: {user.gender || 'N/A'}</Text>
-          <Text variant="bodySmall">Birthdate: {user.birthdate ? new Date(user.birthdate).toLocaleDateString() : 'N/A'}</Text>
-          <Text variant="bodySmall">Height: {user.height_cm ? user.height_cm + ' cm' : 'N/A'}</Text>
-          <Text variant="bodySmall">Weight: {user.weight_kg ? user.weight_kg + ' kg' : 'N/A'}</Text>
-          <Divider style={{marginVertical: 8}} />
-          <Text variant="bodySmall">Diabetes Type: {user.diabetes_type === 1 ? 'Type 1' : user.diabetes_type === 2 ? 'Type 2' : 'N/A'}</Text>
-          <Text variant="bodySmall">Diagnosis Date: {user.diagnosis_date ? new Date(user.diagnosis_date).toLocaleDateString() : 'N/A'}</Text>
-          <Text variant="bodySmall">Target Glucose: {user.target_glucose_min || 'N/A'} - {user.target_glucose_max || 'N/A'} mg/dL</Text>
-          <Text variant="bodySmall">Insulin:Carb Ratio: {user.insulin_carb_ratio ? '1:' + user.insulin_carb_ratio : 'N/A'}</Text>
-          <Text variant="bodySmall">Correction Factor: {user.insulin_sensitivity_factor || 'N/A'}</Text>
-          <Divider style={{marginVertical: 8}} />
-          <Text variant="bodySmall">Dexcom Username: {user.dexcom_username || 'N/A'}</Text>
-          <Text variant="bodySmall">Dexcom OUS: {user.dexcom_ous ? 'Yes' : 'No'}</Text>
-          <Text variant="bodySmall">MyFitnessPal Username: {user.myfitnesspal_username || 'N/A'}</Text>
-          <Text variant="bodySmall">Apple Health: {user.apple_health_authorized ? 'Connected' : 'Not Connected'}</Text>
-          <Text variant="bodySmall">Google Fit: {user.google_fit_authorized ? 'Connected' : 'Not Connected'}</Text>
-          <Text variant="bodySmall">Fitbit: {user.fitbit_authorized ? 'Connected' : 'Not Connected'}</Text>
-          <Divider style={{marginVertical: 8}} />
-          <Text variant="bodySmall">Notification Preferences: {user.notification_preferences ? JSON.stringify(user.notification_preferences) : 'N/A'}</Text>
-          <Text variant="bodySmall">Privacy Preferences: {user.privacy_preferences ? JSON.stringify(user.privacy_preferences) : 'N/A'}</Text>
-        </Surface>
-        {/* Data Dashboard */}
-        <Text variant="titleMedium" style={styles.sectionTitle}>Your Data</Text>
-        <Surface style={styles.card}>
-          {isLoadingStats ? (
-            <View style={styles.statsLoading}>
-              <ActivityIndicator size="small" />
-              <Text style={styles.loadingText}>Loading data...</Text>
-            </View>
-          ) : (
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalGlucoseReadings}</Text>
-                <Text variant="bodySmall">Glucose Readings</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalInsulinDoses}</Text>
-                <Text variant="bodySmall">Insulin Doses</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalFoodEntries}</Text>
-                <Text variant="bodySmall">Food Entries</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="titleLarge">{userStats.totalActivityLogs}</Text>
-                <Text variant="bodySmall">Activity Logs</Text>
-              </View>
-            </View>
+          {showProfileDetails && (
+            <>
+              <Divider style={{marginVertical: 8}} />
+              <Text variant="bodySmall">Username: {user.username}</Text>
+              <Text variant="bodySmall">Active: {user.is_active ? 'Yes' : 'No'}</Text>
+              <Text variant="bodySmall">Verified: {user.is_verified ? 'Yes' : 'No'}</Text>
+              <Text variant="bodySmall">Created: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</Text>
+              <Text variant="bodySmall">Last Login: {user.last_login ? new Date(user.last_login).toLocaleString() : 'N/A'}</Text>
+              <Divider style={{marginVertical: 8}} />
+              <Text variant="bodySmall">Gender: {user.gender || 'N/A'}</Text>
+              <Text variant="bodySmall">Birthdate: {user.birthdate ? new Date(user.birthdate).toLocaleDateString() : 'N/A'}</Text>
+              <Text variant="bodySmall">Height: {user.height_cm ? user.height_cm + ' cm' : 'N/A'}</Text>
+              <Text variant="bodySmall">Weight: {user.weight_kg ? user.weight_kg + ' kg' : 'N/A'}</Text>
+              <Divider style={{marginVertical: 8}} />
+              <Text variant="bodySmall">Diabetes Type: {user.diabetes_type === 1 ? 'Type 1' : user.diabetes_type === 2 ? 'Type 2' : 'N/A'}</Text>
+              <Text variant="bodySmall">Diagnosis Date: {user.diagnosis_date ? new Date(user.diagnosis_date).toLocaleDateString() : 'N/A'}</Text>
+              <Text variant="bodySmall">Target Glucose: {user.target_glucose_min || 'N/A'} - {user.target_glucose_max || 'N/A'} mg/dL</Text>
+              <Text variant="bodySmall">Insulin:Carb Ratio: {user.insulin_carb_ratio ? '1:' + user.insulin_carb_ratio : 'N/A'}</Text>
+              <Text variant="bodySmall">Correction Factor: {user.insulin_sensitivity_factor || 'N/A'}</Text>
+              <Divider style={{marginVertical: 8}} />
+              <Text variant="bodySmall">Dexcom Username: {user.dexcom_username || 'N/A'}</Text>
+              <Text variant="bodySmall">Dexcom OUS: {user.dexcom_ous ? 'Yes' : 'No'}</Text>
+              <Text variant="bodySmall">MyFitnessPal Username: {user.myfitnesspal_username || 'N/A'}</Text>
+              <Text variant="bodySmall">Apple Health: {user.apple_health_authorized ? 'Connected' : 'Not Connected'}</Text>
+              <Text variant="bodySmall">Google Fit: {user.google_fit_authorized ? 'Connected' : 'Not Connected'}</Text>
+              <Text variant="bodySmall">Fitbit: {user.fitbit_authorized ? 'Connected' : 'Not Connected'}</Text>
+              <Divider style={{marginVertical: 8}} />
+              <Text variant="bodySmall">Notification Preferences: {user.notification_preferences ? JSON.stringify(user.notification_preferences) : 'N/A'}</Text>
+              <Text variant="bodySmall">Privacy Preferences: {user.privacy_preferences ? JSON.stringify(user.privacy_preferences) : 'N/A'}</Text>
+            </>
           )}
-          <Divider style={styles.divider} />
-          <Button 
-            mode="outlined" 
-            icon="trash-can-outline" 
-            onPress={() => showSnackbar('Data management coming soon!')}
-            style={styles.manageDataButton}>
-            Manage Data
-          </Button>
         </Surface>
         
         <Text variant="titleMedium" style={styles.sectionTitle}>Data Integrations</Text>

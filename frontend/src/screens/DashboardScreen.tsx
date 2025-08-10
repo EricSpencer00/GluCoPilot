@@ -23,6 +23,7 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
+  // ...existing code...
   // Handler for DexcomStyleChart time range changes
   const handleTimeRangeChange = (range: '3h' | '6h' | '12h' | '24h') => {
     setTimeRange(range);
@@ -52,11 +53,24 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const [timeRange, setTimeRange] = useState<'3h' | '6h' | '12h' | '24h'>('3h');
   const [showDexcomModal, setShowDexcomModal] = useState(false);
 
-  useFocusEffect(
-    React.useCallback(() => {
+
+  // Throttle all dashboard data fetches (glucose, stats, recommendations, sync) to once every 5 minutes
+  useEffect(() => {
+    const now = Date.now();
+    let shouldFetch = false;
+    if (!lastSync) {
+      shouldFetch = true;
+    } else {
+      const last = new Date(lastSync).getTime();
+      if (now - last > 5 * 60 * 1000) {
+        shouldFetch = true;
+      }
+    }
+    if (shouldFetch) {
+      dispatch(syncDexcomData() as any);
       loadDashboardData();
-    }, [])
-  );
+    }
+  }, [dispatch, lastSync]);
 
   // Check if this is a new registration and show Dexcom connection prompt
   useEffect(() => {
@@ -76,9 +90,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     }
   };
 
+  // Manual refresh always fetches data
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
+      await dispatch(syncDexcomData() as any);
       await loadDashboardData();
       showSnackbar('Dashboard refreshed');
     } catch (error) {
