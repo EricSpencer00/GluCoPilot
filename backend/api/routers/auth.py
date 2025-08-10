@@ -154,12 +154,15 @@ async def refresh_token(
         if not user or user.refresh_token != refresh_token:
             logging.warning(f"Refresh token mismatch for user {username if user else 'unknown'}")
             raise credentials_exception
-        # Issue new access token
+        # Issue new access and refresh tokens (rotate refresh token)
         access_token = create_access_token(data={"sub": user.username})
+        new_refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
+        user.refresh_token = new_refresh_token
+        db.commit()
         logging.info(f"Refresh successful for user {username}")
         return {
             "access_token": access_token,
-            "refresh_token": refresh_token,
+            "refresh_token": new_refresh_token,
             "token_type": "bearer",
             "expires_in": 1800
         }
