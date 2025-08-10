@@ -77,32 +77,34 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
           <View>
             {recommendations.map((recommendation, index) => (
               <Surface key={recommendation.id} style={styles.itemSurface}>
-                <List.Item
-                  title={truncateTitle(recommendation.title || recommendation.content)}
-                  description={truncateTitle(recommendation.content, 100)}
-                  left={props => (
-                    <List.Icon 
-                      {...props} 
-                      icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)} 
-                      color={getPriorityColor(recommendation.priority)}
-                    />
-                  )}
-                  right={props => (
-                    <Chip 
-                      mode="outlined" 
-                      style={[styles.priorityChip, { borderColor: getPriorityColor(recommendation.priority) }]}
-                      textStyle={{ color: getPriorityColor(recommendation.priority), fontSize: 10 }}
-                    >
-                      {recommendation.priority}
-                    </Chip>
-                  )}
-                  style={styles.listItem}
-                  titleNumberOfLines={1}
-                  descriptionNumberOfLines={2}
-                  titleStyle={styles.recommendationTitle}
-                  descriptionStyle={styles.recommendationText}
-                />
-                {index < recommendations.length - 1 && <Divider style={styles.divider} />}
+                <View style={styles.overflowClipView}>
+                  <List.Item
+                    title={truncateTitle(recommendation.title || recommendation.content)}
+                    description={truncateTitle(recommendation.content, 100)}
+                    left={props => (
+                      <List.Icon 
+                        {...props} 
+                        icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)} 
+                        color={getPriorityColor(recommendation.priority)}
+                      />
+                    )}
+                    right={props => (
+                      <Chip 
+                        mode="outlined" 
+                        style={[styles.priorityChip, { borderColor: getPriorityColor(recommendation.priority) }]}
+                        textStyle={{ color: getPriorityColor(recommendation.priority), fontSize: 10 }}
+                      >
+                        {recommendation.priority}
+                      </Chip>
+                    )}
+                    style={styles.listItem}
+                    titleNumberOfLines={1}
+                    descriptionNumberOfLines={2}
+                    titleStyle={styles.recommendationTitle}
+                    descriptionStyle={styles.recommendationText}
+                  />
+                  {index < recommendations.length - 1 && <Divider style={styles.divider} />}
+                </View>
               </Surface>
             ))}
             <Button 
@@ -154,7 +156,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     elevation: 1,
     backgroundColor: '#fafafa',
+    // overflow: 'hidden', // Removed to allow shadow
+  },
+  overflowClipView: {
     overflow: 'hidden',
+    borderRadius: 8,
   },
   listItem: {
     paddingVertical: 8,
