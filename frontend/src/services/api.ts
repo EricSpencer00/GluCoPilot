@@ -2,6 +2,8 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
+import { setReduxDispatch } from './reduxDispatch';
+import { setToken } from '../store/slices/authSlice';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -81,6 +83,7 @@ api.interceptors.response.use(
           const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
           if (newToken) {
             await AsyncStorage.setItem('auth_token', newToken);
+            setReduxDispatch(setToken(newToken));
             if (newRefreshToken) {
               await AsyncStorage.setItem('refresh_token', newRefreshToken);
             }

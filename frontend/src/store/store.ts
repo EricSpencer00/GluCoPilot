@@ -7,6 +7,7 @@ import authReducer from './slices/authSlice';
 import glucoseReducer from './slices/glucoseSlice';
 import aiReducer from './slices/aiSlice';
 import dexcomReducer from './slices/dexcomSlice';
+import { setReduxDispatch } from '../services/reduxDispatch';
 
 // Configure persisted reducers
 const authPersistConfig = {
@@ -37,6 +38,7 @@ export const store = configureStore({
 });
 
 export const persistor = persistStore(store);
+setReduxDispatch(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
