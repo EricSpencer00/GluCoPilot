@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
 import { View, ScrollView, Platform } from 'react-native';
-import { Card, Text, ActivityIndicator, Button } from 'react-native-paper';
+import { Card, Text, Button } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from '../styles/screens/TrendsScreen';
 import { useDexcomTrends } from '../hooks/useDexcomTrends';
 import { A1cOverTimeChart } from '../components/charts/A1cOverTimeChart';
+import { LoadingScreen } from '../components/common/LoadingScreen';
 
 export const TrendsScreen: React.FC = () => {
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -79,7 +80,7 @@ export const TrendsScreen: React.FC = () => {
       </Card>
 
       {loading ? (
-        <ActivityIndicator size="large" style={{ margin: 24 }} />
+        <LoadingScreen />
       ) : error ? (
         <Text style={{ color: 'red', margin: 16 }}>{error}</Text>
       ) : trends ? (

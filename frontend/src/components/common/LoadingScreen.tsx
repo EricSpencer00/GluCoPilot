@@ -1,21 +1,19 @@
 
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { Text } from 'react-native-paper';
-import LottieView from 'lottie-react-native';
 
+import { LoadingAnimation } from './LoadingAnimation';
 
 const { width } = Dimensions.get('window');
+
+
 
 export const LoadingScreen: React.FC = () => {
   return (
     <View style={styles.container}>
-      <LottieView
-        source={require('../../../assets/animations/glucose_wave.json')}
-        autoPlay
-        loop
-        style={{ width: width * 0.7, height: width * 0.7 }}
-      />
+      <LoadingAnimation />
       <Text style={styles.text}>Loading...</Text>
     </View>
   );
