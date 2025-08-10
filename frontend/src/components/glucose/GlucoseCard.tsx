@@ -23,10 +23,10 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
   onSync
 }) => {
   const getGlucoseColor = () => {
-    if (!reading) return '#000';
-    if (reading.is_low) return '#E53935';  // Red for low
-    if (reading.is_high) return '#F57C00'; // Orange for high
-    return '#4CAF50';  // Green for in range
+    if (!reading) return '#212121';
+    if (reading.is_low) return '#E53935';  // Critical Red
+    if (reading.is_high) return '#FFB74D'; // Warning Orange
+    return '#00796B';  // Deep Teal for in range
   };
 
   const getTrendIcon = () => {
@@ -60,9 +60,11 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
         <View style={styles.headerRow}>
           <Text variant="titleMedium" style={styles.title}>Current Glucose</Text>
           <Button
-            mode="text"
+            mode="contained"
             onPress={onSync}
             disabled={isLoading}
+            style={styles.syncButton}
+            labelStyle={styles.syncButtonLabel}
           >
             Sync
           </Button>
@@ -93,10 +95,11 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
         ) : (
           <View style={styles.noDataContainer}>
             <Text variant="bodyLarge">No data available</Text>
-            <Button 
-              mode="contained" 
-              onPress={onSync} 
+            <Button
+              mode="contained"
+              onPress={onSync}
               style={styles.syncButton}
+              labelStyle={styles.syncButtonLabel}
             >
               Sync Now
             </Button>
@@ -110,8 +113,12 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   content: {
     padding: 8,
@@ -124,6 +131,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
+    color: '#00796B',
+    fontSize: 18,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -142,14 +151,19 @@ const styles = StyleSheet.create({
   },
   value: {
     fontWeight: 'bold',
+    fontSize: 36,
+    color: '#00796B',
   },
   trend: {
     marginLeft: 8,
     marginTop: 16,
+    color: '#FF8A65',
+    fontSize: 28,
   },
   timestamp: {
     marginTop: 8,
-    opacity: 0.7,
+    color: '#757575',
+    fontSize: 14,
   },
   noDataContainer: {
     alignItems: 'center',
@@ -157,5 +171,13 @@ const styles = StyleSheet.create({
   },
   syncButton: {
     marginTop: 16,
+    borderRadius: 8,
+    backgroundColor: '#FF8A65',
+    elevation: 2,
+  },
+  syncButtonLabel: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

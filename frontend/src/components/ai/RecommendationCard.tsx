@@ -71,10 +71,11 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
                 {index < recommendations.length - 1 && <Divider />}
               </React.Fragment>
             ))}
-            <Button 
-              mode="text" 
+            <Button
+              mode="contained"
               onPress={onViewAll}
               style={styles.viewAllButton}
+              labelStyle={styles.buttonLabel}
             >
               View All Insights
             </Button>
@@ -92,8 +93,12 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   headerRow: {
     flexDirection: 'row',
@@ -103,9 +108,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
+    color: '#00796B',
+    fontSize: 18,
   },
   count: {
-    opacity: 0.7,
+    color: '#757575',
+    fontSize: 14,
   },
   loader: {
     marginVertical: 24,
@@ -115,10 +123,20 @@ const styles = StyleSheet.create({
   },
   recommendationText: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#212121',
   },
   viewAllButton: {
-    marginTop: 8,
-    alignSelf: 'flex-end',
+    marginTop: 16,
+    borderRadius: 8,
+    paddingVertical: 8,
+    backgroundColor: '#FF8A65',
+    elevation: 2,
+  },
+  buttonLabel: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   noDataContainer: {
     alignItems: 'center',
