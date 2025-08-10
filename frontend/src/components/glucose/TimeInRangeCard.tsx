@@ -73,12 +73,18 @@ export const TimeInRangeCard: React.FC<TimeInRangeCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   title: {
     fontWeight: 'bold',
     marginBottom: 12,
+    color: '#00796B',
+    fontSize: 18,
   },
   loader: {
     marginVertical: 24,
@@ -94,15 +100,17 @@ const styles = StyleSheet.create({
   },
   percentValue: {
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#00796B',
+    fontSize: 32,
   },
   avgGlucose: {
-    opacity: 0.7,
+    color: '#757575',
+    fontSize: 16,
   },
   barContainer: {
     flexDirection: 'row',
-    height: 12,
-    borderRadius: 6,
+    height: 14,
+    borderRadius: 7,
     overflow: 'hidden',
     marginBottom: 8,
   },
@@ -110,13 +118,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   lowSegment: {
-    backgroundColor: '#E53935',
+    backgroundColor: '#64B5F6', // Calm Blue
   },
   inRangeSegment: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8A65', // Vibrant Coral
   },
   highSegment: {
-    backgroundColor: '#F57C00',
+    backgroundColor: '#E53935', // Critical Red
   },
   legendContainer: {
     flexDirection: 'row',
@@ -134,13 +142,13 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   lowColor: {
-    backgroundColor: '#E53935',
+    backgroundColor: '#64B5F6', // Calm Blue
   },
   inRangeColor: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8A65', // Vibrant Coral
   },
   highColor: {
-    backgroundColor: '#F57C00',
+    backgroundColor: '#E53935', // Critical Red
   },
   noDataContainer: {
     alignItems: 'center',

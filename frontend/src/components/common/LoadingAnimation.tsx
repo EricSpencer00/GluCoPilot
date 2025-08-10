@@ -30,6 +30,6 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#00796B', // Deep Teal for GlucoPilot brand
   },
 });

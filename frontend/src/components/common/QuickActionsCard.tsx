@@ -56,12 +56,18 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#00796B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   title: {
     fontWeight: 'bold',
     marginBottom: 16,
+    color: '#00796B', // Deep Teal
+    fontSize: 18,
   },
   buttonsContainer: {
     flexDirection: 'row',
@@ -73,17 +79,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     marginBottom: 8,
     minWidth: '30%',
+    borderRadius: 8,
+    elevation: 2,
   },
   buttonContent: {
     height: 48,
   },
   foodButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8A65', // Vibrant Coral
   },
   insulinButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#64B5F6', // Calm Blue
   },
   trendsButton: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#81C784', // Subtle Green
   },
 });
