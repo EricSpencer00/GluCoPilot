@@ -1282,7 +1282,7 @@ class AIInsightsEngine:
 
 
     def _attach_examples_and_graph(self, rec: dict) -> dict:
-        """Attach example events, graph data, and supporting data points for drill-down UI."""
+        """Attach example events, graph data, supporting data points, and timeframe for drill-down UI."""
         import uuid
         now = datetime.utcnow()
         # Generate a unique recommendation_id for drill-down
@@ -1318,6 +1318,64 @@ class AIInsightsEngine:
             for i in range(48)
         ]
         context = rec.get('context', {}) if 'context' in rec else {}
+
+        # --- Timeframe extraction logic ---
+        # Try to extract a relevant timeframe from the recommendation fields (if present)
+        timeframe = None
+        # 1. If the rec has explicit 'start' and 'end' fields
+        if 'start' in rec and 'end' in rec:
+            try:
+                start = str(rec['start'])
+                end = str(rec['end'])
+                # Validate ISO format
+                datetime.fromisoformat(start)
+                datetime.fromisoformat(end)
+                timeframe = {'start': start, 'end': end}
+            except Exception:
+                pass
+        # 2. If the rec has a 'timeframe' field as dict or string
+        elif 'timeframe' in rec:
+            tf = rec['timeframe']
+            if isinstance(tf, dict) and 'start' in tf and 'end' in tf:
+                timeframe = {'start': str(tf['start']), 'end': str(tf['end'])}
+            elif isinstance(tf, str):
+                # Try to parse as ISO or as a period (e.g., 'last 3 hours')
+                try:
+                    # If it's a period like 'last 3 hours', set start = now - 3h, end = now
+                    import re
+                    m = re.match(r'last (\d+) hours?', tf.lower())
+                    if m:
+                        hours = int(m.group(1))
+                        start = (now - timedelta(hours=hours)).isoformat()
+                        end = now.isoformat()
+                        timeframe = {'start': start, 'end': end}
+                    else:
+                        # Try to parse as two ISO datetimes separated by /
+                        parts = tf.split('/')
+                        if len(parts) == 2:
+                            datetime.fromisoformat(parts[0])
+                            datetime.fromisoformat(parts[1])
+                            timeframe = {'start': parts[0], 'end': parts[1]}
+                except Exception:
+                    pass
+        # 3. If the rec has a 'timing' field with a period
+        elif 'timing' in rec and isinstance(rec['timing'], str):
+            import re
+            m = re.match(r'last (\d+) hours?', rec['timing'].lower())
+            if m:
+                hours = int(m.group(1))
+                start = (now - timedelta(hours=hours)).isoformat()
+                end = now.isoformat()
+                timeframe = {'start': start, 'end': end}
+        # 4. Fallback: default to last 3 hours for glucose-related recs
+        if not timeframe and rec.get('category', '').lower() in ['glucose', 'insulin', 'nutrition', 'exercise', 'monitoring']:
+            start = (now - timedelta(hours=3)).isoformat()
+            end = now.isoformat()
+            timeframe = {'start': start, 'end': end}
+
+        if timeframe:
+            context['timeframe'] = timeframe
+
         context.update({
             'generated_at': now.isoformat(),
             'ai_model': getattr(self, 'model_name', 'unknown'),
