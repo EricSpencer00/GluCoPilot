@@ -40,24 +40,50 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
   const MIN_VALUE_DISPLAY = 40;
   const MAX_VALUE_DISPLAY = 400;
 
-  // Get filtered data based on time range
-  const getFilteredData = () => {
+  // Get filled data based on anchor (earliest) point, and fill missing 5-min intervals from anchor
+  const getFilledData = () => {
     if (!data || data.length === 0) return [];
-
+    // Sort data by timestamp ascending
+    const sorted = [...data].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const now = new Date();
     let hoursToShow = 3;
     if (timeRange === '6h') hoursToShow = 6;
     else if (timeRange === '12h') hoursToShow = 12;
     else if (timeRange === '24h') hoursToShow = 24;
 
-    const cutoffTime = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
-    const filteredData = data.filter(reading => new Date(reading.timestamp) > cutoffTime);
+    // Only use data within the selected time range
+    const rangeStart = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
+    const filtered = sorted.filter(r => new Date(r.timestamp) >= rangeStart && new Date(r.timestamp) <= now);
+    if (filtered.length === 0) return [];
 
-    // Take maximum of 288 readings for performance (5-minute intervals for 24 hours)
-    // Sort by timestamp ascending so rightmost is most recent
-    return filteredData
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      .slice(-288);
+    // Use the earliest point as anchor
+    const anchorDate = new Date(filtered[0].timestamp);
+    anchorDate.setSeconds(0, 0); // zero seconds/millis
+    // Build a map of available data by exact timestamp (rounded to 5 min from anchor)
+    const dataMap = new Map();
+    filtered.forEach(reading => {
+      const d = new Date(reading.timestamp);
+      // Calculate offset from anchor in ms, then round to nearest 5-min step
+      const offsetMs = d.getTime() - anchorDate.getTime();
+      const step = Math.round(offsetMs / (5 * 60 * 1000));
+      const t = anchorDate.getTime() + step * 5 * 60 * 1000;
+      dataMap.set(t, reading);
+    });
+
+    // Generate all expected 5-min interval timestamps from anchor to now (or last data point)
+    const lastTime = Math.max(new Date(filtered[filtered.length - 1].timestamp).getTime(), now.getTime());
+    const filled = [];
+    const intervalMs = 5 * 60 * 1000;
+    for (let t = anchorDate.getTime(); t <= lastTime; t += intervalMs) {
+      if (t >= rangeStart.getTime() && t <= now.getTime()) {
+        if (dataMap.has(t)) {
+          filled.push(dataMap.get(t));
+        } else {
+          filled.push({ value: null, timestamp: new Date(t).toISOString() });
+        }
+      }
+    }
+    return filled;
   };
 
   // Format timestamps in a user-friendly way
@@ -76,26 +102,24 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
     return 30 + (percentage * chartHeight);
   };
 
-  // Generate chart points and x-axis labels
+  // Generate chart points and x-axis labels, with spacers for missing data
   const getChartPoints = (): { points: TouchPoint[], gridLines: number[], xLabels: { x: number, label: string }[] } => {
-    const filteredData = getFilteredData();
-    if (filteredData.length === 0) {
-      return { points: [], gridLines: [], xLabels: [] };
-    }
-
+    const filledData = getFilledData();
     const points: TouchPoint[] = [];
     const chartWidth = screenWidth - 40; // Padding
 
     // Calculate points (left = oldest, right = most recent)
-    filteredData.forEach((reading, index) => {
-      const x = 20 + (index / (filteredData.length - 1 || 1)) * chartWidth;
-      const y = valueToYCoordinate(reading.value);
-      points.push({
-        x,
-        y,
-        value: reading.value,
-        timestamp: reading.timestamp
-      });
+    filledData.forEach((reading, index) => {
+      if (reading.value !== null && reading.value !== undefined) {
+        const x = 20 + (index / (filledData.length - 1 || 1)) * chartWidth;
+        const y = valueToYCoordinate(reading.value);
+        points.push({
+          x,
+          y,
+          value: reading.value,
+          timestamp: reading.timestamp
+        });
+      }
     });
 
     // Generate grid lines at every 50 mg/dL
@@ -104,14 +128,21 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
       gridLines.push(value);
     }
 
-    // X-axis time labels (show 4 evenly spaced labels)
+    // X-axis time labels (show 4 evenly spaced labels, always present)
     const xLabels: { x: number, label: string }[] = [];
     const labelCount = 4;
+    const now = new Date();
+    let hoursToShow = 3;
+    if (timeRange === '6h') hoursToShow = 6;
+    else if (timeRange === '12h') hoursToShow = 12;
+    else if (timeRange === '24h') hoursToShow = 24;
+    const startTime = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
     for (let i = 0; i < labelCount; i++) {
-      const dataIdx = Math.round(i * (filteredData.length - 1) / (labelCount - 1));
-      const reading = filteredData[dataIdx];
-      const x = 20 + (dataIdx / (filteredData.length - 1 || 1)) * chartWidth;
-      xLabels.push({ x, label: formatTimestamp(reading.timestamp) });
+      const frac = i / (labelCount - 1);
+      const x = 20 + frac * chartWidth;
+      // For label, interpolate time between start and now
+      const labelTime = new Date(startTime.getTime() + frac * (now.getTime() - startTime.getTime()));
+      xLabels.push({ x, label: formatTimestamp(labelTime.toISOString()) });
     }
 
     return { points, gridLines, xLabels };
@@ -172,22 +203,22 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
     <View style={styles.container}>
       {isLoading ? (
         <ActivityIndicator size="large" style={styles.loader} />
-      ) : data && data.length > 0 ? (
+      ) : (
         <View>
           {/* Time range selector */}
           <View style={styles.timeRangeSelector}>
             {(['3h', '6h', '12h', '24h'] as const).map(range => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={range}
                 style={[
-                  styles.timeRangeButton, 
+                  styles.timeRangeButton,
                   timeRange === range && styles.activeTimeRange
                 ]}
                 onPress={() => onTimeRangeChange?.(range)}
               >
-                <Text 
+                <Text
                   style={[
-                    styles.timeRangeText, 
+                    styles.timeRangeText,
                     timeRange === range && styles.activeTimeRangeText
                   ]}
                 >
@@ -198,10 +229,10 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
           </View>
 
           {/* Main chart */}
-          <Surface style={[styles.chartContainer, { height }]}>
+          <Surface style={[styles.chartContainer, { height }]}> 
             <View {...panResponder.panHandlers} style={{ flex: 1 }}>
               <Svg height={height} width={screenWidth}>
-                {/* X-axis time labels */}
+                {/* X-axis time labels (always present, padded) */}
                 {xLabels.map((labelObj, idx) => (
                   <SvgText
                     key={`x-label-${idx}`}
@@ -209,7 +240,7 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
                     y={height - 2}
                     fontSize="10"
                     fill="#888"
-                    textAnchor="middle"
+                    textAnchor={idx === 0 ? "start" : idx === xLabels.length - 1 ? "end" : "middle"}
                   >
                     {labelObj.label}
                   </SvgText>
@@ -227,7 +258,7 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
                     strokeDasharray={value === TARGET_RANGE_MIN || value === TARGET_RANGE_MAX ? "" : "4,4"}
                   />
                 ))}
-                
+
                 {/* Grid line labels */}
                 {gridLines.map(value => (
                   <SvgText
@@ -262,7 +293,7 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
                   />
                 </G>
 
-                {/* Data points */}
+                {/* Data points (skip nulls) */}
                 {points.map((point, index) => (
                   <Circle
                     key={`point-${index}`}
@@ -308,10 +339,6 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
               </Svg>
             </View>
           </Surface>
-        </View>
-      ) : (
-        <View style={[styles.noDataContainer, { height }]}>
-          <Text variant="bodyLarge">No glucose data available</Text>
         </View>
       )}
     </View>

@@ -19,6 +19,7 @@ export default function TimePicker({ value, onChange, mode = 'time' }: Props) {
         onChange={(_, selectedDate) => {
           if (selectedDate) onChange(selectedDate);
         }}
+        textColor="#000"
       />
     </View>
   );

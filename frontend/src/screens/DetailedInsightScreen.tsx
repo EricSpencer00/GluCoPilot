@@ -5,6 +5,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { clearDetailedInsight } from '../store/slices/aiSlice';
+import { DexcomStyleChart } from '../components/charts/DexcomStyleChart';
+import { useSelector as useReduxSelector } from 'react-redux';
+// Helper to filter glucose readings by timeframe
+function filterReadingsByTimeframe(readings, timeframe) {
+  if (!readings || readings.length === 0 || !timeframe) return readings;
+  const { start, end } = timeframe;
+  const startTime = start ? new Date(start).getTime() : null;
+  const endTime = end ? new Date(end).getTime() : null;
+  return readings.filter(r => {
+    const t = new Date(r.timestamp).getTime();
+    if (startTime && t < startTime) return false;
+    if (endTime && t > endTime) return false;
+    return true;
+  });
+}
 
 interface RelatedRecommendation {
   title: string;
@@ -20,6 +35,8 @@ interface DetailedInsightWithRelated {
 const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
   const { detailedInsight, isLoadingDetailedInsight } = useSelector((state: RootState) => state.ai);
   const dispatch = useDispatch();
+  // Get glucose readings from Redux
+  const glucoseReadings = useReduxSelector((state: RootState) => state.glucose.readings);
 
   useEffect(() => {
     return () => {
@@ -78,6 +95,14 @@ const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
 
   const { original_recommendation, detail, related_recommendations } = detailedInsight;
   const chipStyle = getPriorityChipStyle(original_recommendation.priority);
+
+  // Try to extract timeframe from recommendation/context
+  let timeframe = null;
+  if (original_recommendation?.context?.timeframe) {
+    timeframe = original_recommendation.context.timeframe;
+  }
+  // timeframe should be {start, end} ISO strings
+  const filteredReadings = filterReadingsByTimeframe(glucoseReadings, timeframe);
 
   return (
     <ScrollView style={styles.container}>
@@ -141,6 +166,16 @@ const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
                 </Text>
               </View>
             </Surface>
+
+            <Divider style={styles.divider} />
+
+            {/* Dexcom-style chart for relevant period */}
+            <Text variant="titleMedium" style={styles.detailTitle}>Glucose Trend (Relevant Period)</Text>
+            <DexcomStyleChart
+              data={filteredReadings}
+              isLoading={false}
+              height={220}
+            />
 
             <Divider style={styles.divider} />
 
