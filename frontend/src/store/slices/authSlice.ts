@@ -41,17 +41,24 @@ export const login = createAsyncThunk(
         password,
       });
       const token: string = tokenRes.data.access_token;
+      const refreshToken: string = tokenRes.data.refresh_token;
       
-      // Store token in AsyncStorage
-      await AsyncStorage.setItem('auth_token', token);
-      let refreshToken = null;
-      // Store refresh token if available
-      if (tokenRes.data.refresh_token) {
-        refreshToken = tokenRes.data.refresh_token;
-        await AsyncStorage.setItem('refresh_token', refreshToken);
+      // Make sure we have both tokens
+      if (!token) {
+        throw new Error('No access token returned from server');
       }
-      const savedToken = await AsyncStorage.getItem('auth_token');
-      console.log('Token saved to AsyncStorage:', savedToken); // DEBUG LOG
+      
+      if (!refreshToken) {
+        console.warn('No refresh token returned from server');
+      }
+      
+      // Store tokens in AsyncStorage
+      await AsyncStorage.multiSet([
+        ['auth_token', token],
+        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+      ]);
+      
+      console.log('Tokens saved to AsyncStorage - Access:', !!token, 'Refresh:', !!refreshToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
@@ -86,16 +93,26 @@ export const register = createAsyncThunk(
         username: userData.email,
         password: userData.password,
       });
-      const token: string = loginRes.data.access_token;
       
-      // Store token in AsyncStorage
-      await AsyncStorage.setItem('auth_token', token);
-      let refreshToken = null;
-      // Store refresh token if available
-      if (loginRes.data.refresh_token) {
-        refreshToken = loginRes.data.refresh_token;
-        await AsyncStorage.setItem('refresh_token', refreshToken);
+      const token: string = loginRes.data.access_token;
+      const refreshToken: string = loginRes.data.refresh_token;
+      
+      // Make sure we have both tokens
+      if (!token) {
+        throw new Error('No access token returned from server');
       }
+      
+      if (!refreshToken) {
+        console.warn('No refresh token returned from server');
+      }
+      
+      // Store tokens in AsyncStorage
+      await AsyncStorage.multiSet([
+        ['auth_token', token],
+        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+      ]);
+      
+      console.log('Tokens saved to AsyncStorage after registration - Access:', !!token, 'Refresh:', !!refreshToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
@@ -150,7 +167,8 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken || null;
+      state.refreshToken = action.payload.refreshToken;
+      console.log('[AUTH SLICE] Setting tokens after login - Access:', !!action.payload.token, 'Refresh:', !!action.payload.refreshToken);
     });
     builder.addCase(login.rejected, (state, action) => {
       state.isLoading = false;
@@ -166,8 +184,9 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken || null;
+      state.refreshToken = action.payload.refreshToken;
       state.isNewRegistration = true; // Set flag for new registration
+      console.log('[AUTH SLICE] Setting tokens after registration - Access:', !!action.payload.token, 'Refresh:', !!action.payload.refreshToken);
     });
     builder.addCase(register.rejected, (state, action) => {
       state.isLoading = false;

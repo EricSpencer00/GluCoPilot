@@ -12,7 +12,7 @@ import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { theme } from './src/theme/theme';
 import { NotificationManager } from './src/services/NotificationManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setToken } from './src/store/slices/authSlice';
+import { setToken, setRefreshToken } from './src/store/slices/authSlice';
 import { setReduxDispatch } from './src/services/reduxDispatch';
 
 
@@ -32,23 +32,42 @@ export default function App() {
 
         // Batch get tokens
         const [[, storedToken], [, storedRefreshToken]] = await AsyncStorage.multiGet(['auth_token', 'refresh_token']);
+        
+        // Update Redux state with stored tokens
         if (storedToken) {
           store.dispatch(setToken(storedToken));
-          // ...existing code...
+          console.log('Restored access token from storage to Redux state');
         }
-
+        
         if (storedRefreshToken) {
+          store.dispatch(setRefreshToken(storedRefreshToken));
+          console.log('Restored refresh token from storage to Redux state');
+          
           try {
+            // Attempt to refresh the token on app launch if we have a refresh token
+            console.log('Attempting to proactively refresh token on app launch');
             const refreshResponse = await api.post('/api/v1/auth/refresh', {
               refresh_token: storedRefreshToken
             });
+            
             const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
 
             if (newToken) {
+              // Update both tokens in Redux and storage
               store.dispatch(setToken(newToken));
-              // Batch set tokens
+              
+              // Prepare batch operation
               const multiSetArr: [string, string][] = [['auth_token', newToken]];
-              if (newRefreshToken) multiSetArr.push(['refresh_token', newRefreshToken]);
+              
+              if (newRefreshToken) {
+                store.dispatch(setRefreshToken(newRefreshToken));
+                multiSetArr.push(['refresh_token', newRefreshToken]);
+                console.log('Updated both access and refresh tokens proactively');
+              } else {
+                console.log('Updated access token only (no new refresh token returned)');
+              }
+              
+              // Execute batch storage update
               await AsyncStorage.multiSet(multiSetArr);
             }
           } catch (err: any) {
@@ -59,12 +78,10 @@ export default function App() {
             }
             setError(message);
             setShowSnackbar(true);
-            // Optionally clear tokens here if you want to force logout
-            // await AsyncStorage.multiRemove(['auth_token', 'refresh_token']);
             console.error('Failed to refresh token on app launch:', err);
           }
         } else {
-          // ...existing code...
+          console.log('No refresh token found in storage, skipping token refresh');
         }
       } catch (e) {
         setError('Unexpected error during startup.');
