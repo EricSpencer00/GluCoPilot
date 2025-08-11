@@ -11,6 +11,7 @@ import * as Updates from 'expo-updates';
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isLoading: boolean;
   error: string | null;
   isNewRegistration: boolean;
@@ -20,6 +21,7 @@ interface AuthState {
 const initialState: AuthState = {
   user: null,
   token: null,
+  refreshToken: null,
   isLoading: false,
   error: null,
   isNewRegistration: false,
@@ -42,12 +44,12 @@ export const login = createAsyncThunk(
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem('auth_token', token);
-      
+      let refreshToken = null;
       // Store refresh token if available
       if (tokenRes.data.refresh_token) {
-        await AsyncStorage.setItem('refresh_token', tokenRes.data.refresh_token);
+        refreshToken = tokenRes.data.refresh_token;
+        await AsyncStorage.setItem('refresh_token', refreshToken);
       }
-      
       const savedToken = await AsyncStorage.getItem('auth_token');
       console.log('Token saved to AsyncStorage:', savedToken); // DEBUG LOG
 
@@ -56,7 +58,7 @@ export const login = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return { user: userRes.data, token };
+      return { user: userRes.data, token, refreshToken };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Login failed');
     }
@@ -88,10 +90,11 @@ export const register = createAsyncThunk(
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem('auth_token', token);
-      
+      let refreshToken = null;
       // Store refresh token if available
       if (loginRes.data.refresh_token) {
-        await AsyncStorage.setItem('refresh_token', loginRes.data.refresh_token);
+        refreshToken = loginRes.data.refresh_token;
+        await AsyncStorage.setItem('refresh_token', refreshToken);
       }
 
       // Fetch user profile
@@ -99,7 +102,7 @@ export const register = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return { user: userRes.data, token };
+      return { user: userRes.data, token, refreshToken };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Registration failed');
     }
@@ -107,8 +110,9 @@ export const register = createAsyncThunk(
 );
 
 export const logout = createAsyncThunk('auth/logout', async () => {
-  // Clear token from AsyncStorage
+  // Clear tokens from AsyncStorage
   await AsyncStorage.removeItem('auth_token');
+  await AsyncStorage.removeItem('refresh_token');
   // Purge redux-persist state to fully clear auth
   await persistor.purge();
   // Force a hard reload of the app to clear all in-memory state and interceptors
@@ -132,6 +136,9 @@ const authSlice = createSlice({
     setToken: (state, action) => {
       state.token = action.payload;
     },
+    setRefreshToken: (state, action) => {
+      state.refreshToken = action.payload;
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -143,6 +150,7 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken || null;
     });
     builder.addCase(login.rejected, (state, action) => {
       state.isLoading = false;
@@ -158,6 +166,7 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken || null;
       state.isNewRegistration = true; // Set flag for new registration
     });
     builder.addCase(register.rejected, (state, action) => {
@@ -173,13 +182,17 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.user = null;
       state.token = null;
+      state.refreshToken = null;
     });
     builder.addCase(logout.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
+      state.user = null;
+      state.token = null;
+      state.refreshToken = null;
     });
   },
 });
 
-export const { clearError, clearNewRegistrationFlag, setToken } = authSlice.actions;
+export const { clearError, clearNewRegistrationFlag, setToken, setRefreshToken } = authSlice.actions;
 export default authSlice.reducer;
