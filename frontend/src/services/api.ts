@@ -15,14 +15,6 @@ const api = axios.create({
   },
 });
 
-// Log the current auth and refresh tokens on API connect (app start)
-(async () => {
-  const authToken = await AsyncStorage.getItem('auth_token');
-  const refreshToken = await AsyncStorage.getItem('refresh_token');
-  const maskedRefreshToken = refreshToken ? (refreshToken.substring(0, 6) + '...' + refreshToken.substring(refreshToken.length - 6)) : null;
-  console.log('[API INIT] Auth token:', authToken ? authToken.substring(0, 8) + '...' : null);
-  console.log('[API INIT] Refresh token:', maskedRefreshToken);
-})();
 
 // Add request interceptor to include auth token
 api.interceptors.request.use(

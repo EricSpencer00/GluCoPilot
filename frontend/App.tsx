@@ -78,6 +78,20 @@ export default function App() {
   }, []);
 
 
+
+  // Log tokens after rehydration
+  useEffect(() => {
+    if (!isRefreshing) {
+      (async () => {
+        const authToken = await AsyncStorage.getItem('auth_token');
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const maskedRefreshToken = refreshToken ? (refreshToken.substring(0, 6) + '...' + refreshToken.substring(refreshToken.length - 6)) : null;
+        console.log('[API INIT] Auth token:', authToken ? authToken.substring(0, 8) + '...' : null);
+        console.log('[API INIT] Refresh token:', maskedRefreshToken);
+      })();
+    }
+  }, [isRefreshing]);
+
   if (isRefreshing) {
     return <LoadingScreen />;
   }
