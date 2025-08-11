@@ -21,21 +21,17 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
   isLoading,
   onViewAll
 }) => {
+  // More robust icon mapping, matching EnhancedRecommendationCard
   const getRecommendationIcon = (type: string) => {
-    switch(type) {
-      case 'food':
-        return 'food-apple';
-      case 'insulin':
-        return 'needle';
-      case 'activity':
-        return 'run';
-      case 'medication':
-        return 'pill';
-      case 'sleep':
-        return 'sleep';
-      default:
-        return 'lightbulb-outline';
-    }
+    const lowerType = (type || '').toLowerCase();
+    if (lowerType.includes('insulin')) return 'needle';
+    if (lowerType.includes('food') || lowerType.includes('nutrition')) return 'food-apple';
+    if (lowerType.includes('exercise') || lowerType.includes('activity')) return 'run';
+    if (lowerType.includes('medication')) return 'pill';
+    if (lowerType.includes('sleep')) return 'sleep';
+    if (lowerType.includes('monitoring')) return 'chart-line';
+    if (lowerType.includes('timing')) return 'clock-outline';
+    return 'lightbulb-outline';
   };
   
   return (
@@ -58,12 +54,17 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
               <React.Fragment key={recommendation.id}>
                 <List.Item
                   title={recommendation.content}
-                  left={props => (
-                    <List.Icon 
-                      {...props} 
-                      icon={getRecommendationIcon(recommendation.type)} 
-                    />
-                  )}
+                  left={props => {
+                    // Use category if present, else fallback to type
+                    const iconType = (recommendation as any).category || recommendation.type;
+                    return (
+                      <List.Icon
+                        {...props}
+                        icon={getRecommendationIcon(iconType)}
+                        color={'#00796B'}
+                      />
+                    );
+                  }}
                   style={styles.listItem}
                   titleNumberOfLines={2}
                   titleStyle={styles.recommendationText}
@@ -94,11 +95,14 @@ const styles = StyleSheet.create({
   card: {
     marginVertical: 8,
     borderRadius: 16,
-    elevation: 4,
+    elevation: 8,
     backgroundColor: '#FFFFFF',
     shadowColor: '#00796B',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    // Add gradient shadow using react-native-linear-gradient if available
+    // fallback to shadow for Android
   },
   headerRow: {
     flexDirection: 'row',
