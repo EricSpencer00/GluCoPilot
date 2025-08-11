@@ -21,6 +21,7 @@ interface DetailedInsight {
   original_recommendation: Recommendation;
   timestamp: string;
   recommendation_id: string;
+  related_recommendations?: { title: string; description: string }[];
 }
 
 interface AIState {

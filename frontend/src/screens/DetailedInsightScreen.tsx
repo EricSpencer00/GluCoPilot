@@ -6,6 +6,17 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { clearDetailedInsight } from '../store/slices/aiSlice';
 
+interface RelatedRecommendation {
+  title: string;
+  description: string;
+}
+
+interface DetailedInsightWithRelated {
+  original_recommendation: any;
+  detail: string;
+  related_recommendations?: RelatedRecommendation[];
+}
+
 const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
   const { detailedInsight, isLoadingDetailedInsight } = useSelector((state: RootState) => state.ai);
   const dispatch = useDispatch();
@@ -65,7 +76,7 @@ const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
     );
   }
 
-  const { original_recommendation, detail } = detailedInsight;
+  const { original_recommendation, detail, related_recommendations } = detailedInsight;
   const chipStyle = getPriorityChipStyle(original_recommendation.priority);
 
   return (
@@ -139,6 +150,21 @@ const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
             <Text variant="bodyLarge" style={styles.detailText}>
               {detail}
             </Text>
+            {/* Show related recommendations if present */}
+            {related_recommendations?.length > 0 && (
+              <>
+                <Divider style={styles.divider} />
+                <Text variant="titleMedium" style={styles.detailTitle}>Related Suggestions</Text>
+                {related_recommendations.map((rec, idx) => (
+                  <Card key={idx} style={{ marginBottom: 12, backgroundColor: '#F5F5F5' }}>
+                    <Card.Content>
+                      <Text variant="titleSmall" style={{ fontWeight: 'bold', marginBottom: 4 }}>{rec.title}</Text>
+                      <Text variant="bodyMedium">{rec.description}</Text>
+                    </Card.Content>
+                  </Card>
+                ))}
+              </>
+            )}
           </Card.Content>
         </Card>
       </LinearGradient>
