@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Divider, List, Chip, Surface } from 'react-native-paper';
+import { useDispatch } from 'react-redux';
+import { fetchDetailedInsight } from '../../store/slices/aiSlice';
 
 // Interfaces
 interface Recommendation {
@@ -19,13 +21,17 @@ interface EnhancedRecommendationCardProps {
   recommendations: Recommendation[];
   isLoading: boolean;
   onViewAll: () => void;
+  navigation?: any;
 }
 
 export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProps> = ({ 
   recommendations, 
   isLoading,
-  onViewAll
+  onViewAll,
+  navigation
 }) => {
+  const dispatch = useDispatch();
+
   const getRecommendationIcon = (type: string) => {
     const lowerType = type.toLowerCase();
     
@@ -59,6 +65,25 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
     if (title.length <= maxLength) return title;
     return `${title.substring(0, maxLength)}...`;
   };
+
+  const handleRecommendationPress = (recommendation: Recommendation) => {
+    if (navigation) {
+      // Convert the recommendation to the format expected by the insights screen
+      const formattedRec = {
+        title: recommendation.title,
+        description: recommendation.content,
+        category: recommendation.category || recommendation.recommendation_type,
+        priority: recommendation.priority,
+        confidence: recommendation.confidence_score,
+        action: '', // Default empty action
+        timing: '', // Default empty timing
+        context: recommendation.context_data || {}
+      };
+      
+      dispatch(fetchDetailedInsight(formattedRec) as any);
+      navigation.navigate('Insights', { screen: 'DetailedInsight' });
+    }
+  };
   
   return (
     <Card style={styles.card}>
@@ -77,47 +102,53 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
         ) : recommendations.length > 0 ? (
           <View>
             {recommendations.map((recommendation, index) => (
-              <Surface key={`${recommendation.id}-${index}`} style={styles.itemSurface}>
-                <View style={styles.overflowClipView}>
-                  <List.Item
-                    title={truncateTitle(recommendation.title || recommendation.content)}
-                    description={truncateTitle(recommendation.content, 100)}
-                    left={props => {
-                      const chipStyle = getPriorityChipStyle(recommendation.priority);
-                      return (
-                        <List.Icon
-                          {...props}
-                          icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)}
-                          color={chipStyle.backgroundColor}
-                        />
-                      );
-                    }}
-                    right={props => {
-                      const chipStyle = getPriorityChipStyle(recommendation.priority);
-                      return (
-                        <Chip
-                          mode="flat"
-                          style={[
-                            styles.priorityChip,
-                            { backgroundColor: chipStyle.backgroundColor, borderColor: chipStyle.borderColor }
-                          ]}
-                          textStyle={{ color: chipStyle.textColor, fontSize: 12, fontWeight: 'bold' }}
-                        >
-                          {recommendation.priority}
-                        </Chip>
-                      );
-                    }}
-                    style={styles.listItem}
-                    titleNumberOfLines={1}
-                    descriptionNumberOfLines={2}
-                    titleStyle={styles.recommendationTitle}
-                    descriptionStyle={styles.recommendationText}
-                  />
-                  {index < recommendations.length - 1 && (
-                    <Divider key={`divider-${recommendation.id}-${index}`} style={styles.divider} />
-                  )}
-                </View>
-              </Surface>
+              <TouchableOpacity 
+                key={`${recommendation.id}-${index}`} 
+                onPress={() => handleRecommendationPress(recommendation)}
+                disabled={!navigation}
+              >
+                <Surface key={`${recommendation.id}-${index}`} style={styles.itemSurface}>
+                  <View style={styles.overflowClipView}>
+                    <List.Item
+                      title={truncateTitle(recommendation.title || recommendation.content)}
+                      description={truncateTitle(recommendation.content, 100)}
+                      left={props => {
+                        const chipStyle = getPriorityChipStyle(recommendation.priority);
+                        return (
+                          <List.Icon
+                            {...props}
+                            icon={getRecommendationIcon(recommendation.category || recommendation.recommendation_type)}
+                            color={chipStyle.backgroundColor}
+                          />
+                        );
+                      }}
+                      right={props => {
+                        const chipStyle = getPriorityChipStyle(recommendation.priority);
+                        return (
+                          <Chip
+                            mode="flat"
+                            style={[
+                              styles.priorityChip,
+                              { backgroundColor: chipStyle.backgroundColor, borderColor: chipStyle.borderColor }
+                            ]}
+                            textStyle={{ color: chipStyle.textColor, fontSize: 12, fontWeight: 'bold' }}
+                          >
+                            {recommendation.priority}
+                          </Chip>
+                        );
+                      }}
+                      style={styles.listItem}
+                      titleNumberOfLines={1}
+                      descriptionNumberOfLines={2}
+                      titleStyle={styles.recommendationTitle}
+                      descriptionStyle={styles.recommendationText}
+                    />
+                    {index < recommendations.length - 1 && (
+                      <Divider key={`divider-${recommendation.id}-${index}`} style={styles.divider} />
+                    )}
+                  </View>
+                </Surface>
+              </TouchableOpacity>
             ))}
             <Button 
               mode="contained" 

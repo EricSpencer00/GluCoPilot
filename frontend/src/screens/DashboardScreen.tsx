@@ -232,6 +232,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
             }))}
             isLoading={aiLoading}
             onViewAll={() => navigation.navigate('Insights')}
+            navigation={navigation}
           />
         )}
 
