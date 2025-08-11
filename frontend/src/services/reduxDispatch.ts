@@ -1,9 +1,12 @@
-let _dispatch: any = null;
+import { AnyAction, Dispatch } from '@reduxjs/toolkit';
 
-export function setReduxDispatch(dispatch: any) {
+// Store the Redux dispatch function for use outside components
+let _dispatch: Dispatch<AnyAction> | null = null;
+
+export function setReduxDispatch(dispatch: Dispatch<AnyAction>) {
   _dispatch = dispatch;
 }
 
-export function getReduxDispatch() {
+export function getReduxDispatch(): Dispatch<AnyAction> | null {
   return _dispatch;
 }

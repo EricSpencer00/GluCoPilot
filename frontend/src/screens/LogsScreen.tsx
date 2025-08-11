@@ -1,8 +1,8 @@
 
 
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet, TextInput } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet, TextInput, RefreshControl } from 'react-native';
 import InsulinLogForm from '../components/InsulinLogForm';
 import FoodLogForm from '../components/FoodLogForm';
 import OtherLogForm from '../components/OtherLogForm';
@@ -34,6 +34,7 @@ export default function LogsScreen() {
   const [logs, setLogs] = useState([]);
   const [showModal, setShowModal] = useState<null | 'food' | 'insulin' | 'other'>(null);
   const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
 
   useEffect(() => {
@@ -41,6 +42,11 @@ export default function LogsScreen() {
   }, []);
 
   const fetchLogs = async () => {
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLogs();
+    setRefreshing(false);
+  }, [fetchLogs]);
     try {
       // Fetch all logs from backend (should be unified endpoint in future)
       const [foodRes, insulinRes] = await Promise.all([
@@ -81,6 +87,11 @@ export default function LogsScreen() {
     (!search || (l.name?.toLowerCase().includes(search.toLowerCase()) || l.insulin_type?.toLowerCase().includes(search.toLowerCase()) || l.notes?.toLowerCase().includes(search.toLowerCase()) ))
   );
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLogs();
+    setRefreshing(false);
+  }, []);
   return (
     <View style={styles.container}>
       {/* Quick Add Card */}
@@ -133,6 +144,7 @@ export default function LogsScreen() {
           </View>
         )}
         ListEmptyComponent={<Text style={styles.emptyText}>No logs yet.</Text>}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
 
       {/* Modal Sheets for Logging */}

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
-import { Provider as PaperProvider } from 'react-native-paper';
+import { Provider as PaperProvider, Snackbar } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 
@@ -11,50 +11,86 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { theme } from './src/theme/theme';
 import { NotificationManager } from './src/services/NotificationManager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setToken } from './src/store/slices/authSlice';
+import { setReduxDispatch } from './src/services/reduxDispatch';
 
 
 export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showSnackbar, setShowSnackbar] = useState(false);
 
   useEffect(() => {
-    // Initialize notification manager
     NotificationManager.initialize();
+    setReduxDispatch(store.dispatch);
 
     // Proactive token refresh on app launch
     const refreshTokenOnLaunch = async () => {
       try {
-        const refreshToken = await import('./src/services/api').then(m => m.default);
-        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
         const api = (await import('./src/services/api')).default;
-        const { setToken } = await import('./src/store/slices/authSlice');
-        const { setReduxDispatch } = await import('./src/services/reduxDispatch');
 
-        const storedRefreshToken = await AsyncStorage.getItem('refresh_token');
+        // Batch get tokens
+        const [[, storedToken], [, storedRefreshToken]] = await AsyncStorage.multiGet(['auth_token', 'refresh_token']);
+        if (storedToken) {
+          store.dispatch(setToken(storedToken));
+          // ...existing code...
+        }
+
         if (storedRefreshToken) {
           try {
-            const refreshResponse = await api.post('/auth/refresh', { refresh_token: storedRefreshToken });
+            const refreshResponse = await api.post('/api/v1/auth/refresh', {
+              refresh_token: storedRefreshToken
+            });
             const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
+
             if (newToken) {
-              await AsyncStorage.setItem('auth_token', newToken);
-              setReduxDispatch(setToken(newToken));
-              if (newRefreshToken) {
-                await AsyncStorage.setItem('refresh_token', newRefreshToken);
-              }
+              store.dispatch(setToken(newToken));
+              // Batch set tokens
+              const multiSetArr: [string, string][] = [['auth_token', newToken]];
+              if (newRefreshToken) multiSetArr.push(['refresh_token', newRefreshToken]);
+              await AsyncStorage.multiSet(multiSetArr);
             }
-          } catch (err) {
-            // If refresh fails, clear tokens
-            await AsyncStorage.removeItem('auth_token');
-            await AsyncStorage.removeItem('refresh_token');
+          } catch (err: any) {
+            // Detect expired/invalid token and show user-friendly error
+            let message = 'Failed to refresh session. Please try logging out and back in.';
+            if (err?.response?.status === 401) {
+              message = 'Session expired. Please log out and log in again.';
+            }
+            setError(message);
+            setShowSnackbar(true);
+            // Optionally clear tokens here if you want to force logout
+            // await AsyncStorage.multiRemove(['auth_token', 'refresh_token']);
+            console.error('Failed to refresh token on app launch:', err);
           }
+        } else {
+          // ...existing code...
         }
       } catch (e) {
-        // Ignore errors
+        setError('Unexpected error during startup.');
+        setShowSnackbar(true);
+        console.error('Error in refreshTokenOnLaunch:', e);
       } finally {
         setIsRefreshing(false);
       }
     };
     refreshTokenOnLaunch();
   }, []);
+
+
+
+  // Log tokens after rehydration
+  useEffect(() => {
+    if (!isRefreshing) {
+      (async () => {
+        const authToken = await AsyncStorage.getItem('auth_token');
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const maskedRefreshToken = refreshToken ? (refreshToken.substring(0, 6) + '...' + refreshToken.substring(refreshToken.length - 6)) : null;
+        console.log('[API INIT] Auth token:', authToken ? authToken.substring(0, 8) + '...' : null);
+        console.log('[API INIT] Refresh token:', maskedRefreshToken);
+      })();
+    }
+  }, [isRefreshing]);
 
   if (isRefreshing) {
     return <LoadingScreen />;
@@ -69,6 +105,14 @@ export default function App() {
               <AppNavigator />
             </NavigationContainer>
             <StatusBar style="auto" />
+            <Snackbar
+              visible={showSnackbar}
+              onDismiss={() => setShowSnackbar(false)}
+              duration={6000}
+              action={{ label: 'Dismiss', onPress: () => setShowSnackbar(false) }}
+            >
+              {error}
+            </Snackbar>
           </SafeAreaProvider>
         </PaperProvider>
       </PersistGate>

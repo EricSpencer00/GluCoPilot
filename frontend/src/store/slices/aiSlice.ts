@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AI_RECOMMENDATION_FETCH_INTERVAL } from '../../constants/ai';
+import { getDetailedInsight } from '../../services/insightsService';
 
 // Interfaces
 interface Recommendation {
@@ -15,10 +16,20 @@ interface Recommendation {
   context: any;
 }
 
+interface DetailedInsight {
+  detail: string;
+  original_recommendation: Recommendation;
+  timestamp: string;
+  recommendation_id: string;
+  related_recommendations?: { title: string; description: string }[];
+}
+
 interface AIState {
   recommendations: Recommendation[];
   isLoading: boolean;
   error: string | null;
+  detailedInsight: DetailedInsight | null;
+  isLoadingDetailedInsight: boolean;
 }
 
 // Initial state
@@ -26,6 +37,8 @@ const initialState: AIState = {
   recommendations: [],
   isLoading: false,
   error: null,
+  detailedInsight: null,
+  isLoadingDetailedInsight: false,
 };
 
 // Async thunks
@@ -63,7 +76,18 @@ export const fetchRecommendations = createAsyncThunk(
   }
 );
 
-
+export const fetchDetailedInsight = createAsyncThunk(
+  'ai/fetchDetailedInsight',
+  async (recommendation: Recommendation, { rejectWithValue }) => {
+    try {
+      const result = await getDetailedInsight(recommendation);
+      return result;
+    } catch (error: any) {
+      console.error('Error fetching detailed insight:', error.message);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch detailed insight');
+    }
+  }
+);
 
 // Slice
 const aiSlice = createSlice({
@@ -72,6 +96,9 @@ const aiSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+    clearDetailedInsight: (state) => {
+      state.detailedInsight = null;
     },
   },
   extraReducers: (builder) => {
@@ -88,8 +115,22 @@ const aiSlice = createSlice({
       state.isLoading = false;
       state.error = action.payload as string;
     });
+    
+    // Fetch detailed insight
+    builder.addCase(fetchDetailedInsight.pending, (state) => {
+      state.isLoadingDetailedInsight = true;
+      state.error = null;
+    });
+    builder.addCase(fetchDetailedInsight.fulfilled, (state, action) => {
+      state.isLoadingDetailedInsight = false;
+      state.detailedInsight = action.payload;
+    });
+    builder.addCase(fetchDetailedInsight.rejected, (state, action) => {
+      state.isLoadingDetailedInsight = false;
+      state.error = action.payload as string;
+    });
   },
 });
 
-export const { clearError } = aiSlice.actions;
+export const { clearError, clearDetailedInsight } = aiSlice.actions;
 export default aiSlice.reducer;

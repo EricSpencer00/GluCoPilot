@@ -29,6 +29,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from .detailed_insights import router as detailed_insights_router
+except ImportError:
+    pass
+
 # Re-export for easier imports
 auth = auth_router
 glucose = glucose_router
@@ -39,3 +44,4 @@ food = food_router if 'food_router' in locals() else None
 analysis = analysis_router if 'analysis_router' in locals() else None
 recommendations = recommendations_router if 'recommendations_router' in locals() else None
 health = health_router if 'health_router' in locals() else None
+detailed_insights = detailed_insights_router if 'detailed_insights_router' in locals() else None
