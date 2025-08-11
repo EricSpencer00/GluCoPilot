@@ -71,6 +71,7 @@ export const TrendsScreen: React.FC = () => {
               display="default"
               onChange={onChangeStart}
               maximumDate={endDate || new Date()}
+              textColor="#000"
             />
           )}
           {showEndPicker && (
@@ -81,6 +82,7 @@ export const TrendsScreen: React.FC = () => {
               onChange={onChangeEnd}
               minimumDate={startDate || undefined}
               maximumDate={new Date()}
+              textColor="#000"
             />
           )}
         </Card.Content>

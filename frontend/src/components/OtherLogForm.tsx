@@ -36,7 +36,8 @@ export default function OtherLogForm({ onSuccess, onCancel }: Props) {
       <Text style={styles.label}>Category</Text>
       <Picker
         selectedValue={category}
-        style={styles.input}
+        style={[styles.input, { color: '#000' }]}
+        itemStyle={{ color: '#000' }}
         onValueChange={setCategory}
       >
         <Picker.Item label="Sleep" value="sleep" />

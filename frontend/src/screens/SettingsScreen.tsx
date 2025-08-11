@@ -108,6 +108,7 @@ const SettingsScreen = () => {
             setShowBirthPicker(false);
             if (date) handleChange('birthdate', date.toISOString().slice(0,10));
           }}
+          textColor="#000"
         />
       )}
       <TextInput label="Height (inches)" value={heightInches} onChangeText={v => setHeightInches(v.replace(/[^0-9.]/g, ''))} style={styles.input} keyboardType="numeric" />
@@ -123,6 +124,7 @@ const SettingsScreen = () => {
             setShowDiagnosisPicker(false);
             if (date) handleChange('diagnosis_date', date.toISOString().slice(0,10));
           }}
+          textColor="#000"
         />
       )}
       <TextInput label="Target Glucose Min" value={form.target_glucose_min ? String(form.target_glucose_min) : ''} onChangeText={v => handleChange('target_glucose_min', v.replace(/[^0-9]/g, ''))} style={styles.input} keyboardType="numeric" />
