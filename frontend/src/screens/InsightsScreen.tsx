@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ScrollView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { Card, Text, ActivityIndicator, Button } from 'react-native-paper';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
@@ -8,19 +8,25 @@ import { fetchRecommendations } from '../store/slices/aiSlice';
 export const InsightsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { recommendations, isLoading } = useSelector((state: RootState) => state.ai);
   const dispatch = useDispatch();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleRefresh = () => {
-    dispatch(fetchRecommendations() as any);
-  };
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await dispatch(fetchRecommendations() as any);
+    setRefreshing(false);
+  }, [dispatch]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Text variant="headlineMedium" style={{ margin: 16 }}>Insights</Text>
       <Card style={{ margin: 16 }}>
         <Card.Content>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text variant="titleMedium">AI Recommendations</Text>
-            <Button mode="outlined" onPress={handleRefresh} loading={isLoading} style={{ marginLeft: 8 }}>
+            <Button mode="outlined" onPress={onRefresh} loading={isLoading || refreshing} style={{ marginLeft: 8 }}>
               Refresh
             </Button>
           </View>

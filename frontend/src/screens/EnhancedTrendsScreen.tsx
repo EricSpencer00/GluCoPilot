@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { Card, Text, ActivityIndicator, Divider, Button, Chip } from 'react-native-paper';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
@@ -9,8 +9,15 @@ import { enhancedTrendsStyles as styles } from '../styles/screens/EnhancedTrends
 
 export const EnhancedTrendsScreen: React.FC = () => {
   const { readings, stats, isLoading } = useSelector((state: RootState) => state.glucose);
-  const [timeRange, setTimeRange] = useState<'1h' | '3h' | '6h' | '24h'>('24h');
-  
+  const [timeRange, setTimeRange] = useState<'3h' | '6h' | '12h' | '24h'>('24h');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    // You may want to trigger a reload here, e.g. by updating state or calling a fetch function
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
+
   // Data for daily pattern analysis
   const getDailyPatterns = () => {
     if (!readings || readings.length === 0) return [];
@@ -55,7 +62,10 @@ export const EnhancedTrendsScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Text variant="headlineMedium" style={styles.header}>Glucose Trends</Text>
       
       {/* Time in Range Card */}
@@ -173,5 +183,5 @@ export const EnhancedTrendsScreen: React.FC = () => {
       </Card>
     </ScrollView>
   );
-};
+}
 
