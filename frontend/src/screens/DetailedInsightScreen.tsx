@@ -2,9 +2,19 @@ import React, { useEffect } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Divider, List, Chip, Surface, IconButton } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '../store/store';
+import { clearDetailedInsight } from '../store/slices/aiSlice';
 
-const DetailedInsightScreen = ({ navigation, route }: { navigation: any; route: any }) => {
-  const { insight, isLoadingDetailedInsight } = route.params || {};
+const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
+  const { detailedInsight, isLoadingDetailedInsight } = useSelector((state: RootState) => state.ai);
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    return () => {
+      dispatch(clearDetailedInsight());
+    };
+  }, [dispatch]);
 
   // Helper function to determine icon based on recommendation category
   const getRecommendationIcon = (category: string) => {
@@ -44,7 +54,7 @@ const DetailedInsightScreen = ({ navigation, route }: { navigation: any; route: 
     );
   }
 
-  if (!insight) {
+  if (!detailedInsight) {
     return (
       <View style={styles.errorContainer}>
         <Text>No detailed insight available. Please go back and try again.</Text>
@@ -55,7 +65,7 @@ const DetailedInsightScreen = ({ navigation, route }: { navigation: any; route: 
     );
   }
 
-  const { original_recommendation, detail } = insight;
+  const { original_recommendation, detail } = detailedInsight;
   const chipStyle = getPriorityChipStyle(original_recommendation.priority);
 
   return (
