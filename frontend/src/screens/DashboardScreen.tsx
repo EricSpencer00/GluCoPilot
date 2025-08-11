@@ -16,7 +16,6 @@ import { fetchGlucoseData, syncDexcomData } from '../store/slices/glucoseSlice';
 import { fetchRecommendations } from '../store/slices/aiSlice';
 import { clearNewRegistrationFlag } from '../store/slices/authSlice';
 import { styles } from '../styles/screens/DashboardScreen';
-import type { Recommendation } from '../types/Recommendation';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -44,7 +43,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
     isLoading: aiLoading 
   } = useSelector((state: RootState) => state.ai);
   
-  const { user, isNewRegistration } = useSelector((state: RootState) => state.auth);
+  const { user, isNewRegistration, token } = useSelector((state: RootState) => state.auth);
   
   const [refreshing, setRefreshing] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -54,23 +53,41 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
   const [showDexcomModal, setShowDexcomModal] = useState(false);
 
 
-  // Throttle all dashboard data fetches (glucose, stats, recommendations, sync) to once every 5 minutes
+  // Throttle all dashboard data fetches (glucose, stats, recommendations, sync) to once every 5 minutes, including on app launch
   useEffect(() => {
-    const now = Date.now();
-    let shouldFetch = false;
-    if (!lastSync) {
-      shouldFetch = true;
-    } else {
-      const last = new Date(lastSync).getTime();
-      if (now - last > 5 * 60 * 1000) {
-        shouldFetch = true;
+    let didCancel = false;
+    
+    const fetchIfNeeded = async () => {
+      // First check if we have a valid token
+      if (!token) {
+        console.log('No auth token available, skipping dashboard data fetch');
+        return;
       }
-    }
-    if (shouldFetch) {
-      dispatch(syncDexcomData() as any);
-      loadDashboardData();
-    }
-  }, [dispatch, lastSync]);
+      
+      const now = Date.now();
+      let shouldFetch = false;
+      if (!lastSync) {
+        shouldFetch = true;
+      } else {
+        const last = new Date(lastSync).getTime();
+        if (now - last > 5 * 60 * 1000) {
+          shouldFetch = true;
+        }
+      }
+      
+      if (shouldFetch && !didCancel) {
+        try {
+          await dispatch(syncDexcomData() as any);
+          await loadDashboardData();
+        } catch (error) {
+          console.error('Error in dashboard data fetch:', error);
+        }
+      }
+    };
+    
+    fetchIfNeeded();
+    return () => { didCancel = true; };
+  }, [lastSync, dispatch, token]);
 
   // Check if this is a new registration and show Dexcom connection prompt
   useEffect(() => {
@@ -202,7 +219,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         {/* AI Recommendations */}
         {recommendations.length > 0 && (
           <EnhancedRecommendationCard 
-            recommendations={recommendations as Recommendation[]}
+            recommendations={recommendations.map(rec => ({
+              id: Math.floor(Math.random() * 100000),
+              recommendation_type: rec.category || 'general',
+              content: rec.description || '',
+              title: rec.title || '',
+              category: rec.category || '',
+              priority: rec.priority || 'medium',
+              confidence_score: rec.confidence || 0.5,
+              context_data: rec.context || {},
+              timestamp: new Date().toISOString()
+            }))}
             isLoading={aiLoading}
             onViewAll={() => navigation.navigate('Insights')}
           />

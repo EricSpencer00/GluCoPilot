@@ -42,6 +42,12 @@ export const login = createAsyncThunk(
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem('auth_token', token);
+      
+      // Store refresh token if available
+      if (tokenRes.data.refresh_token) {
+        await AsyncStorage.setItem('refresh_token', tokenRes.data.refresh_token);
+      }
+      
       const savedToken = await AsyncStorage.getItem('auth_token');
       console.log('Token saved to AsyncStorage:', savedToken); // DEBUG LOG
 
@@ -82,6 +88,11 @@ export const register = createAsyncThunk(
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem('auth_token', token);
+      
+      // Store refresh token if available
+      if (loginRes.data.refresh_token) {
+        await AsyncStorage.setItem('refresh_token', loginRes.data.refresh_token);
+      }
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
