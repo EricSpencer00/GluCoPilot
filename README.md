@@ -1,3 +1,5 @@
+<!-- Official badge -->
+![CI](https://github.com/EricSpencer00/GluCoPilot/actions/workflows/i-like-seeing-green.yml/badge.svg)
 
 # GluCoPilot - AI-Powered Diabetes Management
 

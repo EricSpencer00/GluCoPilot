@@ -1,0 +1,14 @@
+name: Greeeen!
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Always succeed
+        run: echo "It's green!" &&
+             echo '![green](https://tenor.com/view/aburt-green-giant-green-shot-green-basketball-gif-5184363724668609182)'
