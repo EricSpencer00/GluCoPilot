@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, ScrollView, Platform, RefreshControl } from 'react-native';
 import { Card, Text, Button } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from '../styles/screens/TrendsScreen';
@@ -12,6 +12,7 @@ export const TrendsScreen: React.FC = () => {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const DEFAULT_DAYS = 30;
 
   // Fallback: if no dates selected, use last 30 days
@@ -24,6 +25,13 @@ export const TrendsScreen: React.FC = () => {
     days = diff;
   }
   const { trends, loading, error } = useDexcomTrends(days, startDate, endDate);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    // You may want to trigger a reload here, e.g. by updating state or calling a fetch function
+    // For now, just setRefreshing(false) after a short delay
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
   // Handlers for date pickers
   const onChangeStart = (event: any, date?: Date) => {
@@ -50,7 +58,10 @@ export const TrendsScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Text variant="headlineMedium" style={styles.header}>Trends</Text>
 
       <Card style={styles.chartCard}>
