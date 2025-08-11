@@ -57,13 +57,22 @@ export default function OtherLogForm({ onSuccess, onCancel }: Props) {
         <View style={{ marginBottom: 16 }}>
           <Text style={styles.label}>Mood</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            {['😃','🙂','😐','😔','😢'].map((emoji, idx) => (
+            {/* Top 5 moods: Stress, Anxiety, Sadness, Anger, Happiness */}
+            {[
+              { emoji: '😰', label: 'Stress' },
+              { emoji: '😟', label: 'Anxiety' },
+              { emoji: '😢', label: 'Sadness' },
+              { emoji: '😡', label: 'Anger' },
+              { emoji: '😃', label: 'Happiness' },
+            ].map(({ emoji, label }) => (
               <TouchableOpacity
                 key={emoji}
                 style={[styles.emojiBtn, mood === emoji && styles.emojiBtnActive]}
                 onPress={() => setMood(emoji)}
+                accessibilityLabel={label}
               >
                 <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                <Text style={{ fontSize: 10, textAlign: 'center' }}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -109,18 +118,6 @@ export default function OtherLogForm({ onSuccess, onCancel }: Props) {
             thumbTintColor={Platform.OS === 'ios' ? '#007AFF' : undefined}
           />
           <Text style={{ textAlign: 'center', fontSize: 18 }}>{sleepHours} hours</Text>
-          <Text style={styles.label}>Sleep Quality</Text>
-          <Picker
-            selectedValue={sleepQuality}
-            style={[styles.input, { color: '#000' }]}
-            itemStyle={{ color: '#000' }}
-            onValueChange={setSleepQuality}
-          >
-            <Picker.Item label="Poor" value="Poor" />
-            <Picker.Item label="Fair" value="Fair" />
-            <Picker.Item label="Good" value="Good" />
-            <Picker.Item label="Excellent" value="Excellent" />
-          </Picker>
         </View>
       )}
 
@@ -153,6 +150,8 @@ const styles = StyleSheet.create({
     borderColor: '#ccc',
     marginHorizontal: 4,
     backgroundColor: '#fff',
+    width: 64,
+    alignItems: 'center',
   },
   emojiBtnActive: {
     borderColor: '#007AFF',
