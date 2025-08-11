@@ -1023,7 +1023,7 @@ class AIInsightsEngine:
         json_instructions = (
             "Please provide exactly 5 personalized, actionable recommendations as a JSON array. "
             "Each item must have: title (string), description (string), category (one of ['insulin','nutrition','activity','timing','monitoring','sleep','stress','general']), "
-            "priority ('high'|'medium'|'low'), action (string), and timing (string or null). "
+            "priority ('high'|'medium'|'low'), action (string), timing (string or null), and confidence (float between 0 and 1, representing your confidence in the recommendation). "
             "Respond ONLY with a valid JSON array, no extra text."
         )
         try:
@@ -1121,7 +1121,7 @@ class AIInsightsEngine:
                         'description': item.get('description', ''),
                         'category': item.get('category', 'general'),
                         'priority': item.get('priority', 'medium'),
-                        'confidence': 0.8,
+                        'confidence': float(item.get('confidence', 0.8)),
                         'action': item.get('action', ''),
                         'timing': item.get('timing', ''),
                         'context': self._attach_examples_and_graph(item)
@@ -1130,8 +1130,41 @@ class AIInsightsEngine:
                 logger.info(f"Processed {len(recommendations)} recommendations from JSON output: {recommendations}")
                 return recommendations[:5]
         except Exception as e:
-            logger.warning(f"AI output was not valid JSON, falling back to text parsing: {e}")
-            # Try to extract all JSON-like objects from the text (partial/truncated JSON array)
+            logger.warning(f"AI output was not valid JSON, falling back to tolerant parsing: {e}")
+            # Try to extract as many valid objects as possible from a partial/truncated JSON array
+            # Remove leading/trailing whitespace and brackets
+            text = ai_text.strip()
+            if text.startswith('['):
+                text = text[1:]
+            if text.endswith(']'):
+                text = text[:-1]
+            # Split on '},' to get individual objects (may be incomplete at the end)
+            obj_strs = re.split(r'\},\s*\{', text)
+            for i, obj_str in enumerate(obj_strs):
+                # Add braces back
+                if not obj_str.startswith('{'):
+                    obj_str = '{' + obj_str
+                if not obj_str.endswith('}'):
+                    obj_str = obj_str + '}'
+                try:
+                    item = json.loads(obj_str)
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': float(item.get('confidence', 0.8)),
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item)
+                    }
+                    recommendations.append(rec)
+                except Exception:
+                    continue
+            if recommendations:
+                logger.info(f"Processed {len(recommendations)} recommendations from tolerant JSON array parsing")
+                return recommendations[:5]
+            # If still nothing, try to extract all JSON-like objects from the text (partial/truncated JSON array)
             json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
             for obj_str in json_objects:
                 try:
@@ -1141,7 +1174,7 @@ class AIInsightsEngine:
                         'description': item.get('description', ''),
                         'category': item.get('category', 'general'),
                         'priority': item.get('priority', 'medium'),
-                        'confidence': 0.8,
+                        'confidence': float(item.get('confidence', 0.8)),
                         'action': item.get('action', ''),
                         'timing': item.get('timing', ''),
                         'context': self._attach_examples_and_graph(item)
@@ -1173,7 +1206,7 @@ class AIInsightsEngine:
                     'description': description.group(1).strip() if description else '',
                     'category': category.group(1).strip().lower() if category else 'general',
                     'priority': priority.group(1).strip().lower() if priority else 'medium',
-                    'confidence': 0.8,
+                    'confidence': 0.8,  # Not available in text fallback
                     'action': action.group(1).strip() if action else '',
                     'timing': timing.group(1).strip() if timing else '',
                     'context': self._attach_examples_and_graph({
