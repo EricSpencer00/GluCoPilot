@@ -40,35 +40,47 @@ export const DexcomStyleChart: React.FC<DexcomStyleChartProps> = ({
   const MIN_VALUE_DISPLAY = 40;
   const MAX_VALUE_DISPLAY = 400;
 
-  // Get filtered data based on time range, and fill missing 5-min intervals with nulls
+  // Get filled data based on anchor (earliest) point, and fill missing 5-min intervals from anchor
   const getFilledData = () => {
+    if (!data || data.length === 0) return [];
+    // Sort data by timestamp ascending
+    const sorted = [...data].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const now = new Date();
     let hoursToShow = 3;
     if (timeRange === '6h') hoursToShow = 6;
     else if (timeRange === '12h') hoursToShow = 12;
     else if (timeRange === '24h') hoursToShow = 24;
 
-    const startTime = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
-    // Build a map of available data by rounded timestamp
+    // Only use data within the selected time range
+    const rangeStart = new Date(now.getTime() - (hoursToShow * 60 * 60 * 1000));
+    const filtered = sorted.filter(r => new Date(r.timestamp) >= rangeStart && new Date(r.timestamp) <= now);
+    if (filtered.length === 0) return [];
+
+    // Use the earliest point as anchor
+    const anchorDate = new Date(filtered[0].timestamp);
+    anchorDate.setSeconds(0, 0); // zero seconds/millis
+    // Build a map of available data by exact timestamp (rounded to 5 min from anchor)
     const dataMap = new Map();
-    if (data && data.length > 0) {
-      data.forEach(reading => {
-        const d = new Date(reading.timestamp);
-        // Round down to nearest 5 min
-        d.setSeconds(0, 0);
-        d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
-        dataMap.set(d.getTime(), reading);
-      });
-    }
-    // Generate all expected 5-min interval timestamps
+    filtered.forEach(reading => {
+      const d = new Date(reading.timestamp);
+      // Calculate offset from anchor in ms, then round to nearest 5-min step
+      const offsetMs = d.getTime() - anchorDate.getTime();
+      const step = Math.round(offsetMs / (5 * 60 * 1000));
+      const t = anchorDate.getTime() + step * 5 * 60 * 1000;
+      dataMap.set(t, reading);
+    });
+
+    // Generate all expected 5-min interval timestamps from anchor to now (or last data point)
+    const lastTime = Math.max(new Date(filtered[filtered.length - 1].timestamp).getTime(), now.getTime());
     const filled = [];
     const intervalMs = 5 * 60 * 1000;
-    for (let t = startTime.getTime(); t <= now.getTime(); t += intervalMs) {
-      if (dataMap.has(t)) {
-        filled.push(dataMap.get(t));
-      } else {
-        // Insert a null/placeholder for missing data
-        filled.push({ value: null, timestamp: new Date(t).toISOString() });
+    for (let t = anchorDate.getTime(); t <= lastTime; t += intervalMs) {
+      if (t >= rangeStart.getTime() && t <= now.getTime()) {
+        if (dataMap.has(t)) {
+          filled.push(dataMap.get(t));
+        } else {
+          filled.push({ value: null, timestamp: new Date(t).toISOString() });
+        }
       }
     }
     return filled;
