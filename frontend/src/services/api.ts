@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
 import { setReduxDispatch, getReduxDispatch } from './reduxDispatch';
-import { setToken } from '../store/slices/authSlice';
+import { setToken, setRefreshToken } from '../store/slices/authSlice';
 
 
 // Create axios instance with default config
@@ -164,21 +164,19 @@ api.interceptors.response.use(
 
         console.log('Token refreshed successfully after 401/403 error');
 
-        // Store new tokens and update Redux state
-        await AsyncStorage.setItem('auth_token', newToken);
+        // Store new tokens
+        await AsyncStorage.multiSet([
+          ['auth_token', newToken],
+          ['refresh_token', newRefreshToken || refreshToken] // Keep old refresh token if no new one is provided
+        ]);
         
-        // Always update refresh token if provided
-        if (newRefreshToken) {
-          console.log('Updating refresh token in storage');
-          await AsyncStorage.setItem('refresh_token', newRefreshToken);
-        } else {
-          console.warn('No new refresh token provided, keeping existing refresh token');
-        }
-
-        // Update Redux state only if we have the dispatch function
+        // Update Redux state with both tokens
         const dispatch = getReduxDispatch();
         if (dispatch) {
           dispatch(setToken(newToken));
+          if (newRefreshToken) {
+            dispatch(setRefreshToken(newRefreshToken));
+          }
         }
 
         // Update the Authorization header for the original request
