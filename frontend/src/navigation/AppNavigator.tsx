@@ -8,7 +8,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { TrendsScreen } from '../screens/TrendsScreen';
 import LogsScreen from '../screens/LogsScreen';
-import { InsightsScreen } from '../screens/InsightsScreen';
 import { LoadingScreen } from '../components/common/LoadingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
@@ -17,13 +16,12 @@ import DexcomLoginScreen from '../screens/DexcomLoginScreen';
 import ProfileScreen from '../screens/ProfileScreen'; // Fixed import
 import SettingsScreen from '../screens/SettingsScreen';
 import AiFeedbackScreen from '../screens/AiFeedbackScreen';
+import { InsightsStackNavigator } from './InsightsNavigator';
 
 // Simple debug screens for tabs that aren't fully implemented yet
 import { View, Text, ScrollView, StyleSheet, Button } from 'react-native';
 import { Card } from 'react-native-paper';
 import { API_BASE_URL } from '../config';
-
-// ...removed placeholder screens...
 
 // Import types
 import { RootState } from '../store/store';
@@ -91,7 +89,7 @@ const MainTabNavigator = () => {
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Logs" component={LogsScreen} />
       <Tab.Screen name="Trends" component={TrendsScreen} />
-      <Tab.Screen name="Insights" component={InsightsScreen} />
+      <Tab.Screen name="Insights" component={InsightsStackNavigator} />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
