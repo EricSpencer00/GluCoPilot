@@ -1047,8 +1047,13 @@ class AIInsightsEngine:
                         max_tokens=1024,
                     )
                     if completion.choices:
-                        logger.info("Successfully generated AI recommendations")
-                        return completion.choices[0].message.content.strip()
+                        content = completion.choices[0].message.content
+                        if content is not None:
+                            logger.info("Successfully generated AI recommendations")
+                            return content.strip()
+                        else:
+                            logger.warning("Model API returned None content in choices")
+                            return self._fallback_recommendations()
                     else:
                         logger.warning("No choices returned from model API")
                         return self._fallback_recommendations()
