@@ -17,18 +17,21 @@ interface Recommendation {
   timestamp: string;
 }
 
+
 interface EnhancedRecommendationCardProps {
   recommendations: Recommendation[];
   isLoading: boolean;
   onViewAll: () => void;
   navigation?: any;
+  onRecommendationPress?: (recommendation: Recommendation) => void;
 }
 
 export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProps> = ({ 
   recommendations, 
   isLoading,
   onViewAll,
-  navigation
+  navigation,
+  onRecommendationPress
 }) => {
   const dispatch = useDispatch();
 
@@ -67,6 +70,10 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
   };
 
   const handleRecommendationPress = (recommendation: Recommendation) => {
+    if (onRecommendationPress) {
+      onRecommendationPress(recommendation);
+      return;
+    }
     if (navigation) {
       // Convert the recommendation to the format expected by the insights screen
       const formattedRec = {
@@ -79,7 +86,6 @@ export const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProp
         timing: '', // Default empty timing
         context: recommendation.context_data || {}
       };
-      
       dispatch(fetchDetailedInsight(formattedRec) as any);
       navigation.navigate('Insights', { screen: 'DetailedInsight' });
     }
