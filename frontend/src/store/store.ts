@@ -13,7 +13,7 @@ import { setReduxDispatch } from '../services/reduxDispatch';
 const authPersistConfig = {
   key: 'auth',
   storage: AsyncStorage,
-  whitelist: ['user', 'token']
+  whitelist: ['user', 'token', 'refreshToken']
 };
 
 const dexcomPersistConfig = {
