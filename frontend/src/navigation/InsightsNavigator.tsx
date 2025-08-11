@@ -1,7 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { InsightsScreen } from '../screens/InsightsScreen';
-import { DetailedInsightScreen } from '../screens/DetailedInsightScreen';
+import DetailedInsightScreen from '../screens/DetailedInsightScreen';
 
 const Stack = createStackNavigator();
 
