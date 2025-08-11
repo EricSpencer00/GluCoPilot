@@ -93,9 +93,6 @@ export const InsightsScreen: React.FC<{ navigation: any }> = ({ navigation }) =>
           </Card.Content>
         </Card>
       </LinearGradient>
-      <Button mode="contained" style={{ margin: 16 }} onPress={() => navigation.navigate('InsightsMain')}>
-        Back to Insights
-      </Button>
     </ScrollView>
   );
 };
