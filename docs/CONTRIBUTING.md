@@ -1,287 +1,143 @@
+
 # Contributing to GluCoPilot
 
-Thank you for your interest in contributing to GluCoPilot! This document provides guidelines and information for contributors.
+Thank you for your interest in GluCoPilot! We welcome contributions of all kinds. Please read this guide before submitting code, issues, or documentation.
 
-## 🎯 Project Overview
+## 🚦 Development Workflow
 
-GluCoPilot is an AI-powered, offline-first diabetes management application designed to help Type 1 diabetics optimize their glucose control through personalized insights and recommendations.
 
-## 🏗 Architecture
+**All development and debugging should be done via:**
 
-- **Backend**: Python FastAPI with SQLite database
-- **Frontend**: React Native with Expo
-- **AI/ML**: Local model inference with Hugging Face fallback
-- **Data Sources**: Dexcom CGM, Apple Watch, manual logging
+```bash
+./scripts/start_glucopilot.sh
+```
 
-## 🚀 Getting Started
+This script sets up both backend and frontend, checks/fixes dependencies, and—crucially—automatically configures the correct `API_BASE_URL` in `frontend/app.json` for your local network. This is required for Expo Go or device/simulator to connect to your backend.
 
-### Prerequisites
+**You do NOT need to manually edit your IP address.** The script will detect your local IP and update the config. If you switch networks or your IP changes, just re-run the script.
 
-- Python 3.9+
-- Node.js 18+
-- Git
-- macOS (for iOS development)
+**Expo Note:**
+- For physical devices, both your computer and device must be on the same WiFi network.
+- If you have issues connecting, check your firewall and ensure the backend is reachable from your device using the printed IP.
+- If you use a simulator/emulator, the script will still set the correct IP, but you may use `localhost` or `127.0.0.1` if supported by your setup.
 
-### Setup
+**Do not manually start backend/frontend for development unless you are debugging the script itself.**
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/EricSpencer00/GluCoPilot.git
-   cd GluCoPilot
-   ```
+---
 
-2. **Run the setup script**
-   ```bash
-   ./scripts/setup.sh
-   ```
-
-3. **Configure environment**
-   ```bash
-   cp backend/.env.example backend/.env
-   # Edit backend/.env with your configuration
-   ```
-
-## 📁 Project Structure
+## 🏗 Project Structure
 
 ```
 GluCoPilot/
 ├── backend/           # Python FastAPI backend
-│   ├── api/          # API routes
-│   ├── core/         # Core configuration
-│   ├── models/       # Database models
-│   ├── services/     # Business logic
-│   ├── schemas/      # Pydantic schemas
-│   └── utils/        # Utility functions
-├── frontend/         # React Native app
+│   ├── api/           # API routes
+│   ├── core/          # Core config
+│   ├── models/        # DB models
+│   ├── services/      # Business logic
+│   ├── schemas/       # Pydantic schemas
+│   └── utils/         # Utilities
+├── frontend/          # React Native app
 │   └── src/
-│       ├── components/  # Reusable UI components
-│       ├── screens/     # Screen components
-│       ├── navigation/  # Navigation configuration
+│       ├── components/  # UI components
+│       ├── screens/     # Screens
+│       ├── navigation/  # Navigation
 │       ├── store/       # Redux store
 │       └── services/    # API services
-├── ai/              # AI/ML models and processing
-├── database/        # Database schemas and migrations
-├── docs/           # Documentation
-└── scripts/        # Setup and utility scripts
+├── ai/                # AI/ML models and processing
+├── database/           # DB schemas/migrations
+├── docs/               # Documentation
+└── scripts/            # Setup and utility scripts
 ```
 
-## 🔧 Development Workflow
+## 🧑‍� Coding Standards
 
-### Backend Development
-
-1. **Activate Python environment**
-   ```bash
-   cd backend
-   source venv/bin/activate
-   ```
-
-2. **Start development server**
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-3. **Run tests**
-   ```bash
-   pytest
-   ```
-
-4. **Database migrations**
-   ```bash
-   alembic revision --autogenerate -m "Description"
-   alembic upgrade head
-   ```
-
-### Frontend Development
-
-1. **Start development server**
-   ```bash
-   cd frontend
-   npm start
-   ```
-
-2. **Run on iOS simulator**
-   ```bash
-   npm run ios
-   ```
-
-3. **Run tests**
-   ```bash
-   npm test
-   ```
-
-### AI Model Development
-
-1. **Navigate to AI directory**
-   ```bash
-   cd ai
-   ```
-
-2. **Test model inference**
-   ```bash
-   python test_model.py
-   ```
-
-## 🎨 Code Style
-
-### Python (Backend)
-- Follow PEP 8
-- Use type hints
-- Maximum line length: 100 characters
-- Use Black for formatting
-- Use isort for import sorting
-
-### TypeScript/JavaScript (Frontend)
-- Use TypeScript for all new code
-- Follow Airbnb ESLint configuration
-- Use Prettier for formatting
-- Maximum line length: 100 characters
-
-### Git Commit Messages
-- Use conventional commit format
-- Examples:
-  - `feat: add glucose trend analysis`
-  - `fix: resolve Dexcom sync issue`
-  - `docs: update API documentation`
-  - `refactor: improve recommendation engine`
+- **Python:** PEP8, type hints, Black, isort
+- **TypeScript:** Airbnb ESLint, Prettier, 100-char lines
+- **Commits:** Conventional format (e.g. `feat:`, `fix:`, `docs:`)
 
 ## 🧪 Testing
 
-### Backend Testing
-- Unit tests with pytest
-- Integration tests for API endpoints
-- Database tests with SQLite in-memory
-- AI model tests with mock data
+- **Backend:** pytest, SQLite in-memory, >80% coverage
+- **Frontend:** Jest, Testing Library, Detox (E2E)
+- **AI:** Mock/test data for model logic
 
-### Frontend Testing
-- Component tests with Jest and Testing Library
-- Integration tests for screens
-- E2E tests with Detox (iOS/Android)
+All new features must include tests. Critical paths require integration tests.
 
-### Test Coverage
-- Maintain >80% code coverage
-- All new features must include tests
-- Critical paths require integration tests
 
-## 🔒 Security Considerations
+## 🔑 API Keys & Secrets
 
-- **Data Privacy**: All health data remains on-device
-- **Encryption**: Sensitive data encrypted at rest
-- **Authentication**: Secure local authentication only
-- **API Security**: Input validation and sanitization
-- **Secrets**: Never commit API keys or passwords
+You will need to set up several API keys/tokens for local development. Copy `backend/.env.example` to `backend/.env` and fill in the following:
 
-## 📊 Performance Guidelines
+- **Dexcom:**
+  - `DEXCOM_USERNAME` and `DEXCOM_PASSWORD` are your Dexcom Share credentials.
+- **HuggingFace:**
+  - Get a free token at https://huggingface.co/settings/tokens and set `HUGGINGFACE_TOKEN` and `HF_TOKEN`.
+- **Reddit:**
+  - Create an app at https://www.reddit.com/prefs/apps, set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT`.
+- **Expo/EAS:**
+  - Register your app at https://expo.dev, set `EXPO_APP_ID`.
+- **REACT_APP_API_BASE_URL:**
+  - Usually `http://localhost:8000` for local dev. The startup script will update this for device debugging.
 
-### Backend
-- API responses <500ms
-- Database queries optimized with indexes
-- Background tasks for heavy processing
-- Efficient AI model loading and caching
-
-### Frontend
-- App launch <3 seconds
-- Smooth 60fps animations
-- Offline-first data synchronization
-- Efficient state management with Redux
-
-### AI/ML
-- Model inference <10 seconds
-- Local model preferred over remote
-- Efficient memory usage
-- Graceful fallbacks for model failures
-
-## 🐛 Issue Reporting
-
-### Bug Reports
-Include:
-- Device/OS version
-- App version
-- Steps to reproduce
-- Expected vs actual behavior
-- Screenshots/logs if applicable
-
-### Feature Requests
-Include:
-- Clear problem description
-- Proposed solution
-- User impact assessment
-- Implementation considerations
-
-## 📋 Pull Request Process
-
-1. **Fork the repository**
-2. **Create feature branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. **Make changes with tests**
-4. **Update documentation**
-5. **Commit with conventional messages**
-6. **Push branch and create PR**
-7. **Address review feedback**
-
-### PR Requirements
-- [ ] Code follows style guidelines
-- [ ] Tests pass and coverage maintained
-- [ ] Documentation updated
-- [ ] No merge conflicts
-- [ ] Squashed commits (if requested)
-
-## 🔍 Code Review Guidelines
-
-### As a Reviewer
-- Be constructive and respectful
-- Focus on code quality and security
-- Suggest improvements, don't just point out problems
-- Approve when ready, request changes when needed
-
-### As an Author
-- Respond to feedback promptly
-- Explain complex decisions
-- Update tests and docs
-- Keep PRs focused and reasonably sized
-
-## 🏥 Healthcare Compliance
-
-### Important Notes
-- This is a personal health management tool
-- Not intended for medical diagnosis
-- Users should consult healthcare providers
-- Follow FDA guidelines for health apps
-- Maintain data accuracy and reliability
-
-### Data Handling
-- Minimize data collection
-- Secure data transmission
-- Clear data retention policies
-- User control over data export/deletion
-
-## 🆘 Getting Help
-
-### Communication Channels
-- **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: General questions and ideas
-- **Code Reviews**: Technical discussions on PRs
-
-### Resources
-- [API Documentation](http://localhost:8000/docs)
-- [React Native Docs](https://reactnative.dev/docs/getting-started)
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [Dexcom API](https://github.com/gagebenne/pydexcom)
-
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Type 1 Diabetes community for inspiration and feedback
-- Open source contributors and maintainers
-- Healthcare professionals providing guidance
-- OpenAI Hackathon for the opportunity
+**Never commit your real secrets or credentials!**
 
 ---
 
-**Remember**: This project handles sensitive health data. Always prioritize user privacy, data security, and medical accuracy in your contributions.
+## 🔒 Security & Privacy
 
-Thank you for contributing to GluCoPilot! 🩺💙
+- All health data is local only
+- SQLite encrypted at rest
+- No cloud storage
+- Never commit secrets or credentials
+
+## 🐛 Issue Reporting
+
+**Bugs:**
+- Device/OS, app version
+- Steps to reproduce
+- Expected vs actual
+- Logs/screenshots if possible
+
+**Features:**
+- Problem description
+- Proposed solution
+- User impact
+
+## 📋 Pull Requests
+
+1. Fork and branch: `git checkout -b feature/your-feature`
+2. Make changes with tests/docs
+3. Commit with conventional messages
+4. Push and open PR
+5. Address review feedback
+
+**PRs must:**
+- Pass all tests/coverage
+- Follow style guidelines
+- Update docs as needed
+- Have no merge conflicts
+
+## 🏥 Healthcare Compliance
+
+- Not for medical diagnosis
+- Users should consult healthcare providers
+- Follow FDA guidelines for health apps
+- Minimize and secure data
+
+## 🆘 Getting Help
+
+- GitHub Issues: bugs/features
+- Discussions: questions/ideas
+- [API Docs](http://localhost:8000/docs)
+- [React Native](https://reactnative.dev/docs/getting-started)
+- [FastAPI](https://fastapi.tiangolo.com/)
+
+## 📜 License
+
+MIT License - see [LICENSE](../LICENSE)
+
+---
+
+**Always prioritize user privacy, data security, and medical accuracy.**
+
+Thank you for contributing to GluCoPilot! 💙

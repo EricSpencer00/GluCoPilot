@@ -1,37 +1,48 @@
+
 # GluCoPilot - AI-Powered Diabetes Management
 
-A comprehensive, offline-first diabetes management application that combines real-time CGM data, activity tracking, food logging, and AI-powered insights to help Type 1 diabetics optimize their glucose control.
+A comprehensive, offline-first diabetes management app combining real-time CGM data, activity tracking, food logging, and AI-powered insights to help Type 1 diabetics optimize glucose control.
 
-## 🎯 OpenAI Hackathon September 2025
+## 🚀 Quick Start (Recommended)
 
-**Playground**: https://gpt-oss.com  
-**DevPost**: https://openai.devpost.com
+**For seamless development and debugging, always use the provided script:**
+
+```bash
+./scripts/start_glucopilot.sh
+```
+
+This script:
+- Sets up and checks your Python/Node environments
+- Handles backend and frontend dependencies
+- Configures your local IP for mobile debugging
+- Starts both backend (FastAPI) and frontend (Expo) servers
+- Ensures a clean, reproducible dev environment
+
+If you encounter issues, re-run the script to rule out environment/config problems before investigating code bugs.
+
+---
 
 ## ✨ Core Features
 
 ### 📊 Data Ingestion
-- **Real-time CGM Data**: Pulls glucose readings from Dexcom via `pydexcom`
-- **Health Integrations**: Apple HealthKit/Google Fit for activity, sleep, and heart rate data
-- **MyFitnessPal Integration**: Comprehensive food logging with detailed nutrition data
-- **Smart Food Logging**: Manual entry or barcode scanning with complete nutrition profiles
-- **Insulin Tracking**: Comprehensive logging of dosage, timing, and insulin types
-- **Comprehensive Health Data**: Mood tracking, sleep quality, medication, illness, and menstrual cycle data
+- Real-time CGM data from Dexcom
+- Apple HealthKit/Google Fit for activity, sleep, heart rate
+- MyFitnessPal integration for food logging
+- Manual/scan food entry, insulin tracking, mood, sleep, medication, illness, menstrual cycle
 
 ### 🧠 AI-Powered Analysis
-- **Multi-Stream Pattern Recognition**: Identifies correlations across glucose, food, insulin, activity, sleep, mood, and more
-- **Personalized Insights**: LLM-generated improvement suggestions based on comprehensive analysis
-- **Community Wisdom**: Curated advice from r/T1D relevant to detected issues
-- **Predictive Recommendations**: Actionable suggestions with specific timing and personalized interventions
-- **Outlier Detection**: Identifies unusual patterns and potential health concerns across all data streams
-- **Correlation Analysis**: Shows how different factors (exercise, sleep, stress) affect glucose levels
+- Multi-stream pattern recognition (glucose, food, insulin, activity, sleep, mood, etc.)
+- Personalized LLM-generated insights and recommendations
+- Community wisdom from r/T1D
+- Predictive, actionable suggestions
+- Outlier and correlation analysis
 
 ### 📱 User Experience
-- **Interactive Dashboard**: Real-time glucose trends with time-in-range metrics
-- **Multi-Data Visualization**: Comprehensive charts overlaying glucose, meals, insulin, activity, sleep, and mood
-- **Service Integration UI**: Simple toggles to connect external services like MyFitnessPal
-- **Offline-First**: Full functionality without internet connection
-- **Local Privacy**: All data stored and processed locally
-- **Actionable Insights**: Specific recommendations with timing and expected outcomes
+- Interactive dashboard with real-time trends
+- Multi-data visualizations
+- Simple service integration UI
+- Offline-first, privacy-focused (all data local)
+- Actionable, time-specific insights
 
 ## 🏗 Architecture
 
@@ -39,138 +50,53 @@ A comprehensive, offline-first diabetes management application that combines rea
 GluCoPilot/
 ├── backend/           # Python FastAPI server
 ├── frontend/          # React Native mobile app
-├── ai/               # Local AI models and processing
-├── database/         # SQLite schema and migrations
-├── docs/             # Documentation
-└── scripts/          # Utility and setup scripts
+├── ai/                # Local AI models and processing
+├── database/          # SQLite schema and migrations
+├── docs/              # Documentation
+└── scripts/           # Utility and setup scripts
 ```
 
-### Backend (Python + FastAPI)
-- **Data Collection**: Dexcom API, HealthKit bridge, manual inputs
-- **Pattern Analysis**: Statistical analysis and trend detection
-- **AI Integration**: Local LLM inference with Hugging Face fallback
-- **Reddit Integration**: Automated r/T1D content curation
+## 🛠 Manual Setup (Advanced/CI Only)
 
-### Frontend (React Native)
-- **Cross-Platform**: iOS and Android support
-- **Real-Time Updates**: Live glucose monitoring and notifications
-- **Intuitive UI**: Quick meal/insulin entry with barcode scanning
-- **Offline Capable**: Full functionality without internet
+If you must set up manually (not recommended for dev):
 
-### AI/ML Pipeline
-- **Local Models**: Privacy-focused on-device inference
-- **Multi-Stream Pattern Detection**: Advanced correlation analysis across all health data
-- **Outlier Detection**: Identifies unusual patterns and potential health concerns
-- **Recommendation Engine**: Personalized advice with specific timing and actions
-- **Community Insights**: Relevant tip extraction and summarization
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.9+
-- Node.js 18+
-- React Native development environment
-- Dexcom Share account
-- Apple Watch (for activity data)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/EricSpencer00/GluCoPilot.git
-   cd GluCoPilot
-   ```
-
-2. **Set up the backend**
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. **Set up the frontend**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-4. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Dexcom credentials
-   ```
-
-5. **Initialize database**
-   ```bash
-   cd backend
-   python -m alembic upgrade head
-   ```
-
-6. **Start the application**
-   ```bash
-   # Terminal 1: Start backend
-   cd backend
-   uvicorn main:app --reload
-
-   # Terminal 2: Start frontend
-   cd frontend
-   npm start
-   ```
+1. Clone repo: `git clone https://github.com/EricSpencer00/GluCoPilot.git && cd GluCoPilot`
+2. Backend: `cd backend && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
+3. Frontend: `cd frontend && npm install`
+4. Configure env: `cp backend/.env.example backend/.env` (edit as needed)
+5. DB: `cd backend && python -m alembic upgrade head`
+6. Start backend: `uvicorn main:app --reload --host 0.0.0.0 --port 8000`
+7. Start frontend: `cd frontend && npx expo start --clear`
 
 ## 📊 Data Sources
 
 | Source | Data Type | Frequency | Format |
-|--------|-----------|-----------|---------|
-| Dexcom CGM | Glucose readings (mg/dL) | 5-minute intervals | JSON |
-| Apple HealthKit | Heart rate, steps, workouts, sleep | Real-time sync | JSON |
-| Google Fit | Activity, steps, workouts | Real-time sync | JSON |
-| MyFitnessPal | Detailed nutrition data | User entry & sync | JSON |
-| Food Log | Nutrition data (carbs, protein, fat) | User entry | JSON |
-| Insulin Log | Type, units, timestamp | User entry | JSON |
-| Activity Log | Type, duration, intensity | User entry & sync | JSON |
-| Sleep Log | Duration, quality, phases | User entry & sync | JSON |
-| Mood Log | Rating, description, tags | User entry | JSON |
-| Medication Log | Name, dosage, timing | User entry | JSON |
-| Illness Log | Type, severity, duration | User entry | JSON |
-| Menstrual Cycle | Dates, symptoms, flow | User entry | JSON |
-| Reddit r/T1D | Community tips and advice | Daily batch | JSON |
+|--------|-----------|-----------|--------|
+| Dexcom CGM | Glucose readings | 5-min | JSON |
+| Apple HealthKit | Heart, steps, sleep | Real-time | JSON |
+| Google Fit | Activity, steps | Real-time | JSON |
+| MyFitnessPal | Nutrition | User/Sync | JSON |
+| Food/Insulin/Activity/Sleep/Mood/Med/Illness/Menstrual | User/Sync | JSON |
+| Reddit r/T1D | Community tips | Daily | JSON |
 
-## 🔄 User Flow
+## � Privacy & Security
 
-1. **Authentication**: Secure local login
-2. **Data Sync**: Automatic Dexcom and Apple Watch data retrieval
-3. **Analysis**: Real-time pattern detection and AI processing
-4. **Insights**: Personalized recommendations display
-5. **Logging**: Quick meal and insulin entry
-6. **Monitoring**: Continuous glucose trend visualization
-
-## 🛡 Privacy & Security
-
-- **Local Storage**: All data remains on your device
-- **Encrypted Database**: SQLite with encryption at rest
-- **No Cloud Dependencies**: Full offline functionality
-- **Open Source**: Complete transparency and auditability
-
-## 🎯 Hackathon Goals
-
-- ✅ **Offline-First**: Complete functionality without internet
-- ✅ **Real-Time Data**: Sub-5-second Dexcom/Apple Watch sync
-- ✅ **Fast AI**: <10-second recommendation generation
-- ✅ **Local Privacy**: Zero cloud data storage
-- ✅ **Production Ready**: Robust error handling and fallbacks
+- All data stored and processed locally
+- SQLite encrypted at rest
+- No cloud dependencies
+- Open source and auditable
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./docs/CONTRIBUTING.md) for details.
+See [Contributing Guide](./docs/CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE)
 
 ## 🙋‍♂️ Support
 
-For questions or support, please [open an issue](https://github.com/EricSpencer00/GluCoPilot/issues) or contact the development team.
+Open an issue or contact the dev team.
 
 ---
 
