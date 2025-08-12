@@ -1,3 +1,8 @@
+# Feedback router
+try:
+    from .feedback import router as feedback_router
+except ImportError:
+    pass
 # Import all routers
 from .auth import router as auth_router
 from .glucose import router as glucose_router
@@ -45,3 +50,4 @@ analysis = analysis_router if 'analysis_router' in locals() else None
 recommendations = recommendations_router if 'recommendations_router' in locals() else None
 health = health_router if 'health_router' in locals() else None
 detailed_insights = detailed_insights_router if 'detailed_insights_router' in locals() else None
+feedback = feedback_router if 'feedback_router' in locals() else None
