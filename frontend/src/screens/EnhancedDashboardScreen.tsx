@@ -39,7 +39,7 @@ export const EnhancedDashboardScreen: React.FC<DashboardScreenProps> = ({ naviga
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [timeRange, setTimeRange] = useState<'1h' | '3h' | '6h' | '24h'>('3h');
+  const [timeRange, setTimeRange] = useState<'3h' | '6h' | '12h' | '24h'>('3h');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -109,12 +109,12 @@ export const EnhancedDashboardScreen: React.FC<DashboardScreenProps> = ({ naviga
     return `${Math.floor(diffHours / 24)}d ago`;
   };
 
-  const handleTimeRangeChange = (range: '1h' | '3h' | '6h' | '24h') => {
+  const handleTimeRangeChange = (range: '3h' | '6h' | '12h' | '24h') => {
     setTimeRange(range);
     // If we're switching to a longer time range than we have data for, fetch more data
-    const hoursNeeded = range === '1h' ? 3 : 
-                      range === '3h' ? 6 : 
-                      range === '6h' ? 12 : 24;
+    const hoursNeeded = range === '3h' ? 3 : 
+                      range === '6h' ? 6 : 
+                      range === '12h' ? 12 : 24;
                       
     if (readings.length < hoursNeeded * 12) { // Assuming readings every 5 mins, 12 per hour
       dispatch(fetchGlucoseData({ hours: hoursNeeded }) as any);
@@ -168,7 +168,7 @@ export const EnhancedDashboardScreen: React.FC<DashboardScreenProps> = ({ naviga
         {/* Enhanced AI Recommendations */}
         {recommendations.length > 0 && (
           <EnhancedRecommendationCard 
-            recommendations={recommendations}
+            recommendations={JSON.parse(JSON.stringify(recommendations))}
             isLoading={aiLoading}
             onViewAll={() => navigation.navigate('Insights')}
           />

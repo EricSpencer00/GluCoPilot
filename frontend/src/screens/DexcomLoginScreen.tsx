@@ -2,16 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
 import { loginToDexcom, clearError } from '../store/slices/dexcomSlice';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppDispatch } from '../hooks/useAppDispatch';
 import { useAppSelector } from '../hooks/useAppSelector';
 import { syncDexcomData } from '../store/slices/glucoseSlice';
 
+type DexcomLoginScreenRouteParams = {
+  fromRegistration?: boolean;
+};
+
 const DexcomLoginScreen: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigation = useNavigation();
-  const route = useRoute();
-  const fromRegistration = route.params?.fromRegistration;
+  const route = useRoute<RouteProp<Record<string, DexcomLoginScreenRouteParams>, string>>();
+  const fromRegistration = (route.params as DexcomLoginScreenRouteParams)?.fromRegistration;
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
