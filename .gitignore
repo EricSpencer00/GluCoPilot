@@ -135,8 +135,8 @@ web-build/
 logs/
 *.log
 
-# AI Models (if stored locally)
-models/
+models/DialoGPT-medium/
+models/sentence-transformer
 *.bin
 *.safetensors
 
