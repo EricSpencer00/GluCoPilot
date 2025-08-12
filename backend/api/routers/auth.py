@@ -89,6 +89,14 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": user.username})
     refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
 
+    # Ensure both tokens are present
+    if not access_token or not refresh_token:
+        logger.error(f"Login failed: Missing token(s) for user {user.username}. access_token: {bool(access_token)}, refresh_token: {bool(refresh_token)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate authentication tokens. Please try again later."
+        )
+
     # Store refresh token in user model (add field if not present)
     user.refresh_token = refresh_token
     db.commit()
@@ -137,7 +145,6 @@ async def refresh_token(
 ):
     """Refresh access token using refresh token"""
     from services.auth import verify_token
-    import logging
     refresh_token = body.refresh_token
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -145,21 +152,21 @@ async def refresh_token(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        logging.info(f"Refresh attempt with token: {refresh_token}")
+        logger.info(f"Refresh attempt with token: {refresh_token}")
         payload = verify_token(refresh_token, credentials_exception)
         username = payload.username
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            logging.warning(f"No user found for username: {username}")
+            logger.warning(f"No user found for username: {username}")
         if not user or user.refresh_token != refresh_token:
-            logging.warning(f"Refresh token mismatch for user {username if user else 'unknown'}")
+            logger.warning(f"Refresh token mismatch for user {username if user else 'unknown'}")
             raise credentials_exception
         # Issue new access and refresh tokens (rotate refresh token)
         access_token = create_access_token(data={"sub": user.username})
         new_refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
         user.refresh_token = new_refresh_token
         db.commit()
-        logging.info(f"Refresh successful for user {username}")
+        logger.info(f"Refresh successful for user {username}")
         return {
             "access_token": access_token,
             "refresh_token": new_refresh_token,
@@ -167,7 +174,7 @@ async def refresh_token(
             "expires_in": 1800
         }
     except Exception as e:
-        logging.error(f"Refresh failed: {e}")
+        logger.error(f"Refresh failed: {e}")
         raise credentials_exception
 
 @router.post("/connect-dexcom", response_model=DexcomResponse)
