@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 
-# Only import routers that exist
 from api.routers import auth, glucose, prediction
 from api.routers.recommendations import router as recommendations
 from api.routers.food import router as food
@@ -13,6 +12,7 @@ from api.routers.insulin import router as insulin
 from api.routers.integrations import router as integrations
 from api.routers.dexcom_trends import router as dexcom_trends
 from api.routers.detailed_insights import router as detailed_insights
+from api.routers import forgot_password
 from core.database import get_db, create_tables
 from core.config import settings
 # Background tasks service will be implemented later
@@ -66,6 +66,7 @@ security = HTTPBearer()
 
 # Include routers
 app.include_router(auth, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(forgot_password.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(glucose, prefix="/api/v1/glucose", tags=["Glucose"])
 app.include_router(recommendations, prefix="/api/v1/recommendations", tags=["Recommendations"])
 app.include_router(prediction, prefix="/api/v1/predict", tags=["Prediction"])
