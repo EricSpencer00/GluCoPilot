@@ -42,25 +42,37 @@ export const login = createAsyncThunk(
         username: email,
         password,
       });
+      console.log('[LOGIN] Raw response:', tokenRes);
+      console.log('[LOGIN] tokenRes.data:', tokenRes.data);
       const token: string = tokenRes.data.access_token;
       const refreshToken: string = tokenRes.data.refresh_token;
-      
+      console.log('[LOGIN] Extracted access_token:', token);
+      console.log('[LOGIN] Extracted refresh_token:', refreshToken);
+
       // Make sure we have both tokens
       if (!token) {
+        console.error('[LOGIN] No access token returned from server!', tokenRes.data);
         throw new Error('No access token returned from server');
       }
-      
       if (!refreshToken) {
-        console.warn('No refresh token returned from server');
+        console.error('[LOGIN] No refresh token returned from server!', tokenRes.data);
+        throw new Error('No refresh token returned from server');
       }
-      
-      // Store tokens in AsyncStorage
       await AsyncStorage.multiSet([
         ['auth_token', token],
-        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+        ['refresh_token', refreshToken]
       ]);
-      
-      console.log('Tokens saved to AsyncStorage - Access:', !!token, 'Refresh:', !!refreshToken);
+
+      // Immediately update Redux state with tokens
+      // @ts-ignore
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
+        global.dispatch(setToken(token));
+        global.dispatch(setRefreshToken(refreshToken));
+      }
+
+      // Debug: read back from AsyncStorage
+      const storedToken = await AsyncStorage.getItem('auth_token');
+      console.log('Tokens saved to AsyncStorage - Access:', !!token, 'Refresh:', !!refreshToken, '| Read back:', storedToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
@@ -105,16 +117,23 @@ export const register = createAsyncThunk(
       }
       
       if (!refreshToken) {
-        console.warn('No refresh token returned from server');
+        throw new Error('No refresh token returned from server');
       }
-      
-      // Store tokens in AsyncStorage
       await AsyncStorage.multiSet([
         ['auth_token', token],
-        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+        ['refresh_token', refreshToken]
       ]);
-      
-      console.log('Tokens saved to AsyncStorage after registration - Access:', !!token, 'Refresh:', !!refreshToken);
+
+      // Immediately update Redux state with tokens
+      // @ts-ignore
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
+        global.dispatch(setToken(token));
+        global.dispatch(setRefreshToken(refreshToken));
+      }
+
+      // Debug: read back from AsyncStorage
+      const storedToken = await AsyncStorage.getItem('auth_token');
+      console.log('Tokens saved to AsyncStorage after registration - Access:', !!token, 'Refresh:', !!refreshToken, '| Read back:', storedToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
