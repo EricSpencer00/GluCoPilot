@@ -74,7 +74,12 @@ app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 app.include_router(integrations, prefix="/api/v1/integrations", tags=["Integrations"])
 app.include_router(dexcom_trends, prefix="/api/v1", tags=["Trends"])
+
 app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insights"])
+# Feedback router
+from api.routers import feedback
+if feedback:
+    app.include_router(feedback, prefix="/api/v1", tags=["Feedback"])
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
