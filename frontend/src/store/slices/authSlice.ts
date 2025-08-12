@@ -49,13 +49,11 @@ export const login = createAsyncThunk(
       }
       
       if (!refreshToken) {
-        console.warn('No refresh token returned from server');
+        throw new Error('No refresh token returned from server');
       }
-      
-      // Store tokens in AsyncStorage
       await AsyncStorage.multiSet([
         ['auth_token', token],
-        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+        ['refresh_token', refreshToken]
       ]);
       
       console.log('Tokens saved to AsyncStorage - Access:', !!token, 'Refresh:', !!refreshToken);
@@ -103,13 +101,11 @@ export const register = createAsyncThunk(
       }
       
       if (!refreshToken) {
-        console.warn('No refresh token returned from server');
+        throw new Error('No refresh token returned from server');
       }
-      
-      // Store tokens in AsyncStorage
       await AsyncStorage.multiSet([
         ['auth_token', token],
-        ['refresh_token', refreshToken || ''] // Store empty string if null to avoid issues
+        ['refresh_token', refreshToken]
       ]);
       
       console.log('Tokens saved to AsyncStorage after registration - Access:', !!token, 'Refresh:', !!refreshToken);
