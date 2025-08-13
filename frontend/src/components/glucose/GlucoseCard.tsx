@@ -30,6 +30,7 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
   };
 
   const getTrendIcon = () => {
+    console.log(`Reading trend: ${reading.trend}`);
     if (!reading) return null;
     // Use Unicode diagonal arrows for rising/falling, fallback to text if not supported
     switch(reading.trend) {
@@ -37,7 +38,7 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
         return '⬈⬈'; // double northeast
       case 'rising':
         return '⬈'; // northeast arrow U+2B08
-      case 'steady':
+      case 'stable':
         return '→'; // right arrow
       case 'falling':
         return '⬊'; // southeast arrow U+2B0A
@@ -80,29 +81,15 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
             <View style={styles.valueContainer}>
               <Text 
                 variant="displayLarge" 
-                style={[styles.value, { color: getGlucoseColor() }]}
+                style={[styles.value, { color: getGlucoseColor(), flexDirection: 'row', alignItems: 'center' }]}
               >
                 {reading.value}
-              </Text>
-              {getTrendIcon() && (
-                <View style={{ flexDirection: 'column', alignItems: 'center', marginLeft: 8 }}>
-                  <Text variant="headlineSmall" style={styles.trend}>
+                {getTrendIcon() && (
+                  <Text style={[styles.trend, { marginLeft: 10, marginTop: 0, fontSize: 36 }]}>
                     {getTrendIcon()}
                   </Text>
-                  <Text style={{ fontSize: 10, color: '#757575', marginTop: -2 }}>
-                    {(() => {
-                      switch(reading.trend) {
-                        case 'rising': return 'Rising';
-                        case 'rising_quickly': return 'Rising Fast';
-                        case 'falling': return 'Falling';
-                        case 'falling_quickly': return 'Falling Fast';
-                        case 'steady': return 'Steady';
-                        default: return '';
-                      }
-                    })()}
-                  </Text>
-                </View>
-              )}
+                )}
+              </Text>
             </View>
             <Text variant="bodyMedium" style={styles.timestamp}>
               as of {formatTime(reading.timestamp)}
