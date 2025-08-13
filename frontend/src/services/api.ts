@@ -1,6 +1,5 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './secureStorage';
 import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
 import { setReduxDispatch, getReduxDispatch } from './reduxDispatch';
 import { setToken, setRefreshToken } from '../store/slices/authSlice';
@@ -15,18 +14,17 @@ const api = axios.create({
   },
 });
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   async (config) => {
     // Get token from secure storage
-    const token = await AsyncStorage.getItem('auth_token');
-    console.log('Token used for API:', token); // DEBUG LOG
+    const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
     // If token exists, add to headers
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      console.error('No auth token found for API request');
     }
 
     // Add /api/v1 prefix if not already present and not an absolute URL
@@ -37,7 +35,7 @@ api.interceptors.request.use(
     // Log requests in development
     if (ENABLE_API_LOGS) {
       console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-        headers: config.headers,
+        headers: { ...config.headers, Authorization: config.headers?.Authorization ? '[REDACTED]' : undefined },
         data: config.data,
         params: config.params
       });
@@ -110,16 +108,10 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        console.log('Attempting to refresh token after 401/403 error');
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const refreshToken = await secureStorage.getItem(REFRESH_TOKEN_KEY);
         if (!refreshToken) {
-          console.log('No refresh token available, cannot refresh');
           throw new Error('No refresh token');
         }
-
-        // Log the refresh token being used (but mask most of it for security)
-        const maskedRefreshToken = refreshToken.substring(0, 6) + '...' + refreshToken.substring(refreshToken.length - 6);
-        console.log(`Using refresh token: ${maskedRefreshToken}`);
 
         // Create a new axios instance without interceptors to avoid recursion
         const axiosNoInterceptors = axios.create({
@@ -133,7 +125,6 @@ api.interceptors.response.use(
         try {
           // Ensure the URL is correctly formed with /api/v1 prefix
           const refreshUrl = '/api/v1/auth/refresh';
-          console.log(`Calling refresh endpoint: ${API_BASE_URL}${refreshUrl}`);
           
           refreshResponse = await axiosNoInterceptors.post(refreshUrl,
             { refresh_token: refreshToken },
@@ -141,20 +132,36 @@ api.interceptors.response.use(
           );
         } catch (refreshErr: any) {
           // Enhanced error logging
-          console.error('Refresh endpoint error:', {
-            status: refreshErr?.response?.status,
-            data: refreshErr?.response?.data,
-            message: refreshErr?.message,
-            url: refreshErr?.config?.url
-          });
-          throw refreshErr;
+          if (ENABLE_API_LOGS) {
+            console.error('Refresh endpoint error:', {
+              status: refreshErr?.response?.status,
+              data: refreshErr?.response?.data,
+              message: refreshErr?.message,
+              url: refreshErr?.config?.url
+            });
+          }
+
+          // Retry once on network/5xx errors with small backoff
+          const status = refreshErr?.response?.status;
+          if (!status || (status >= 500 && status < 600)) {
+            await delay(1000);
+            const refreshUrl = '/api/v1/auth/refresh';
+            refreshResponse = await axiosNoInterceptors.post(refreshUrl,
+              { refresh_token: refreshToken },
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+          } else {
+            throw refreshErr;
+          }
         }
 
-        console.log('Refresh token response received:', {
-          status: refreshResponse.status,
-          hasAccessToken: !!refreshResponse.data.access_token,
-          hasRefreshToken: !!refreshResponse.data.refresh_token
-        });
+        if (ENABLE_API_LOGS) {
+          console.log('Refresh token response received:', {
+            status: refreshResponse.status,
+            hasAccessToken: !!refreshResponse.data.access_token,
+            hasRefreshToken: !!refreshResponse.data.refresh_token
+          });
+        }
 
         const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
 
@@ -162,21 +169,15 @@ api.interceptors.response.use(
           throw new Error('Token refresh failed - no new token received');
         }
 
-        console.log('Token refreshed successfully after 401/403 error');
-
-        // Store new tokens
-        await AsyncStorage.multiSet([
-          ['auth_token', newToken],
-          ['refresh_token', newRefreshToken || refreshToken] // Keep old refresh token if no new one is provided
-        ]);
+        // Store new tokens securely
+        await secureStorage.setItem(AUTH_TOKEN_KEY, newToken);
+        await secureStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken || refreshToken);
         
         // Update Redux state with both tokens
         const dispatch = getReduxDispatch();
         if (dispatch) {
           dispatch(setToken(newToken));
-          if (newRefreshToken) {
-            dispatch(setRefreshToken(newRefreshToken));
-          }
+          dispatch(setRefreshToken(newRefreshToken || refreshToken));
         }
 
         // Update the Authorization header for the original request
@@ -187,16 +188,22 @@ api.interceptors.response.use(
 
         // Return a retry of the original request
         return api(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         // Log refresh error details
-        console.error('Token refresh failed:', refreshError?.response?.data || refreshError);
-        // Clear tokens on refresh failure
-        await AsyncStorage.removeItem('auth_token');
-        await AsyncStorage.removeItem('refresh_token');
-        // Update Redux state to clear token
-        const dispatch = getReduxDispatch();
-        if (dispatch) {
-          dispatch(setToken(null));
+        if (ENABLE_API_LOGS) {
+          console.error('Token refresh failed:', refreshError?.response?.data || refreshError);
+        }
+        // Only clear tokens on explicit 401 from refresh
+        const status = refreshError?.response?.status;
+        if (status === 401) {
+          await secureStorage.removeItem(AUTH_TOKEN_KEY);
+          await secureStorage.removeItem(REFRESH_TOKEN_KEY);
+          // Update Redux state to clear token
+          const dispatch = getReduxDispatch();
+          if (dispatch) {
+            dispatch(setToken(null));
+            dispatch(setRefreshToken(null));
+          }
         }
         // Reject all queued requests
         refreshQueue.forEach(callback => callback(''));

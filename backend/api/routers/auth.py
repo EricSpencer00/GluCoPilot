@@ -152,7 +152,7 @@ async def refresh_token(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        logger.info(f"Refresh attempt with token: {refresh_token}")
+        logger.info("Refresh attempt received")
         payload = verify_token(refresh_token, credentials_exception)
         username = payload.username
         user = db.query(User).filter(User.username == username).first()
@@ -176,6 +176,19 @@ async def refresh_token(
     except Exception as e:
         logger.error(f"Refresh failed: {e}")
         raise credentials_exception
+
+@router.delete('/delete-account')
+async def delete_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete the current user's account and associated data."""
+    try:
+        # TODO: cascade delete related records (glucose, insulin, recommendations, etc.)
+        db.delete(current_user)
+        db.commit()
+        logger.info("Account deleted for user")
+        return {"success": True}
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete account")
 
 @router.post("/connect-dexcom", response_model=DexcomResponse)
 async def connect_dexcom(

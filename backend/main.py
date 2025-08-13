@@ -77,8 +77,12 @@ app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insig
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    # Redact Authorization header and avoid logging bodies/sensitive data
+    headers = dict(request.headers)
+    if 'authorization' in headers:
+        headers['authorization'] = 'Bearer [REDACTED]'
     logger.info(f"Incoming request: {request.method} {request.url}")
-    logger.info(f"Headers: {request.headers}")
+    logger.info(f"Headers: {headers}")
     logger.info(f"Client: {request.client}")
 
     response = await call_next(request)

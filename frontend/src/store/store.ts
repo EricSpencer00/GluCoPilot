@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { persistStore, persistReducer } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../services/secureStorage';
 import { combineReducers } from 'redux';
 
 import authReducer from './slices/authSlice';
@@ -9,10 +10,17 @@ import aiReducer from './slices/aiSlice';
 import dexcomReducer from './slices/dexcomSlice';
 import { setReduxDispatch } from '../services/reduxDispatch';
 
+// SecureStore adapter for redux-persist (auth slice only)
+const SecureStoreStorage = {
+  getItem: (key: string) => secureStorage.getItem(key) as Promise<string | null>,
+  setItem: (key: string, value: string) => secureStorage.setItem(key, value),
+  removeItem: (key: string) => secureStorage.removeItem(key),
+};
+
 // Configure persisted reducers
 const authPersistConfig = {
   key: 'auth',
-  storage: AsyncStorage,
+  storage: SecureStoreStorage,
   whitelist: ['user', 'token', 'refreshToken']
 };
 
