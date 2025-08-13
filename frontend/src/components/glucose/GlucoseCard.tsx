@@ -30,7 +30,6 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
   };
 
   const getTrendIcon = () => {
-    console.log(`Reading trend: ${reading.trend}`);
     if (!reading) return null;
     // Use Unicode diagonal arrows for rising/falling, fallback to text if not supported
     switch(reading.trend) {
