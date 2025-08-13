@@ -14,6 +14,7 @@ import { NotificationManager } from './src/services/NotificationManager';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './src/services/secureStorage';
 import { setToken, setRefreshToken } from './src/store/slices/authSlice';
 import { setReduxDispatch } from './src/services/reduxDispatch';
+import { setAuthTokens } from './src/services/api';
 
 
 export default function App() {
@@ -34,6 +35,9 @@ export default function App() {
         const storedToken = await secureStorage.getItem(AUTH_TOKEN_KEY);
         const storedRefreshToken = await secureStorage.getItem(REFRESH_TOKEN_KEY);
         
+        // Prime in-memory tokens immediately
+        setAuthTokens(storedToken, storedRefreshToken);
+        
         // Update Redux state with stored tokens
         if (storedToken) {
           store.dispatch(setToken(storedToken));
@@ -51,14 +55,13 @@ export default function App() {
             const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
 
             if (newToken) {
-              // Update both tokens in Redux and storage
+              // Update both tokens in Redux, memory and storage
               store.dispatch(setToken(newToken));
-              
-              if (newRefreshToken) {
-                store.dispatch(setRefreshToken(newRefreshToken));
-              }
+              const nextRefresh = newRefreshToken || storedRefreshToken;
+              store.dispatch(setRefreshToken(nextRefresh));
+              setAuthTokens(newToken, nextRefresh);
               await secureStorage.setItem(AUTH_TOKEN_KEY, newToken);
-              await secureStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken || storedRefreshToken);
+              await secureStorage.setItem(REFRESH_TOKEN_KEY, nextRefresh);
             }
           } catch (err: any) {
             // Detect expired/invalid token and show user-friendly error

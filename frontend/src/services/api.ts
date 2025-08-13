@@ -2,8 +2,16 @@ import axios from 'axios';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './secureStorage';
 import { API_BASE_URL, ENABLE_API_LOGS } from '../config';
 import { setReduxDispatch, getReduxDispatch } from './reduxDispatch';
-import { setToken, setRefreshToken } from '../store/slices/authSlice';
 
+// In-memory token cache to avoid async races with SecureStore
+let inMemoryAccessToken: string | null = null;
+let inMemoryRefreshToken: string | null = null;
+export const setAuthTokens = (accessToken: string | null, refreshToken?: string | null) => {
+  inMemoryAccessToken = accessToken;
+  if (typeof refreshToken !== 'undefined') {
+    inMemoryRefreshToken = refreshToken;
+  }
+};
 
 // Create axios instance with default config
 const api = axios.create({
@@ -14,33 +22,56 @@ const api = axios.create({
   },
 });
 
+
+// Debug: Log token values after login and before requests
+const logToken = async (label: string) => {
+  const token = inMemoryAccessToken || await secureStorage.getItem(AUTH_TOKEN_KEY);
+  const refreshToken = inMemoryRefreshToken || await secureStorage.getItem(REFRESH_TOKEN_KEY);
+  if (ENABLE_API_LOGS) {
+    console.log(`[Token Debug] ${label} | access: ${token ? '[SET]' : '[EMPTY]'}, refresh: ${refreshToken ? '[SET]' : '[EMPTY]'}`);
+  }
+};
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   async (config) => {
-    // Get token from secure storage
-    const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
+    // Debug: Log token before every request
+    await logToken('Before Request');
+    // Prefer in-memory token first, then secure storage
+    const token = inMemoryAccessToken || await secureStorage.getItem(AUTH_TOKEN_KEY);
     // If token exists, add to headers
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Support Axios v1 AxiosHeaders as well as plain objects
+      const headers: any = config.headers || {};
+      if (typeof headers.set === 'function') {
+        headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        config.headers = { ...(config.headers as any), Authorization: `Bearer ${token}` } as any;
+      }
+    } else {
+      if (ENABLE_API_LOGS) {
+        console.warn('[Token Debug] No access token found for request:', config.url);
+      }
     }
 
     // Add /api/v1 prefix if not already present and not an absolute URL
     if (config.url && !config.url.startsWith('http') && !config.url.startsWith('/api/v1/')) {
       config.url = `/api/v1${config.url}`;
     }
-    
+
     // Log requests in development
     if (ENABLE_API_LOGS) {
+      const authHeader = (config.headers as any)?.Authorization || (typeof (config.headers as any)?.get === 'function' ? (config.headers as any).get('Authorization') : undefined);
       console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-        headers: { ...config.headers, Authorization: config.headers?.Authorization ? '[REDACTED]' : undefined },
+        headers: { ...(config.headers as any), Authorization: authHeader ? '[REDACTED]' : undefined },
         data: config.data,
         params: config.params
       });
     }
-    
+
     return config;
   },
   (error) => {
@@ -54,10 +85,10 @@ api.interceptors.request.use(
 // Track if we're currently refreshing the token to prevent multiple refresh attempts
 let isRefreshing = false;
 // Queue of requests to retry after token refresh
-let refreshQueue: ((token: string) => void)[] = [];
+let refreshQueue: ((token: string | null) => void)[] = [];
 
 // Function to process the queue of failed requests
-const processQueue = (token: string) => {
+const processQueue = (token: string | null) => {
   refreshQueue.forEach(callback => callback(token));
   refreshQueue = [];
 };
@@ -97,10 +128,20 @@ api.interceptors.response.use(
 
       // If a token refresh is already in progress, add this request to the queue
       if (isRefreshing) {
-        return new Promise(resolve => {
-          refreshQueue.push((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(api(originalRequest));
+        return new Promise((resolve) => {
+          refreshQueue.push((token: string | null) => {
+            if (token) {
+              // Support Axios v1 AxiosHeaders as well as plain objects
+              const headers: any = originalRequest.headers || {};
+              if (typeof headers.set === 'function') {
+                headers.set('Authorization', `Bearer ${token}`);
+              } else {
+                originalRequest.headers = { ...(originalRequest.headers as any), Authorization: `Bearer ${token}` } as any;
+              }
+              resolve(api(originalRequest));
+            } else {
+              resolve(Promise.reject(error));
+            }
           });
         });
       }
@@ -108,7 +149,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await secureStorage.getItem(REFRESH_TOKEN_KEY);
+        const refreshToken = inMemoryRefreshToken || await secureStorage.getItem(REFRESH_TOKEN_KEY);
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -169,19 +210,30 @@ api.interceptors.response.use(
           throw new Error('Token refresh failed - no new token received');
         }
 
+        // Update in-memory tokens first
+        inMemoryAccessToken = newToken;
+        inMemoryRefreshToken = newRefreshToken || refreshToken;
+
         // Store new tokens securely
         await secureStorage.setItem(AUTH_TOKEN_KEY, newToken);
         await secureStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken || refreshToken);
-        
-        // Update Redux state with both tokens
+        // Debug: Log token after refresh
+        await logToken('After Refresh');
+
+        // Update Redux state with both tokens without importing slice (avoid cycle)
         const dispatch = getReduxDispatch();
         if (dispatch) {
-          dispatch(setToken(newToken));
-          dispatch(setRefreshToken(newRefreshToken || refreshToken));
+          dispatch({ type: 'auth/setToken', payload: newToken });
+          dispatch({ type: 'auth/setRefreshToken', payload: newRefreshToken || refreshToken });
         }
 
         // Update the Authorization header for the original request
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        const origHeaders: any = originalRequest.headers || {};
+        if (typeof origHeaders.set === 'function') {
+          origHeaders.set('Authorization', `Bearer ${newToken}`);
+        } else {
+          originalRequest.headers = { ...(originalRequest.headers as any), Authorization: `Bearer ${newToken}` } as any;
+        }
 
         // Process any queued requests with the new token
         processQueue(newToken);
@@ -196,18 +248,21 @@ api.interceptors.response.use(
         // Only clear tokens on explicit 401 from refresh
         const status = refreshError?.response?.status;
         if (status === 401) {
+          inMemoryAccessToken = null;
+          inMemoryRefreshToken = null;
           await secureStorage.removeItem(AUTH_TOKEN_KEY);
           await secureStorage.removeItem(REFRESH_TOKEN_KEY);
-          // Update Redux state to clear token
+          // Debug: Log token after clearing
+          await logToken('After Clear');
+          // Update Redux state to clear token (avoid cycle)
           const dispatch = getReduxDispatch();
           if (dispatch) {
-            dispatch(setToken(null));
-            dispatch(setRefreshToken(null));
+            dispatch({ type: 'auth/setToken', payload: null });
+            dispatch({ type: 'auth/setRefreshToken', payload: null });
           }
         }
         // Reject all queued requests
-        refreshQueue.forEach(callback => callback(''));
-        refreshQueue = [];
+        processQueue(null);
         return Promise.reject(error);
       } finally {
         isRefreshing = false;

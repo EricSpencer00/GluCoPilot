@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { User } from '../../types/User';
-import api from '../../services/api';
+import api, { setAuthTokens } from '../../services/api';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../services/secureStorage';
 import { persistor } from '../store';
 import * as Updates from 'expo-updates';
@@ -50,6 +50,10 @@ export const login = createAsyncThunk(
       if (!refreshToken) {
         throw new Error('No refresh token returned from server');
       }
+
+      // Seed in-memory tokens immediately to avoid races
+      setAuthTokens(token, refreshToken);
+
       await secureStorage.setItem(AUTH_TOKEN_KEY, token);
       await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
@@ -105,6 +109,10 @@ export const register = createAsyncThunk(
       if (!refreshToken) {
         throw new Error('No refresh token returned from server');
       }
+
+      // Seed in-memory tokens immediately
+      setAuthTokens(token, refreshToken);
+
       await secureStorage.setItem(AUTH_TOKEN_KEY, token);
       await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
@@ -131,6 +139,8 @@ export const logout = createAsyncThunk('auth/logout', async () => {
   // Clear tokens from storage
   await secureStorage.removeItem(AUTH_TOKEN_KEY);
   await secureStorage.removeItem(REFRESH_TOKEN_KEY);
+  // Clear in-memory tokens
+  setAuthTokens(null, null);
   // Purge redux-persist state to fully clear auth
   await persistor.purge();
   // Force a hard reload of the app to clear all in-memory state and interceptors
