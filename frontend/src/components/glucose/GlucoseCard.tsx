@@ -31,18 +31,18 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
 
   const getTrendIcon = () => {
     if (!reading) return null;
-    
+    // Use Unicode diagonal arrows for rising/falling, fallback to text if not supported
     switch(reading.trend) {
       case 'rising_quickly':
-        return '↑↑';
+        return '⬈⬈'; // double northeast
       case 'rising':
-        return '↑';
+        return '⬈'; // northeast arrow U+2B08
       case 'steady':
-        return '→';
+        return '→'; // right arrow
       case 'falling':
-        return '↓';
+        return '⬊'; // southeast arrow U+2B0A
       case 'falling_quickly':
-        return '↓↓';
+        return '⬊⬊'; // double southeast
       default:
         return null;
     }
@@ -84,9 +84,25 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
               >
                 {reading.value}
               </Text>
-              <Text variant="headlineSmall" style={styles.trend}>
-                {getTrendIcon()}
-              </Text>
+              {getTrendIcon() && (
+                <View style={{ flexDirection: 'column', alignItems: 'center', marginLeft: 8 }}>
+                  <Text variant="headlineSmall" style={styles.trend}>
+                    {getTrendIcon()}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#757575', marginTop: -2 }}>
+                    {(() => {
+                      switch(reading.trend) {
+                        case 'rising': return 'Rising';
+                        case 'rising_quickly': return 'Rising Fast';
+                        case 'falling': return 'Falling';
+                        case 'falling_quickly': return 'Falling Fast';
+                        case 'steady': return 'Steady';
+                        default: return '';
+                      }
+                    })()}
+                  </Text>
+                </View>
+              )}
             </View>
             <Text variant="bodyMedium" style={styles.timestamp}>
               as of {formatTime(reading.timestamp)}
