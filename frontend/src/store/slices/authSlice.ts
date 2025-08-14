@@ -45,7 +45,6 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { User } from '../../types/User';
 import api, { setAuthTokens } from '../../services/api';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../services/secureStorage';
-import { persistor } from '../store';
 import * as Updates from 'expo-updates';
 
 // Interfaces
@@ -151,6 +150,7 @@ export const register = createAsyncThunk(
       
       if (!refreshToken) {
         throw new Error('No refresh token returned from server');
+      }
       }
 
       // Seed in-memory tokens immediately
