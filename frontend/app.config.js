@@ -1,8 +1,15 @@
 // Generate development build config for Expo
 // This helps fix the notification limitations in Expo Go
 
-const dotenv = require('dotenv');
-dotenv.config();
+// Load environment variables only during local development to avoid injecting logs
+// into stdout when Expo's autolinking expects JSON (e.g. during EAS builds).
+if (!process.env.EAS_BUILD && !process.env.CI && process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config();
+  } catch (err) {
+    // ignore errors loading .env in environments where it's not present
+  }
+}
 
 module.exports = {
   // Use EAS development build
@@ -30,6 +37,9 @@ module.exports = {
   ios: {
     bundleIdentifier: "com.ericspencer00.glucopilot.dev",
     supportsTablet: true,
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false
+    }
   },
   extra: {
     eas: {
