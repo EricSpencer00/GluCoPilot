@@ -41,9 +41,9 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const useProxy = true;
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     {
-      clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || (Constants.manifest as any)?.extra?.GOOGLE_WEB_CLIENT_ID,
-      iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || (Constants.manifest as any)?.extra?.GOOGLE_IOS_CLIENT_ID,
-      androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || (Constants.manifest as any)?.extra?.GOOGLE_ANDROID_CLIENT_ID,
+      clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_WEB_CLIENT_ID as string),
+      iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_IOS_CLIENT_ID as string),
+      androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_ANDROID_CLIENT_ID as string),
     },
     { useProxy }
   );
