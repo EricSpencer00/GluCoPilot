@@ -1,14 +1,16 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { login, socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { appleAuth } from '@invertase/react-native-apple-authentication';
-import Config from 'react-native-config';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 
+
+WebBrowser.maybeCompleteAuthSession();
 
 export const LoginScreen: React.FC<any> = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -16,12 +18,28 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Configure Google Sign-In (replace with your webClientId)
-  React.useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: Config.GOOGLE_WEB_CLIENT_ID,
-    });
-  }, []);
+  const useProxy = true; // use Expo proxy in dev
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
+    {
+      clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || (Constants.manifest?.extra?.GOOGLE_WEB_CLIENT_ID as string),
+      iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || (Constants.manifest?.extra?.GOOGLE_IOS_CLIENT_ID as string),
+      androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || (Constants.manifest?.extra?.GOOGLE_ANDROID_CLIENT_ID as string),
+    },
+    { useProxy }
+  );
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const idToken = (response as any).params.id_token;
+      // decode JWT to get names
+      const payload = idToken ? JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString()) : {};
+      const firstName = payload.given_name || payload.givenName || '';
+      const lastName = payload.family_name || payload.familyName || '';
+      const emailFromToken = payload.email || '';
+      dispatch(socialLogin({ firstName, lastName, email: emailFromToken, provider: 'google', idToken }) as any);
+    }
+  }, [response]);
 
   const onSubmit = async () => {
     if (!email.includes('@')) {
@@ -44,67 +62,30 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
     }
   };
 
-const handleGoogleSignIn = async () => {
-  try {
-    await GoogleSignin.hasPlayServices();
-    const userInfo: any = await GoogleSignin.signIn();
-
-    const givenName =
-      userInfo.user?.givenName ??
-      (userInfo as any)?.user?.given_name ??
-      (userInfo as any)?.givenName ??
-      (userInfo as any)?.user?.given_name ??
-      '';
-
-    const familyName =
-      userInfo.user?.familyName ??
-      (userInfo as any)?.user?.family_name ??
-      (userInfo as any)?.familyName ??
-      (userInfo as any)?.user?.family_name ??
-      '';
-
-    const userEmail =
-      userInfo.user?.email ?? (userInfo as any)?.email ?? '';
-
-    const idToken =
-      (userInfo as any)?.idToken ??
-      (userInfo as any)?.id_token ??
-      '';
-
-    await onSocialLogin({
-      firstName: givenName,
-      lastName: familyName,
-      email: userEmail,
-      provider: 'google',
-      idToken,
-    });
-
-  } catch (err: any) {
-    if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-      console.log('Google Sign-In cancelled by user');
-      return;
+  const handleGoogleSignIn = async () => {
+    try {
+      await promptAsync({ useProxy });
+    } catch (err) {
+      console.error('Google Sign-In prompt error', err);
+      alert('Google Sign-In failed.');
     }
-    console.error('Google Sign-In error', err);
-    alert('Google Sign-In failed.');
-  }
-};
-
+  };
 
   const handleAppleSignIn = async () => {
     try {
-      const appleAuthRequestResponse = await appleAuth.performRequest({
-        requestedOperation: appleAuth.Operation.LOGIN,
-        requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
       });
-      const { fullName, email, identityToken } = appleAuthRequestResponse;
-      await onSocialLogin({
-        firstName: fullName?.givenName || '',
-        lastName: fullName?.familyName || '',
-        email: email || '',
-        provider: 'apple',
-        idToken: identityToken,
-      });
+      const idToken = credential.identityToken;
+      const firstName = credential.fullName?.givenName || '';
+      const lastName = credential.fullName?.familyName || '';
+      const userEmail = credential.email || '';
+      await onSocialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken });
     } catch (error) {
+      console.error('Apple Sign-In failed', error);
       alert('Apple Sign-In failed.');
     }
   };

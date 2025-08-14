@@ -151,7 +151,6 @@ export const register = createAsyncThunk(
       if (!refreshToken) {
         throw new Error('No refresh token returned from server');
       }
-      }
 
       // Seed in-memory tokens immediately
       setAuthTokens(token, refreshToken);
@@ -184,8 +183,15 @@ export const logout = createAsyncThunk('auth/logout', async () => {
   await secureStorage.removeItem(REFRESH_TOKEN_KEY);
   // Clear in-memory tokens
   setAuthTokens(null, null);
-  // Purge redux-persist state to fully clear auth
-  await persistor.purge();
+  // Purge redux-persist state to fully clear auth (import lazily to avoid cycle)
+  try {
+    const { persistor } = await import('../store');
+    if (persistor && persistor.purge) await persistor.purge();
+  } catch (e) {
+    // If dynamic import fails, continue — not critical for logout flow
+    // eslint-disable-next-line no-console
+    console.warn('Could not purge persistor during logout:', e);
+  }
   // Force a hard reload of the app to clear all in-memory state and interceptors
   if (Updates?.reloadAsync) {
     await Updates.reloadAsync();

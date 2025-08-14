@@ -40,16 +40,43 @@ async def social_login(
 
     # 1. Verify id_token with provider
     if data.provider == 'google':
-        google_url = f'https://oauth2.googleapis.com/tokeninfo?id_token={data.id_token}'
-        resp = requests.get(google_url)
-        if resp.status_code != 200:
-            logger.warning(f"Google token verification failed for {data.email}")
-            raise HTTPException(status_code=401, detail="Invalid Google token")
-        token_info = resp.json()
-        email_verified = token_info.get('email_verified') == 'true'
-        if not email_verified or token_info.get('email') != data.email:
-            logger.warning(f"Google email mismatch or not verified: {data.email}")
-            raise HTTPException(status_code=401, detail="Google email not verified")
+        token = data.id_token
+        # Distinguish between id_token (JWT with dots) and access_token (opaque)
+        if token and '.' in token:
+            # id_token (JWT) verification
+            google_url = f'https://oauth2.googleapis.com/tokeninfo?id_token={token}'
+            resp = requests.get(google_url)
+            if resp.status_code != 200:
+                logger.warning(f"Google id_token verification failed for {data.email}")
+                raise HTTPException(status_code=401, detail="Invalid Google id_token")
+            token_info = resp.json()
+            email_verified = token_info.get('email_verified') in (True, 'true', 'True')
+            if not email_verified or token_info.get('email') != data.email:
+                logger.warning(f"Google email mismatch or not verified: {data.email}")
+                raise HTTPException(status_code=401, detail="Google email not verified")
+            # populate names from token if available
+            if not data.first_name and token_info.get('given_name'):
+                data.first_name = token_info.get('given_name')
+            if not data.last_name and token_info.get('family_name'):
+                data.last_name = token_info.get('family_name')
+        else:
+            # treat token as access_token and fetch userinfo
+            access_token = token
+            userinfo_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
+            resp = requests.get(userinfo_url, params={'alt': 'json', 'access_token': access_token})
+            if resp.status_code != 200:
+                logger.warning(f"Google access_token verification failed for {data.email}")
+                raise HTTPException(status_code=401, detail="Invalid Google access token")
+            token_info = resp.json()
+            # Google userinfo uses 'verified_email' field
+            email_verified = token_info.get('verified_email') in (True, 'true', 'True')
+            if not email_verified or token_info.get('email') != data.email:
+                logger.warning(f"Google email mismatch or not verified: {data.email}")
+                raise HTTPException(status_code=401, detail="Google email not verified")
+            if not data.first_name and token_info.get('given_name'):
+                data.first_name = token_info.get('given_name')
+            if not data.last_name and token_info.get('family_name'):
+                data.last_name = token_info.get('family_name')
     elif data.provider == 'apple':
         # Apple token verification (basic, for production use Apple public keys)
         try:
