@@ -6,13 +6,11 @@ import { register, socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
 import DisclaimerModal from '../components/DisclaimerModal';
 
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+// import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 
-WebBrowser.maybeCompleteAuthSession();
 
 export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -39,26 +37,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
     })();
   }, []);
 
-  // --- Google Auth Config (copied from LoginScreen) ---
-  const extra = Constants.expoConfig?.extra ?? (Updates.manifest as any)?.extra;
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || extra?.GOOGLE_WEB_CLIENT_ID,
-    iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || extra?.GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || extra?.GOOGLE_ANDROID_CLIENT_ID,
-  });
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const idToken = (response as any).params.id_token;
-      const payload = idToken
-        ? JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString())
-        : {};
-      const firstName = payload.given_name || payload.givenName || '';
-      const lastName = payload.family_name || payload.familyName || '';
-      const emailFromToken = payload.email || '';
-      dispatch(socialLogin({ firstName, lastName, email: emailFromToken, provider: 'google', idToken }) as any);
-    }
-  }, [response]);
+  // Apple only: No Google Auth
 
   const onSubmit = async () => {
     if (!disclaimerAccepted) return;
@@ -73,22 +52,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
     await dispatch(register({ email, password, first_name: firstName, last_name: lastName }) as any);
   };
 
-  const onSocialLogin = async ({ firstName, lastName, email, provider, idToken }: any) => {
-    try {
-      await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
-    } catch {
-      alert('Social login failed.');
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      await promptAsync();
-    } catch (err) {
-      console.error('Google Sign-In prompt error', err);
-      alert('Google Sign-In failed.');
-    }
-  };
+  // Apple only: No Google Social Login
 
   const handleAppleSignIn = async () => {
     try {
@@ -102,7 +66,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
       const firstName = credential.fullName?.givenName || '';
       const lastName = credential.fullName?.familyName || '';
       const userEmail = credential.email || '';
-      await onSocialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken });
+      await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken }) as any);
     } catch (error) {
       console.error('Apple Sign-In failed', error);
       alert('Apple Sign-In failed.');
@@ -126,15 +90,6 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
 
           <View style={styles.socialContainer}>
             <Text style={styles.socialText}>Or sign up with</Text>
-            <Button
-              mode="outlined"
-              icon="google"
-              onPress={handleGoogleSignIn}
-              style={styles.socialButton}
-              disabled={!request}
-            >
-              Google
-            </Button>
             {Platform.OS === 'ios' && appleAvailable && (
               <Button
                 mode="outlined"
