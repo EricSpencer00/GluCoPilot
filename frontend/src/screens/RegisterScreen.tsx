@@ -10,6 +10,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -38,47 +39,58 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
     })();
   }, []);
 
-  const useProxy = true;
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    {
-      clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_WEB_CLIENT_ID as string),
-      iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_IOS_CLIENT_ID as string),
-      androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || ((Constants.manifest as any)?.extra?.GOOGLE_ANDROID_CLIENT_ID as string),
-    },
-    { useProxy }
-  );
+  // --- Google Auth Config (copied from LoginScreen) ---
+  const extra = Constants.expoConfig?.extra ?? (Updates.manifest as any)?.extra;
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_GOOGLE_WEB_CLIENT_ID || extra?.GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_GOOGLE_IOS_CLIENT_ID || extra?.GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_GOOGLE_ANDROID_CLIENT_ID || extra?.GOOGLE_ANDROID_CLIENT_ID,
+  });
 
   useEffect(() => {
     if (response?.type === 'success') {
       const idToken = (response as any).params.id_token;
-      let payload: any = {};
-      try {
-        payload = idToken ? JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString()) : {};
-      } catch (e) {
-        payload = {};
-      }
-      const fName = payload.given_name || payload.givenName || '';
-      const lName = payload.family_name || payload.familyName || '';
+      const payload = idToken
+        ? JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString())
+        : {};
+      const firstName = payload.given_name || payload.givenName || '';
+      const lastName = payload.family_name || payload.familyName || '';
       const emailFromToken = payload.email || '';
-      dispatch(socialLogin({ firstName: fName, lastName: lName, email: emailFromToken, provider: 'google', idToken }) as any);
+      dispatch(socialLogin({ firstName, lastName, email: emailFromToken, provider: 'google', idToken }) as any);
     }
   }, [response]);
 
   const onSubmit = async () => {
     if (!disclaimerAccepted) return;
+    if (!email.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long.');
+      return;
+    }
     await dispatch(register({ email, password, first_name: firstName, last_name: lastName }) as any);
   };
 
-  const handleGoogle = async () => {
+  const onSocialLogin = async ({ firstName, lastName, email, provider, idToken }: any) => {
     try {
-      await promptAsync({ useProxy });
-    } catch (e) {
-      console.warn('Google auth failed', e);
-      alert('Google sign-in failed');
+      await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
+    } catch {
+      alert('Social login failed.');
     }
   };
 
-  const handleApple = async () => {
+  const handleGoogleSignIn = async () => {
+    try {
+      await promptAsync();
+    } catch (err) {
+      console.error('Google Sign-In prompt error', err);
+      alert('Google Sign-In failed.');
+    }
+  };
+
+  const handleAppleSignIn = async () => {
     try {
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -87,13 +99,13 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
         ],
       });
       const idToken = credential.identityToken;
-      const fName = credential.fullName?.givenName || '';
-      const lName = credential.fullName?.familyName || '';
+      const firstName = credential.fullName?.givenName || '';
+      const lastName = credential.fullName?.familyName || '';
       const userEmail = credential.email || '';
-      dispatch(socialLogin({ firstName: fName, lastName: lName, email: userEmail, provider: 'apple', idToken }) as any);
-    } catch (e) {
-      console.warn('Apple auth failed', e);
-      alert('Apple sign-in failed');
+      await onSocialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken });
+    } catch (error) {
+      console.error('Apple Sign-In failed', error);
+      alert('Apple Sign-In failed.');
     }
   };
 
@@ -117,7 +129,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
             <Button
               mode="outlined"
               icon="google"
-              onPress={handleGoogle}
+              onPress={handleGoogleSignIn}
               style={styles.socialButton}
               disabled={!request}
             >
@@ -127,7 +139,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
               <Button
                 mode="outlined"
                 icon="apple"
-                onPress={handleApple}
+                onPress={handleAppleSignIn}
                 style={styles.socialButton}
               >
                 Apple
