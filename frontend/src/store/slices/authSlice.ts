@@ -57,6 +57,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   isNewRegistration: boolean;
+  isLoggingOut: boolean;
 }
 
 // Initial state
@@ -67,6 +68,7 @@ const initialState: AuthState = {
   isLoading: false,
   error: null,
   isNewRegistration: false,
+  isLoggingOut: false,
 };
 
 // Async thunks
@@ -177,6 +179,7 @@ export const register = createAsyncThunk(
   }
 );
 
+
 export const logout = createAsyncThunk('auth/logout', async () => {
   // Clear tokens from storage
   await secureStorage.removeItem(AUTH_TOKEN_KEY);
@@ -192,6 +195,7 @@ export const logout = createAsyncThunk('auth/logout', async () => {
     // eslint-disable-next-line no-console
     console.warn('Could not purge persistor during logout:', e);
   }
+
   // Force a hard reload of the app to clear all in-memory state and interceptors
   if (Updates?.reloadAsync) {
     await Updates.reloadAsync();
@@ -215,6 +219,9 @@ const authSlice = createSlice({
     },
     setRefreshToken: (state, action) => {
       state.refreshToken = action.payload;
+    },
+    setLoggingOut: (state, action) => {
+      state.isLoggingOut = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -253,21 +260,24 @@ const authSlice = createSlice({
 
     // Register
     builder.addCase(register.pending, (state) => {
+
       state.isLoading = true;
       state.error = null;
+      state.isLoggingOut = true;
     });
-    builder.addCase(register.fulfilled, (state, action) => {
+    builder.addCase(logout.fulfilled, (state) => {
       state.isLoading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.refreshToken = action.payload.refreshToken;
       state.isNewRegistration = true; // Set flag for new registration
-    });
-    builder.addCase(register.rejected, (state, action) => {
-      state.isLoading = false;
-      state.error = action.payload as string;
-    });
 
+    });
+    builder.addCase(logout.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.error.message || 'Logout failed';
+      state.isLoggingOut = false;
+    });
     // Logout
     builder.addCase(logout.pending, (state) => {
       state.isLoading = true;

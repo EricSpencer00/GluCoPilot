@@ -20,6 +20,11 @@ This script:
 - Starts both backend (FastAPI) and frontend (Expo) servers
 - Ensures a clean, reproducible dev environment
 
+Additionally, ensure you have correctly setup your keys using the [.env.example](https://github.com/EricSpencer00/GluCoPilot/blob/main/backend/.env.example)
+
+- Copy and paste the boilerplate into a new '.env' file and replace the placeholders with real keys
+- You may get away with not replacing a few keys, but HuggingFace and CORS routing are necessary to replace from defaults.
+
 If you encounter issues, re-run the script to rule out environment/config problems before investigating code bugs.
 
 ---
