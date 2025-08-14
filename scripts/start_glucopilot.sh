@@ -76,9 +76,18 @@ fi
 echo "Setting up frontend..."
 cd "$ROOT_DIR/frontend" || { echo "Failed to change to frontend directory"; exit 1; }
 
+
 # Fix any dependency issues
 echo "Fixing dependencies..."
 npm install
+# Ensure correct React versions for Expo SDK 53
+REACT_VERSION="18.2.0"
+REACT_DOM_VERSION="18.2.0"
+if grep -q '"react":' package.json && grep -q '"react-dom":' package.json; then
+  npm pkg set react="$REACT_VERSION"
+  npm pkg set react-dom="$REACT_DOM_VERSION"
+  npm install
+fi
 npx expo install --fix
 
 
