@@ -5,7 +5,22 @@
 // into stdout when Expo's autolinking expects JSON (e.g. during EAS builds).
 if (!process.env.EAS_BUILD && !process.env.CI && process.env.NODE_ENV !== 'production') {
   try {
-    require('dotenv').config();
+    // Temporarily suppress stdout/stderr while loading dotenv so it doesn't
+    // pollute the JSON output expected by Expo autolinking / pod install.
+    const _suppressIO = (fn) => {
+      const stdoutWrite = process.stdout.write;
+      const stderrWrite = process.stderr.write;
+      try {
+        process.stdout.write = () => {};
+        process.stderr.write = () => {};
+        return fn();
+      } finally {
+        process.stdout.write = stdoutWrite;
+        process.stderr.write = stderrWrite;
+      }
+    };
+
+    _suppressIO(() => require('dotenv').config());
   } catch (err) {
     // ignore errors loading .env in environments where it's not present
   }

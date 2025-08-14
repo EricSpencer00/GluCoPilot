@@ -5,8 +5,8 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start --clear",
-    "android": "expo start --android --clear",
-    "ios": "expo start --ios --clear",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
     "eject": "expo eject",
