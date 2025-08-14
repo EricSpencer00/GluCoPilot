@@ -1,3 +1,46 @@
+// Social login thunk
+export const socialLogin = createAsyncThunk(
+  'auth/socialLogin',
+  async (
+    { firstName, lastName, email, provider, idToken }: { firstName: string; lastName: string; email: string; provider: string; idToken: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      // Call your backend social login endpoint
+      const tokenRes = await api.post('/auth/social-login', {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        provider,
+        id_token: idToken,
+      });
+      const token: string = tokenRes.data.access_token;
+      const refreshToken: string = tokenRes.data.refresh_token;
+
+      if (!token) throw new Error('No access token returned from server');
+      if (!refreshToken) throw new Error('No refresh token returned from server');
+
+      setAuthTokens(token, refreshToken);
+      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+
+      // @ts-ignore
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
+        global.dispatch(setToken(token));
+        global.dispatch(setRefreshToken(refreshToken));
+      }
+
+      // Fetch user profile
+      const userRes = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return { user: userRes.data, token, refreshToken };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Social login failed');
+    }
+  }
+);
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { User } from '../../types/User';
 import api, { setAuthTokens } from '../../services/api';
@@ -169,6 +212,7 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+
     // Login
     builder.addCase(login.pending, (state) => {
       state.isLoading = true;
@@ -181,6 +225,22 @@ const authSlice = createSlice({
       state.refreshToken = action.payload.refreshToken;
     });
     builder.addCase(login.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.payload as string;
+    });
+
+    // Social Login
+    builder.addCase(socialLogin.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(socialLogin.fulfilled, (state, action) => {
+      state.isLoading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
+    });
+    builder.addCase(socialLogin.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });

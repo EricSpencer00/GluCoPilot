@@ -5,8 +5,9 @@ import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { login } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
+import Config from 'react-native-config';
 
 
 export const LoginScreen: React.FC<any> = ({ navigation }) => {
@@ -18,7 +19,7 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
   // Configure Google Sign-In (replace with your webClientId)
   React.useEffect(() => {
     GoogleSignin.configure({
-      webClientId: 'YOUR_GOOGLE_WEB_CLIENT_ID',
+      webClientId: Config.GOOGLE_WEB_CLIENT_ID,
     });
   }, []);
 
@@ -36,22 +37,61 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
 
   // Social login handler (to be implemented in your redux/auth logic)
   const onSocialLogin = async ({ firstName, lastName, email, provider, idToken }: any) => {
-    // You should dispatch a socialLogin action here
-    // await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
-    alert(`Logged in with ${provider}: ${firstName} ${lastName} (${email})`);
-  };
-
-  const handleGoogleSignIn = async () => {
     try {
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const { givenName, familyName, email } = userInfo.user;
-      const idToken = userInfo.idToken;
-      await onSocialLogin({ firstName: givenName, lastName: familyName, email, provider: 'google', idToken });
-    } catch (error) {
-      alert('Google Sign-In failed.');
+      // You should implement socialLogin thunk in your authSlice
+      // Example:
+      // await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
+      alert(`Logged in with ${provider}: ${firstName} ${lastName} (${email})`);
+    } catch (err) {
+      alert('Social login failed.');
     }
   };
+
+const handleGoogleSignIn = async () => {
+  try {
+    await GoogleSignin.hasPlayServices();
+    const userInfo: any = await GoogleSignin.signIn();
+
+    const givenName =
+      userInfo.user?.givenName ??
+      (userInfo as any)?.user?.given_name ??
+      (userInfo as any)?.givenName ??
+      (userInfo as any)?.user?.given_name ??
+      '';
+
+    const familyName =
+      userInfo.user?.familyName ??
+      (userInfo as any)?.user?.family_name ??
+      (userInfo as any)?.familyName ??
+      (userInfo as any)?.user?.family_name ??
+      '';
+
+    const userEmail =
+      userInfo.user?.email ?? (userInfo as any)?.email ?? '';
+
+    const idToken =
+      (userInfo as any)?.idToken ??
+      (userInfo as any)?.id_token ??
+      '';
+
+    await onSocialLogin({
+      firstName: givenName,
+      lastName: familyName,
+      email: userEmail,
+      provider: 'google',
+      idToken,
+    });
+
+  } catch (err: any) {
+    if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+      console.log('Google Sign-In cancelled by user');
+      return;
+    }
+    console.error('Google Sign-In error', err);
+    alert('Google Sign-In failed.');
+  }
+};
+
 
   const handleAppleSignIn = async () => {
     try {
