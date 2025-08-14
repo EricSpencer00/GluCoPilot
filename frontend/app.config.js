@@ -4,7 +4,7 @@
 module.exports = {
   // Use EAS development build
   name: "GluCoPilot (Dev)",
-  slug: "glucopilot-dev",
+  slug: "glucopilot",
   owner: "ericspencer00",
   version: "1.0.0",
   orientation: "portrait",
@@ -21,9 +21,7 @@ module.exports = {
   assetBundlePatterns: [
     "**/*"
   ],
-  android: {
-    package: "com.ericspencer00.glucopilot.dev",
-  },
+  // android config removed to target only iOS
   ios: {
     bundleIdentifier: "com.ericspencer00.glucopilot.dev",
     supportsTablet: true,
