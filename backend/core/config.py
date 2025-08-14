@@ -14,14 +14,14 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = False
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-this-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # API Configuration
     API_HOST: str = "0.0.0.0"  # Allow connections from any IP
     API_PORT: int = 8000
     # CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:19006,exp://,http://192.168.1.36:8000,exp://192.168.1.36:19000,http://localhost:19000,http://localhost:19001,http://localhost:19002,*"
-    CORS_ORIGINS: str = "*"
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     
     # Dexcom
     DEXCOM_USERNAME: str = ""
@@ -65,3 +65,11 @@ class Settings(BaseSettings):
         extra = "ignore"  # Ignore extra fields from environment
 
 settings = Settings()
+
+# Basic production safety checks
+if settings.ENVIRONMENT.lower() == 'production':
+    if settings.SECRET_KEY == "your-secret-key-change-this-in-production":
+        raise RuntimeError("SECRET_KEY must be set in production")
+    # If not explicitly set, default CORS to empty in production (supply via env)
+    if settings.CORS_ORIGINS == "*":
+        settings.CORS_ORIGINS = ""

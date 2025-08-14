@@ -30,7 +30,23 @@ class GlucoseReadingResponse(GlucoseReadingBase):
     created_at: datetime
     glucose_status: str
     is_in_range: bool
-    
+    trend_arrow: Optional[str] = Field(None, description="Glucose trend arrow (e.g., ↑, ↓, →)")
+
+    @property
+    def trend_arrow(self) -> Optional[str]:
+        mapping = {
+            "rising_rapidly": "↑↑",
+            "rising": "↑",
+            "rising_slightly": "↗",
+            "stable": "→",
+            "falling_slightly": "↘",
+            "falling": "↓",
+            "falling_rapidly": "↓↓",
+            "unknown": "?",
+            "not_computable": "NC"
+        }
+        return mapping.get(self.trend, None)
+
     class Config:
         from_attributes = True
 

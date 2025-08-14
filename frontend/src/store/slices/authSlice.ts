@@ -1,8 +1,50 @@
+// Social login thunk
+export const socialLogin = createAsyncThunk(
+  'auth/socialLogin',
+  async (
+    { firstName, lastName, email, provider, idToken }: { firstName: string; lastName: string; email: string; provider: string; idToken: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      // Call your backend social login endpoint
+      const tokenRes = await api.post('/auth/social-login', {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        provider,
+        id_token: idToken,
+      });
+      const token: string = tokenRes.data.access_token;
+      const refreshToken: string = tokenRes.data.refresh_token;
+
+      if (!token) throw new Error('No access token returned from server');
+      if (!refreshToken) throw new Error('No refresh token returned from server');
+
+      setAuthTokens(token, refreshToken);
+      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+
+      // @ts-ignore
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
+        global.dispatch(setToken(token));
+        global.dispatch(setRefreshToken(refreshToken));
+      }
+
+      // Fetch user profile
+      const userRes = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return { user: userRes.data, token, refreshToken };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Social login failed');
+    }
+  }
+);
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { User } from '../../types/User';
-import api from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { persistor } from '../store';
+import api, { setAuthTokens } from '../../services/api';
+import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../services/secureStorage';
 import * as Updates from 'expo-updates';
 
 // Interfaces
@@ -42,26 +84,22 @@ export const login = createAsyncThunk(
         username: email,
         password,
       });
-      console.log('[LOGIN] Raw response:', tokenRes);
-      console.log('[LOGIN] tokenRes.data:', tokenRes.data);
       const token: string = tokenRes.data.access_token;
       const refreshToken: string = tokenRes.data.refresh_token;
-      console.log('[LOGIN] Extracted access_token:', token);
-      console.log('[LOGIN] Extracted refresh_token:', refreshToken);
 
       // Make sure we have both tokens
       if (!token) {
-        console.error('[LOGIN] No access token returned from server!', tokenRes.data);
         throw new Error('No access token returned from server');
       }
       if (!refreshToken) {
-        console.error('[LOGIN] No refresh token returned from server!', tokenRes.data);
         throw new Error('No refresh token returned from server');
       }
-      await AsyncStorage.multiSet([
-        ['auth_token', token],
-        ['refresh_token', refreshToken]
-      ]);
+
+      // Seed in-memory tokens immediately to avoid races
+      setAuthTokens(token, refreshToken);
+
+      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
       // Immediately update Redux state with tokens
       // @ts-ignore
@@ -69,10 +107,6 @@ export const login = createAsyncThunk(
         global.dispatch(setToken(token));
         global.dispatch(setRefreshToken(refreshToken));
       }
-
-      // Debug: read back from AsyncStorage
-      const storedToken = await AsyncStorage.getItem('auth_token');
-      console.log('Tokens saved to AsyncStorage - Access:', !!token, 'Refresh:', !!refreshToken, '| Read back:', storedToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
@@ -119,10 +153,12 @@ export const register = createAsyncThunk(
       if (!refreshToken) {
         throw new Error('No refresh token returned from server');
       }
-      await AsyncStorage.multiSet([
-        ['auth_token', token],
-        ['refresh_token', refreshToken]
-      ]);
+
+      // Seed in-memory tokens immediately
+      setAuthTokens(token, refreshToken);
+
+      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
       // Immediately update Redux state with tokens
       // @ts-ignore
@@ -130,10 +166,6 @@ export const register = createAsyncThunk(
         global.dispatch(setToken(token));
         global.dispatch(setRefreshToken(refreshToken));
       }
-
-      // Debug: read back from AsyncStorage
-      const storedToken = await AsyncStorage.getItem('auth_token');
-      console.log('Tokens saved to AsyncStorage after registration - Access:', !!token, 'Refresh:', !!refreshToken, '| Read back:', storedToken);
 
       // Fetch user profile
       const userRes = await api.get('/auth/me', {
@@ -147,14 +179,23 @@ export const register = createAsyncThunk(
   }
 );
 
-export const logout = createAsyncThunk('auth/logout', async (_, { dispatch }) => {
-  // Set logging out flag immediately
-  dispatch(authSlice.actions.setLoggingOut(true));
-  // Clear tokens from AsyncStorage
-  await AsyncStorage.removeItem('auth_token');
-  await AsyncStorage.removeItem('refresh_token');
-  // Purge redux-persist state to fully clear auth
-  await persistor.purge();
+
+export const logout = createAsyncThunk('auth/logout', async () => {
+  // Clear tokens from storage
+  await secureStorage.removeItem(AUTH_TOKEN_KEY);
+  await secureStorage.removeItem(REFRESH_TOKEN_KEY);
+  // Clear in-memory tokens
+  setAuthTokens(null, null);
+  // Purge redux-persist state to fully clear auth (import lazily to avoid cycle)
+  try {
+    const { persistor } = await import('../store');
+    if (persistor && persistor.purge) await persistor.purge();
+  } catch (e) {
+    // If dynamic import fails, continue — not critical for logout flow
+    // eslint-disable-next-line no-console
+    console.warn('Could not purge persistor during logout:', e);
+  }
+
   // Force a hard reload of the app to clear all in-memory state and interceptors
   if (Updates?.reloadAsync) {
     await Updates.reloadAsync();
@@ -184,6 +225,7 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+
     // Login
     builder.addCase(login.pending, (state) => {
       state.isLoading = true;
@@ -194,26 +236,42 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.refreshToken = action.payload.refreshToken;
-      console.log('[AUTH SLICE] Setting tokens after login - Access:', !!action.payload.token, 'Refresh:', !!action.payload.refreshToken);
     });
     builder.addCase(login.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });
 
-    // Logout
-    builder.addCase(logout.pending, (state) => {
+    // Social Login
+    builder.addCase(socialLogin.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(socialLogin.fulfilled, (state, action) => {
+      state.isLoading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
+    });
+    builder.addCase(socialLogin.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.payload as string;
+    });
+
+    // Register
+    builder.addCase(register.pending, (state) => {
+
       state.isLoading = true;
       state.error = null;
       state.isLoggingOut = true;
     });
     builder.addCase(logout.fulfilled, (state) => {
       state.isLoading = false;
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.isNewRegistration = false;
-      state.isLoggingOut = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
+      state.isNewRegistration = true; // Set flag for new registration
+
     });
     builder.addCase(logout.rejected, (state, action) => {
       state.isLoading = false;

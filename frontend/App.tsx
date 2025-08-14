@@ -13,9 +13,10 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { theme } from './src/theme/theme';
 import { NotificationManager } from './src/services/NotificationManager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './src/services/secureStorage';
 import { setToken, setRefreshToken } from './src/store/slices/authSlice';
 import { setReduxDispatch } from './src/services/reduxDispatch';
+import { setAuthTokens } from './src/services/api';
 
 
 export default function App() {
@@ -39,22 +40,23 @@ export default function App() {
       try {
         const api = (await import('./src/services/api')).default;
 
-        // Batch get tokens
-        const [[, storedToken], [, storedRefreshToken]] = await AsyncStorage.multiGet(['auth_token', 'refresh_token']);
+        // Read tokens from secure storage
+        const storedToken = await secureStorage.getItem(AUTH_TOKEN_KEY);
+        const storedRefreshToken = await secureStorage.getItem(REFRESH_TOKEN_KEY);
+        
+        // Prime in-memory tokens immediately
+        setAuthTokens(storedToken, storedRefreshToken);
         
         // Update Redux state with stored tokens
         if (storedToken) {
           store.dispatch(setToken(storedToken));
-          console.log('Restored access token from storage to Redux state');
         }
         
         if (storedRefreshToken) {
           store.dispatch(setRefreshToken(storedRefreshToken));
-          console.log('Restored refresh token from storage to Redux state');
           
           try {
             // Attempt to refresh the token on app launch if we have a refresh token
-            console.log('Attempting to proactively refresh token on app launch');
             const refreshResponse = await api.post('/api/v1/auth/refresh', {
               refresh_token: storedRefreshToken
             });
@@ -62,22 +64,13 @@ export default function App() {
             const { access_token: newToken, refresh_token: newRefreshToken } = refreshResponse.data;
 
             if (newToken) {
-              // Update both tokens in Redux and storage
+              // Update both tokens in Redux, memory and storage
               store.dispatch(setToken(newToken));
-              
-              // Prepare batch operation
-              const multiSetArr: [string, string][] = [['auth_token', newToken]];
-              
-              if (newRefreshToken) {
-                store.dispatch(setRefreshToken(newRefreshToken));
-                multiSetArr.push(['refresh_token', newRefreshToken]);
-                console.log('Updated both access and refresh tokens proactively');
-              } else {
-                console.log('Updated access token only (no new refresh token returned)');
-              }
-              
-              // Execute batch storage update
-              await AsyncStorage.multiSet(multiSetArr);
+              const nextRefresh = newRefreshToken || storedRefreshToken;
+              store.dispatch(setRefreshToken(nextRefresh));
+              setAuthTokens(newToken, nextRefresh);
+              await secureStorage.setItem(AUTH_TOKEN_KEY, newToken);
+              await secureStorage.setItem(REFRESH_TOKEN_KEY, nextRefresh);
             }
           } catch (err: any) {
             // Detect expired/invalid token and show user-friendly error
@@ -87,7 +80,6 @@ export default function App() {
             }
             setError(message);
             setShowSnackbar(true);
-            console.error('Failed to refresh token on app launch:', err);
           }
         } else {
           console.log('No refresh token found in storage, skipping token refresh');
@@ -95,7 +87,6 @@ export default function App() {
       } catch (e) {
         setError('Unexpected error during startup.');
         setShowSnackbar(true);
-        console.error('Error in refreshTokenOnLaunch:', e);
       } finally {
         setIsRefreshing(false);
       }
@@ -109,11 +100,7 @@ export default function App() {
   useEffect(() => {
     if (!isRefreshing) {
       (async () => {
-        const authToken = await AsyncStorage.getItem('auth_token');
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
-        const maskedRefreshToken = refreshToken ? (refreshToken.substring(0, 6) + '...' + refreshToken.substring(refreshToken.length - 6)) : null;
-        console.log('[API INIT] Auth token:', authToken ? authToken.substring(0, 8) + '...' : null);
-        console.log('[API INIT] Refresh token:', maskedRefreshToken);
+        // No token logging
       })();
     }
   }, [isRefreshing]);

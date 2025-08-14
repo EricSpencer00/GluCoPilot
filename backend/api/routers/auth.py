@@ -3,6 +3,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
+from pydantic import BaseModel
+from jose import jwt
+import requests
 
 from core.database import get_db
 from models.user import User
@@ -13,9 +16,126 @@ from fastapi import Body
 from utils.logging import get_logger
 from utils.encryption import encrypt_password
 
-logger = get_logger(__name__)
+# Ensure router exists before any decorator usage
 router = APIRouter()
+
+logger = get_logger(__name__)
 security = HTTPBearer()
+
+# --- Social Login Schema ---
+class SocialLoginRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    provider: str  # 'google' or 'apple'
+    id_token: str
+
+@router.post("/social-login", response_model=Token)
+async def social_login(
+    data: SocialLoginRequest,
+    db: Session = Depends(get_db)
+):
+    """Authenticate or register user via Google/Apple sign-in and return tokens"""
+    logger.info(f"Social login attempt: {data.email} via {data.provider}")
+
+    # 1. Verify id_token with provider
+    if data.provider == 'google':
+        token = data.id_token
+        # Distinguish between id_token (JWT with dots) and access_token (opaque)
+        if token and '.' in token:
+            # id_token (JWT) verification
+            google_url = f'https://oauth2.googleapis.com/tokeninfo?id_token={token}'
+            resp = requests.get(google_url)
+            if resp.status_code != 200:
+                logger.warning(f"Google id_token verification failed for {data.email}")
+                raise HTTPException(status_code=401, detail="Invalid Google id_token")
+            token_info = resp.json()
+            email_verified = token_info.get('email_verified') in (True, 'true', 'True')
+            if not email_verified or token_info.get('email') != data.email:
+                logger.warning(f"Google email mismatch or not verified: {data.email}")
+                raise HTTPException(status_code=401, detail="Google email not verified")
+            # populate names from token if available
+            if not data.first_name and token_info.get('given_name'):
+                data.first_name = token_info.get('given_name')
+            if not data.last_name and token_info.get('family_name'):
+                data.last_name = token_info.get('family_name')
+        else:
+            # treat token as access_token and fetch userinfo
+            access_token = token
+            userinfo_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
+            resp = requests.get(userinfo_url, params={'alt': 'json', 'access_token': access_token})
+            if resp.status_code != 200:
+                logger.warning(f"Google access_token verification failed for {data.email}")
+                raise HTTPException(status_code=401, detail="Invalid Google access token")
+            token_info = resp.json()
+            # Google userinfo uses 'verified_email' field
+            email_verified = token_info.get('verified_email') in (True, 'true', 'True')
+            if not email_verified or token_info.get('email') != data.email:
+                logger.warning(f"Google email mismatch or not verified: {data.email}")
+                raise HTTPException(status_code=401, detail="Google email not verified")
+            if not data.first_name and token_info.get('given_name'):
+                data.first_name = token_info.get('given_name')
+            if not data.last_name and token_info.get('family_name'):
+                data.last_name = token_info.get('family_name')
+    elif data.provider == 'apple':
+        # Apple token verification (basic, for production use Apple public keys)
+        try:
+            decoded = jwt.get_unverified_claims(data.id_token)
+            if decoded.get('email') != data.email:
+                logger.warning(f"Apple email mismatch: {data.email}")
+                raise HTTPException(status_code=401, detail="Apple email mismatch")
+        except Exception as e:
+            logger.warning(f"Apple token decode failed: {e}")
+            raise HTTPException(status_code=401, detail="Invalid Apple token")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+
+    # 2. Find or create user
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        user = User(
+            username=data.email,
+            email=data.email,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            is_active=True,
+            is_verified=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        logger.info(f"Created new user via social login: {data.email}")
+    else:
+        # Update names if changed
+        updated = False
+        if user.first_name != data.first_name:
+            user.first_name = data.first_name
+            updated = True
+        if user.last_name != data.last_name:
+            user.last_name = data.last_name
+            updated = True
+        if not user.is_active:
+            user.is_active = True
+            updated = True
+        if not user.is_verified:
+            user.is_verified = True
+            updated = True
+        if updated:
+            db.commit()
+
+    # 3. Issue tokens
+    access_token = create_access_token(data={"sub": user.username})
+    refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
+    user.refresh_token = refresh_token
+    db.commit()
+
+    logger.info(f"Social login successful for {user.email}")
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": 1800
+    }
 
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
@@ -133,8 +253,6 @@ async def update_current_user_profile(
     return current_user
 
 
-from pydantic import BaseModel
-
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -152,7 +270,7 @@ async def refresh_token(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        logger.info(f"Refresh attempt with token: {refresh_token}")
+        logger.info("Refresh attempt received")
         payload = verify_token(refresh_token, credentials_exception)
         username = payload.username
         user = db.query(User).filter(User.username == username).first()
@@ -176,6 +294,19 @@ async def refresh_token(
     except Exception as e:
         logger.error(f"Refresh failed: {e}")
         raise credentials_exception
+
+@router.delete('/delete-account')
+async def delete_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete the current user's account and associated data."""
+    try:
+        # TODO: cascade delete related records (glucose, insulin, recommendations, etc.)
+        db.delete(current_user)
+        db.commit()
+        logger.info("Account deleted for user")
+        return {"success": True}
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete account")
 
 @router.post("/connect-dexcom", response_model=DexcomResponse)
 async def connect_dexcom(

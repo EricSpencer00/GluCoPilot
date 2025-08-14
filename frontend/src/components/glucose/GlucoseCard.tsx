@@ -31,18 +31,18 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
 
   const getTrendIcon = () => {
     if (!reading) return null;
-    
+    // Use Unicode diagonal arrows for rising/falling, fallback to text if not supported
     switch(reading.trend) {
       case 'rising_quickly':
-        return '↑↑';
+        return '⬈⬈'; // double northeast
       case 'rising':
-        return '↑';
-      case 'steady':
-        return '→';
+        return '⬈'; // northeast arrow U+2B08
+      case 'stable':
+        return '→'; // right arrow
       case 'falling':
-        return '↓';
+        return '⬊'; // southeast arrow U+2B0A
       case 'falling_quickly':
-        return '↓↓';
+        return '⬊⬊'; // double southeast
       default:
         return null;
     }
@@ -80,12 +80,14 @@ export const GlucoseCard: React.FC<GlucoseCardProps> = ({
             <View style={styles.valueContainer}>
               <Text 
                 variant="displayLarge" 
-                style={[styles.value, { color: getGlucoseColor() }]}
+                style={[styles.value, { color: getGlucoseColor(), flexDirection: 'row', alignItems: 'center' }]}
               >
                 {reading.value}
-              </Text>
-              <Text variant="headlineSmall" style={styles.trend}>
-                {getTrendIcon()}
+                {getTrendIcon() && (
+                  <Text style={[styles.trend, { marginLeft: 10, marginTop: 0, fontSize: 36 }]}>
+                    {getTrendIcon()}
+                  </Text>
+                )}
               </Text>
             </View>
             <Text variant="bodyMedium" style={styles.timestamp}>

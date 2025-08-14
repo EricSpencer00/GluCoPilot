@@ -37,6 +37,24 @@ async def get_glucose_readings(
     # Order by timestamp descending and limit
     readings = query.order_by(desc(GlucoseReading.timestamp)).limit(limit).all()
     
+    # Attach trend_arrow to each reading
+    def map_trend_arrow(trend):
+        mapping = {
+            "rising_rapidly": "↑↑",
+            "rising": "↑",
+            "rising_slightly": "↗",
+            "stable": "→",
+            "falling_slightly": "↘",
+            "falling": "↓",
+            "falling_rapidly": "↓↓",
+            "unknown": "?",
+            "not_computable": "NC"
+        }
+        return mapping.get(trend, None)
+    
+    for r in readings:
+        r.trend_arrow = map_trend_arrow(r.trend)
+    
     logger.info(f"Retrieved {len(readings)} glucose readings")
     return readings
 
@@ -56,6 +74,21 @@ async def get_latest_glucose(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No glucose readings found"
         )
+    # Attach trend_arrow
+    def map_trend_arrow(trend):
+        mapping = {
+            "rising_rapidly": "↑↑",
+            "rising": "↑",
+            "rising_slightly": "↗",
+            "stable": "→",
+            "falling_slightly": "↘",
+            "falling": "↓",
+            "falling_rapidly": "↓↓",
+            "unknown": "?",
+            "not_computable": "NC"
+        }
+        return mapping.get(trend, None)
+    reading.trend_arrow = map_trend_arrow(reading.trend)
     
     return reading
 

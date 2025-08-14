@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
-import { register } from '../store/slices/authSlice';
+import { register, socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
 import DisclaimerModal from '../components/DisclaimerModal';
+
+// import * as Google from 'expo-auth-session/providers/google';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
+
 
 export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -14,12 +20,57 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   const onAcceptDisclaimer = () => setDisclaimerAccepted(true);
 
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS === 'ios') {
+        try {
+          const available = await AppleAuthentication.isAvailableAsync();
+          setAppleAvailable(available);
+        } catch (e) {
+          setAppleAvailable(false);
+        }
+      }
+    })();
+  }, []);
+
+  // Apple only: No Google Auth
+
   const onSubmit = async () => {
     if (!disclaimerAccepted) return;
+    if (!email.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long.');
+      return;
+    }
     await dispatch(register({ email, password, first_name: firstName, last_name: lastName }) as any);
+  };
+
+  // Apple only: No Google Social Login
+
+  const handleAppleSignIn = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const idToken = credential.identityToken;
+      const firstName = credential.fullName?.givenName || '';
+      const lastName = credential.fullName?.familyName || '';
+      const userEmail = credential.email || '';
+      await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken }) as any);
+    } catch (error) {
+      console.error('Apple Sign-In failed', error);
+      alert('Apple Sign-In failed.');
+    }
   };
 
   return (
@@ -36,6 +87,21 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
           <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button} disabled={!disclaimerAccepted}>
             Register
           </Button>
+
+          <View style={styles.socialContainer}>
+            <Text style={styles.socialText}>Or sign up with</Text>
+            {Platform.OS === 'ios' && appleAvailable && (
+              <Button
+                mode="outlined"
+                icon="apple"
+                onPress={handleAppleSignIn}
+                style={styles.socialButton}
+              >
+                Apple
+              </Button>
+            )}
+          </View>
+
           <Button onPress={() => navigation.goBack()}>Back to Login</Button>
         </Card.Content>
       </Card>
@@ -49,4 +115,16 @@ const styles = StyleSheet.create({
   title: { marginBottom: 16 },
   input: { marginBottom: 12 },
   button: { marginTop: 8 },
+  socialContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  socialText: {
+    marginBottom: 8,
+    color: '#888',
+  },
+  socialButton: {
+    marginVertical: 4,
+    width: 220,
+  },
 });
