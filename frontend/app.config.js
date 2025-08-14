@@ -7,7 +7,7 @@ dotenv.config();
 module.exports = {
   // Use EAS development build
   name: "GluCoPilot (Dev)",
-  slug: "glucopilot-dev",
+  slug: "glucopilot",
   owner: "ericspencer00",
   version: "1.0.0",
   orientation: "portrait",
