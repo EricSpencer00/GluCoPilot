@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
-import { login } from '../store/slices/authSlice';
+import { login, socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
@@ -38,10 +38,7 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
   // Social login handler (to be implemented in your redux/auth logic)
   const onSocialLogin = async ({ firstName, lastName, email, provider, idToken }: any) => {
     try {
-      // You should implement socialLogin thunk in your authSlice
-      // Example:
-      // await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
-      alert(`Logged in with ${provider}: ${firstName} ${lastName} (${email})`);
+      await dispatch(socialLogin({ firstName, lastName, email, provider, idToken }) as any);
     } catch (err) {
       alert('Social login failed.');
     }
