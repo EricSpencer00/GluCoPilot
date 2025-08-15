@@ -92,22 +92,40 @@ class ExternalDataService {
     const options = {
       permissions: {
         read: [
-          AppleHealthKit.Constants.Permissions.StepCount,
-          AppleHealthKit.Constants.Permissions.HeartRate,
-          AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
-          AppleHealthKit.Constants.Permissions.SleepAnalysis,
-          AppleHealthKit.Constants.Permissions.Weight,
-        ],
+          AppleHealthKit.Constants?.Permissions?.StepCount,
+          AppleHealthKit.Constants?.Permissions?.HeartRate,
+          AppleHealthKit.Constants?.Permissions?.DistanceWalkingRunning,
+          AppleHealthKit.Constants?.Permissions?.SleepAnalysis,
+          AppleHealthKit.Constants?.Permissions?.Weight,
+        ].filter(Boolean),
         write: [],
       },
     } as any;
 
-    return new Promise<void>((resolve, reject) => {
-      AppleHealthKit.initHealthKit(options, (err: string | null) => {
-        if (err) return reject(new Error(`HealthKit init error: ${err}`));
-        resolve();
+    // Support different native bridge method names (initHealthKit, initializeHealthKit, initialize)
+    const initFn = (AppleHealthKit as any).initHealthKit || (AppleHealthKit as any).initializeHealthKit || (AppleHealthKit as any).initialize;
+
+    if (typeof initFn === 'function') {
+      return new Promise<void>((resolve, reject) => {
+        try {
+          initFn.call(AppleHealthKit, options, (err: string | null) => {
+            if (err) return reject(new Error(`HealthKit init error: ${err}`));
+            resolve();
+          });
+        } catch (e) {
+          reject(e);
+        }
       });
-    });
+    }
+
+    // If there is no init method, surface a clear error with available keys to help debugging
+    const keys = Object.keys(AppleHealthKit || {}).slice(0, 50).join(', ');
+    // Provide actionable guidance for common Expo-managed workflow issue
+    throw new Error(
+      `AppleHealthKit bridge does not expose an init method. Available keys: ${keys}. ` +
+      `This usually means the native HealthKit module isn't linked into the running app (common when using Expo Go). ` +
+      `Build a custom dev client or run the app from Xcode (prebuild / eject) so the native module is present, then try again.`
+    );
   }
 
   // Request HealthKit permissions (exposed)
