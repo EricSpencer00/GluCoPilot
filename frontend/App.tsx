@@ -7,8 +7,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 
 import { store, persistor } from './src/store/store';
-import { useSelector } from 'react-redux';
-import { RootState } from './src/store/store';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { theme } from './src/theme/theme';
@@ -16,20 +14,12 @@ import { NotificationManager } from './src/services/NotificationManager';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './src/services/secureStorage';
 import { setToken, setRefreshToken } from './src/store/slices/authSlice';
 import { setReduxDispatch } from './src/services/reduxDispatch';
-import { setAuthTokens } from './src/services/api';
-
+import { setAuthTokens } from './src/services/api'; 
 
 export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSnackbar, setShowSnackbar] = useState(false);
-
-  // Use Redux to check if logging out
-  // Use a try/catch in case store is not ready yet (e.g. during first mount)
-  let isLoggingOut = false;
-  try {
-    isLoggingOut = useSelector((state: RootState) => state.auth.isLoggingOut);
-  } catch (e) {}
 
   useEffect(() => {
     NotificationManager.initialize();
@@ -105,7 +95,7 @@ export default function App() {
     }
   }, [isRefreshing]);
 
-  if (isRefreshing || isLoggingOut) {
+  if (isRefreshing) {
     return <LoadingScreen />;
   }
 

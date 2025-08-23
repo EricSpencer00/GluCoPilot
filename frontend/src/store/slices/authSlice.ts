@@ -260,23 +260,9 @@ const authSlice = createSlice({
 
     // Register
     builder.addCase(register.pending, (state) => {
-
       state.isLoading = true;
       state.error = null;
       state.isLoggingOut = true;
-    });
-    builder.addCase(logout.fulfilled, (state) => {
-      state.isLoading = false;
-      state.user = action.payload.user;
-      state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken;
-      state.isNewRegistration = true; // Set flag for new registration
-
-    });
-    builder.addCase(logout.rejected, (state, action) => {
-      state.isLoading = false;
-      state.error = action.error.message || 'Logout failed';
-      state.isLoggingOut = false;
     });
     // Logout
     builder.addCase(logout.pending, (state) => {

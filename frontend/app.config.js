@@ -52,6 +52,7 @@ module.exports = {
   ios: {
     bundleIdentifier: "com.ericspencer00.glucopilot.dev",
     supportsTablet: true,
+    newArchEnabled: false, // Disable React Native New Architecture
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false
     }
