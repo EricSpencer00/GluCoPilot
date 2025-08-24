@@ -128,22 +128,34 @@ export const syncDexcomData = createAsyncThunk(
         return rejectWithValue('Dexcom credentials not configured. Please connect Dexcom in Settings.');
       }
 
-      // Trigger sync providing credentials
-      await api.post('/api/v1/glucose/sync', { username, password, ous });
-      console.log('Sync completed, fetching updated data');
+      // Prefer stateless sync endpoint which returns readings directly (no DB writes)
+      try {
+        const statelessRes = await api.post('/api/v1/glucose/stateless/sync', { username, password, ous });
+        const readings = statelessRes.data?.readings || [];
+        const latest_reading = readings && readings.length > 0 ? readings[0] : null;
+        let stats = null;
+        try {
+          stats = await fetchDexcomTrends(1);
+        } catch (e) {
+          console.warn('Failed to fetch Dexcom trends after stateless sync:', e);
+          stats = null;
+        }
 
-      // After sync, refresh data (default 24h)
-      const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
-        api.get('/api/v1/glucose/latest'),
-        api.get('/api/v1/glucose/stats', { params: { days: 1 } }),
-      ]);
+        console.log('Stateless sync completed, returning readings');
+        return {
+          readings,
+          latest_reading,
+          stats,
+        };
+      } catch (statelessErr: any) {
+        // If stateless endpoint fails for some reason, surface the error to caller
+        console.error('Stateless Dexcom sync error:', statelessErr);
+        return rejectWithValue(statelessErr.response?.data?.detail || 'Failed to sync Dexcom data');
+      }
 
-      return {
-        readings: readingsRes.data || [],
-        latest_reading: latestRes.data || null,
-        stats: statsRes.data || null,
-      };
+      // NOTE: For DB-backed deployments the legacy flow would POST /api/v1/glucose/sync and
+      // then GET readings/latest/stats. That code is intentionally not executed in
+      // stateless deployments to avoid triggering missing-DB errors.
     } catch (error: any) {
       console.error('Error syncing Dexcom data:', error.message);
       return rejectWithValue(

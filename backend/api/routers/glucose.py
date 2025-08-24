@@ -32,6 +32,10 @@ async def get_glucose_readings(
     db: Session = Depends(get_db)
 ):
     """Get glucose readings for the current user"""
+    # Block DB-backed endpoint in stateless mode
+    if not settings.USE_DATABASE:
+        raise HTTPException(status_code=410, detail="Disabled in stateless mode. Use POST /api/v1/glucose/stateless/sync with Dexcom credentials.")
+
     logger.info(f"Fetching glucose readings for user {current_user.id}")
     
     query = db.query(GlucoseReading).filter(GlucoseReading.user_id == current_user.id)
@@ -72,6 +76,10 @@ async def get_latest_glucose(
     db: Session = Depends(get_db)
 ):
     """Get the most recent glucose reading"""
+    # Block DB-backed endpoint in stateless mode
+    if not settings.USE_DATABASE:
+        raise HTTPException(status_code=410, detail="Disabled in stateless mode. Use POST /api/v1/glucose/stateless/latest with Dexcom credentials.")
+
     reading = db.query(GlucoseReading)\
         .filter(GlucoseReading.user_id == current_user.id)\
         .order_by(desc(GlucoseReading.timestamp))\
@@ -107,6 +115,10 @@ async def create_glucose_reading(
     db: Session = Depends(get_db)
 ):
     """Create a manual glucose reading"""
+    # Block DB-backed endpoint in stateless mode
+    if not settings.USE_DATABASE:
+        raise HTTPException(status_code=410, detail="Disabled in stateless mode.")
+
     logger.info(f"Creating manual glucose reading for user {current_user.id}")
     
     reading = GlucoseReading(
@@ -140,6 +152,10 @@ async def get_glucose_stats(
     db: Session = Depends(get_db)
 ):
     """Get glucose statistics for the specified period"""
+    # Block DB-backed endpoint in stateless mode
+    if not settings.USE_DATABASE:
+        raise HTTPException(status_code=410, detail="Disabled in stateless mode. Use POST /api/v1/glucose/stateless/stats with Dexcom credentials.")
+
     logger.info(f"Calculating glucose stats for user {current_user.id}, {days} days")
     
     start_date = datetime.utcnow() - timedelta(days=days)
@@ -282,3 +298,46 @@ async def stateless_get_latest(
     except Exception as e:
         logger.error(f"Stateless get latest Dexcom failed for username {creds.username}: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch latest Dexcom reading")
+
+@router.post('/stateless/stats', response_model=GlucoseStats)
+async def stateless_get_stats(
+    creds: DexcomCredentials = Body(...),
+    hours: int = Query(24, ge=1, le=72)
+):
+    """Compute glucose statistics from Dexcom readings using provided credentials (no DB writes).
+    Note: Dexcom Share via pydexcom limits history to ~24h (up to 72h depending on server)."""
+    try:
+        dexcom_service = DexcomService()
+        readings = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False, hours=hours)
+        if not readings:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No glucose data available for the specified period")
+
+        values = [r["value"] for r in readings]
+        total_readings = len(values)
+        avg = sum(values) / total_readings
+        in_range_count = len([v for v in values if 70 <= v <= 180])
+        low_count = len([v for v in values if v < 70])
+        high_count = len([v for v in values if v > 180])
+        # Standard deviation
+        mean = avg
+        variance = sum((v - mean) ** 2 for v in values) / total_readings
+        stddev = variance ** 0.5
+        coef_var = (stddev / mean) * 100 if mean else 0.0
+        gmi = 3.31 + (0.02392 * avg)
+        period_days = max(1, int(round(hours / 24)))
+
+        return GlucoseStats(
+            total_readings=total_readings,
+            average_glucose=round(avg, 1),
+            time_in_range=round((in_range_count / total_readings) * 100, 1),
+            time_below_range=round((low_count / total_readings) * 100, 1),
+            time_above_range=round((high_count / total_readings) * 100, 1),
+            glucose_management_indicator=round(gmi, 1),
+            coefficient_of_variation=round(coef_var, 1),
+            period_days=period_days
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Stateless stats computation failed for username {creds.username}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to compute glucose statistics")

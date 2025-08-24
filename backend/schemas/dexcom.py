@@ -20,3 +20,13 @@ class DexcomLoginRequest(BaseModel):
 class DexcomLoginResponse(BaseModel):
     """Schema for Dexcom login response"""
     message: str
+
+class DexcomTrendsRequest(BaseModel):
+    """Payload for stateless Dexcom trends request"""
+    username: str
+    password: str
+    ous: Optional[bool] = False
+    days: int = 30
+    # ISO date strings YYYY-MM-DD
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None

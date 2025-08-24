@@ -22,10 +22,14 @@ export async function fetchDexcomTrends(days: number = 30, startDate?: Date | nu
     return response.data;
   }
 
+  // No device credentials: do NOT call server GET in stateless deployments (prevents DB queries).
+  console.warn('No Dexcom credentials on device — skipping server trends GET to avoid DB calls');
+  return null;
+
   // Fallback: call GET for server-backed deployments that can derive trends without per-call creds.
-  const response = await api.get('/trends/dexcom', {
-    params,
-    withCredentials: true,
-  });
-  return response.data;
+  // const response = await api.get('/trends/dexcom', {
+  //   params,
+  //   withCredentials: true,
+  // });
+  // return response.data;
 }
