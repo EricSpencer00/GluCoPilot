@@ -30,11 +30,20 @@ def verify_apple_token(id_token: str, audience: str | None = None) -> Dict:
 
     import logging
     logger = logging.getLogger("uvicorn.error")
+
     try:
         headers = jwt.get_unverified_header(id_token)
     except Exception:
         logger.error("Malformed id_token header for Apple token")
         raise AppleTokenError("Malformed id_token header")
+
+    # Apple tokens must be RS256 and have a kid
+    if headers.get("alg") != "RS256":
+        logger.error(f"Apple id_token has invalid alg: {headers.get('alg')}. Expected RS256.")
+        raise AppleTokenError("Apple id_token must be signed with RS256 (not a mock or test token)")
+    if not headers.get("kid"):
+        logger.error("Apple id_token missing 'kid' in header. This is not a real Apple token.")
+        raise AppleTokenError("Apple id_token missing 'kid' in header. This is not a real Apple token.")
 
     # Fetch Apple's JWKS and find matching key
     try:
