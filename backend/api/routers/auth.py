@@ -160,3 +160,28 @@ async def connect_dexcom(
     except Exception as e:
         logger.error(f"Failed to connect Dexcom: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to connect Dexcom account")
+
+@router.get('/me')
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Return current user profile. In stateless mode return a minimal payload so clients can use it."""
+    # If DB is enabled, current_user will be a User instance and is suitable to return
+    if settings.USE_DATABASE:
+        return current_user
+
+    # Stateless mode: current_user is a SimpleUser with minimal attributes.
+    # Construct a minimal response compatible with frontend expectations (id and email at minimum).
+    return {
+        "id": 0,
+        "username": getattr(current_user, "username", ""),
+        "email": getattr(current_user, "email", getattr(current_user, "username", "")),
+        "first_name": getattr(current_user, "first_name", ""),
+        "last_name": getattr(current_user, "last_name", ""),
+        "is_active": getattr(current_user, "is_active", True),
+        "is_verified": getattr(current_user, "is_verified", True),
+        "created_at": datetime.utcnow(),
+        "last_login": None,
+        "target_glucose_min": None,
+        "target_glucose_max": None,
+        "insulin_carb_ratio": None,
+        "insulin_sensitivity_factor": None,
+    }
