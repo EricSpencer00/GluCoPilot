@@ -3,12 +3,15 @@ import jwtDecode from 'jwt-decode';
 function extractUserFromToken(token: string): Partial<User> | null {
   try {
     const decoded: any = jwtDecode(token);
-    // Map JWT claims to User fields as best as possible
+    // Always provide at least id and email for navigation logic
+    const id = decoded.sub || decoded.email || decoded.user_id || '';
+    const email = decoded.email || '';
+    if (!id || !email) return null;
     return {
-      email: decoded.email || decoded.sub || '',
+      id,
+      email,
       first_name: decoded.given_name || decoded.first_name || '',
       last_name: decoded.family_name || decoded.last_name || '',
-      id: decoded.sub || '',
       // Add more fields as needed
     };
   } catch (e) {
