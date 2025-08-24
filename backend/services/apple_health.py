@@ -2,13 +2,17 @@
 from typing import Optional, Dict, Any
 
 class AppleHealthService:
-    def __init__(self, user_id: int):
-        self.user_id = user_id
-        # In production, store tokens/credentials securely
+    """
+    This class is a stub for HealthKit integration.
+    In production, HealthKit data is accessed directly on the user's device via the app.
+    No backend storage or routing is required unless you want to sync data to the cloud.
+    """
+    def __init__(self):
+        pass
 
     def fetch_activity_data(self, start_date: str, end_date: str) -> Optional[Dict[str, Any]]:
-        # This is a stub. In production, use HealthKit APIs via a bridge or server-to-device sync.
-        # Here, just return a mock structure.
+        # This is a stub. In production, use HealthKit APIs on-device.
+        # Here, just return a mock structure for testing.
         return {
             'steps': 12000,
             'workouts': [

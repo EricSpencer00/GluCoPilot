@@ -67,8 +67,9 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 3600  # 1 hour
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    # HealthKit Bridge
-    HEALTHKIT_BRIDGE_URL: str = "http://localhost:3001"
+    # HealthKit: No backend bridge needed, data is local-only
+    # If you want to sync HealthKit data to backend in future, add a bridge URL here
+    # HEALTHKIT_BRIDGE_URL: str = ""
     
     # Expo Mobile App
     EXPO_APP_ID: str = "f16e8675-cf9b-4b3d-a4ba-58b21d990311"
