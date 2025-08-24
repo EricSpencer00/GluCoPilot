@@ -60,17 +60,15 @@ export const RegisterScreen: React.FC<any> = () => {
       <DisclaimerModal visible={!disclaimerAccepted} onAccept={onAcceptDisclaimer} />
       <Card style={styles.card}>
         <Card.Content>
-          <Text variant="headlineSmall" style={styles.title}>Sign in or Register</Text>
+          <Text variant="headlineSmall" style={styles.title}>Sign in or Register with Apple</Text>
           {error ? <HelperText type="error" visible={true}>{error}</HelperText> : null}
-          <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button} disabled={!disclaimerAccepted}>
-            Continue with Apple
-          </Button>
-
-          <View style={styles.socialContainer}>
-            {/* Apple-only registration; keep secondary Apple button hidden to avoid duplicates */}
-          </View>
-
-          <Button onPress={() => navigation.goBack()}>Back to Login</Button>
+          {appleAvailable ? (
+            <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button} disabled={!disclaimerAccepted}>
+              Continue with Apple
+            </Button>
+          ) : (
+            <Text style={{marginTop: 16, color: '#888'}}>Apple Sign-In is not available on this device.</Text>
+          )}
         </Card.Content>
       </Card>
     </View>
