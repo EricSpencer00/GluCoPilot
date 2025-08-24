@@ -44,6 +44,20 @@ export const RegisterScreen: React.FC<any> = () => {
         ],
       });
       const idToken = credential.identityToken as string;
+      if (!idToken) {
+        alert('Apple did not return a valid identityToken. This usually happens on a simulator or with a test Apple account. Please use a real device and a real Apple ID.');
+        return;
+      }
+      // Check alg in header (should be RS256)
+      try {
+        const header = JSON.parse(atob(idToken.split('.')[0]));
+        if (header.alg !== 'RS256') {
+          alert('Apple identityToken is not signed with RS256. This is not a real Apple token. Please use a real device and a real Apple ID.');
+          return;
+        }
+      } catch (e) {
+        // Ignore header parse errors
+      }
       // Always use Apple-provided info only
       const firstName = credential.fullName?.givenName || '';
       const lastName = credential.fullName?.familyName || '';
