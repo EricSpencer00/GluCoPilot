@@ -1,7 +1,7 @@
 // Centralized configuration for API URLs
 import { Platform } from 'react-native';
 
-const ENV = 'development'; // Force development environment for local dev
+const ENV = process.env.NODE_ENV === 'production' ? 'production' : 'development'; // Use production in prod builds
 
 // For iOS simulator, localhost won't work. Use your computer's local IP instead
 // For Android emulator, use 10.0.2.2 to reference your computer's localhost
@@ -30,7 +30,7 @@ const CONFIG = {
     ENABLE_API_LOGS: false, // Disable API logging by default
   },
   production: {
-    API_BASE_URL: 'https://api.glucopilot.com', // Updated production URL
+    API_BASE_URL: 'https://glucopilot-8ed6389c53c8.herokuapp.com/', // Heroku production URL
     ENABLE_API_LOGS: false,
   },
 };
