@@ -1,24 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
+import { Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
-import { register, socialLogin } from '../store/slices/authSlice';
+import { socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
 import DisclaimerModal from '../components/DisclaimerModal';
-
-// import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 
 
-export const RegisterScreen: React.FC<any> = ({ navigation }) => {
+export const RegisterScreen: React.FC<any> = () => {
   const dispatch = useDispatch();
   const { isLoading, error } = useSelector((state: RootState) => state.auth);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -37,22 +30,10 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
     })();
   }, []);
 
-  // Apple only: No Google Auth
-
   const onSubmit = async () => {
     if (!disclaimerAccepted) return;
-    if (!email.includes('@')) {
-      alert('Please enter a valid email address.');
-      return;
-    }
-    if (password.length < 6) {
-      alert('Password must be at least 6 characters long.');
-      return;
-    }
-    await dispatch(register({ email, password, first_name: firstName, last_name: lastName }) as any);
+    await handleAppleSignIn();
   };
-
-  // Apple only: No Google Social Login
 
   const handleAppleSignIn = async () => {
     try {
@@ -62,7 +43,8 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      const idToken = credential.identityToken;
+      const idToken = credential.identityToken as string;
+      // Always use Apple-provided info only
       const firstName = credential.fullName?.givenName || '';
       const lastName = credential.fullName?.familyName || '';
       const userEmail = credential.email || '';
@@ -78,28 +60,14 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
       <DisclaimerModal visible={!disclaimerAccepted} onAccept={onAcceptDisclaimer} />
       <Card style={styles.card}>
         <Card.Content>
-          <Text variant="headlineSmall" style={styles.title}>Create account</Text>
-          <TextInput label="First name" value={firstName} onChangeText={setFirstName} style={styles.input} />
-          <TextInput label="Last name" value={lastName} onChangeText={setLastName} style={styles.input} />
-          <TextInput label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" style={styles.input} />
-          <TextInput label="Password" value={password} onChangeText={setPassword} secureTextEntry style={styles.input} />
+          <Text variant="headlineSmall" style={styles.title}>Sign in or Register</Text>
           {error ? <HelperText type="error" visible={true}>{error}</HelperText> : null}
           <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button} disabled={!disclaimerAccepted}>
-            Register
+            Continue with Apple
           </Button>
 
           <View style={styles.socialContainer}>
-            <Text style={styles.socialText}>Or sign up with</Text>
-            {Platform.OS === 'ios' && appleAvailable && (
-              <Button
-                mode="outlined"
-                icon="apple"
-                onPress={handleAppleSignIn}
-                style={styles.socialButton}
-              >
-                Apple
-              </Button>
-            )}
+            {/* Apple-only registration; keep secondary Apple button hidden to avoid duplicates */}
           </View>
 
           <Button onPress={() => navigation.goBack()}>Back to Login</Button>

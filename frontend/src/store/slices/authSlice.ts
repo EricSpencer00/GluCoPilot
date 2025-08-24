@@ -6,14 +6,20 @@ export const socialLogin = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      // Call your backend social login endpoint
-      const tokenRes = await api.post('/auth/social-login', {
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        provider,
-        id_token: idToken,
-      });
+      // Call your backend social login endpoint with Apple/Google token in Authorization header
+      const tokenRes = await api.post(
+        '/auth/social-login',
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          provider,
+          id_token: idToken,
+        },
+        {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
       const token: string = tokenRes.data.access_token;
       const refreshToken: string = tokenRes.data.refresh_token;
 
@@ -260,23 +266,9 @@ const authSlice = createSlice({
 
     // Register
     builder.addCase(register.pending, (state) => {
-
       state.isLoading = true;
       state.error = null;
       state.isLoggingOut = true;
-    });
-    builder.addCase(logout.fulfilled, (state) => {
-      state.isLoading = false;
-      state.user = action.payload.user;
-      state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken;
-      state.isNewRegistration = true; // Set flag for new registration
-
-    });
-    builder.addCase(logout.rejected, (state, action) => {
-      state.isLoading = false;
-      state.error = action.error.message || 'Logout failed';
-      state.isLoggingOut = false;
     });
     // Logout
     builder.addCase(logout.pending, (state) => {

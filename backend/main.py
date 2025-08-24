@@ -30,9 +30,12 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown events"""
     logger.info("Starting GluCoPilot Backend...")
     
-    # Initialize database
-    await create_tables()
-    logger.info("Database initialized")
+    # Initialize database only if enabled
+    if settings.USE_DATABASE:
+        await create_tables()
+        logger.info("Database initialized")
+    else:
+        logger.info("Stateless mode: skipping database initialization")
     
     # Start background tasks (to be implemented)
     # await start_background_tasks()
@@ -74,8 +77,11 @@ app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 app.include_router(integrations, prefix="/api/v1/integrations", tags=["Integrations"])
 app.include_router(dexcom_trends, prefix="/api/v1", tags=["Trends"])
-
 app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insights"])
+from api.routers.dexcom_signin import router as dexcom_signin
+app.include_router(dexcom_signin, prefix="/api/v1", tags=["Dexcom"])
+from api.routers.dexcom_oauth import router as dexcom_oauth
+app.include_router(dexcom_oauth, prefix="/api/v1", tags=["Dexcom OAuth"])
 # Feedback router
 from api.routers import feedback
 if feedback:

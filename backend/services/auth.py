@@ -53,11 +53,19 @@ def verify_token(token: str, credentials_exception):
         raise credentials_exception
     return token_data
 
+class SimpleUser:
+    def __init__(self, username: str):
+        self.username = username
+        self.email = username
+        self.is_active = True
+        self.is_verified = True
+        self.id = None
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Get current authenticated user"""
+    """Get current authenticated user. In stateless mode, return a simple identity without DB lookup."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -65,6 +73,11 @@ async def get_current_user(
     )
     
     token_data = verify_token(credentials.credentials, credentials_exception)
+
+    if not settings.USE_DATABASE:
+        # Stateless: don't hit DB
+        return SimpleUser(username=token_data.username)
+
     user = db.query(User).filter(User.username == token_data.username).first()
     if user is None:
         raise credentials_exception
@@ -72,6 +85,6 @@ async def get_current_user(
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     """Get current active user"""
-    if not current_user.is_active:
+    if not getattr(current_user, 'is_active', True):
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user

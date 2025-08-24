@@ -108,8 +108,8 @@ const AppStackNavigator = () => {
 // Auth stack navigator
 const AuthStackNavigator = () => {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Register">
+      {/* Removed Login screen to enforce registration-first flow */}
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="DexcomLogin" component={DexcomLoginScreen} />
