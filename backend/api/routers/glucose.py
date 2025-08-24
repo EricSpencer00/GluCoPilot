@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from core.database import get_db
+from core.config import settings
 from models.user import User
 from models.glucose import GlucoseReading
 from schemas.glucose import GlucoseReadingCreate, GlucoseReadingResponse, GlucoseStats
@@ -186,30 +187,52 @@ async def get_glucose_stats(
 
 @router.post("/sync")
 async def sync_dexcom_data(
+    creds: DexcomCredentials | None = Body(None),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Sync glucose data from Dexcom CGM"""
-    logger.info(f"Starting Dexcom sync for user {current_user.id}")
-    
-    if not current_user.dexcom_username:
+    """Sync glucose data from Dexcom CGM.
+
+    In DB mode this uses stored credentials on the user record. In stateless mode,
+    the client must provide Dexcom credentials in the request body (DexcomCredentials) or
+    call the stateless endpoints directly. This avoids accessing non-existent attributes on SimpleUser.
+    """
+    # If running stateless, require credentials to be provided in the request body
+    if not settings.USE_DATABASE:
+        if not creds or not creds.username or not creds.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dexcom credentials required in stateless mode. Provide username/password in the request body or use /glucose/stateless/sync"
+            )
+        try:
+            dexcom_service = DexcomService()
+            results = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False)
+            logger.info(f"Stateless Dexcom sync completed: {len(results)} readings for username {creds.username}")
+            return {"message": f"Successfully fetched {len(results)} readings", "new_readings": len(results), "readings": results}
+        except Exception as e:
+            logger.error(f"Stateless Dexcom sync failed for username {creds.username}: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch Dexcom data: {str(e)}")
+
+    # DB-backed flow: use credentials stored on current_user
+    # Defensive: current_user might not have dexcom_username in some edge cases
+    if not getattr(current_user, 'dexcom_username', None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dexcom credentials not configured"
+            detail="Dexcom credentials not configured for this user"
         )
-    
+
     try:
         dexcom_service = DexcomService()
         new_readings = await dexcom_service.sync_glucose_data(current_user, db)
-        
+
         logger.info(f"Dexcom sync completed: {len(new_readings)} new readings")
         return {
             "message": f"Successfully synced {len(new_readings)} new readings",
             "new_readings": len(new_readings)
         }
-    
+
     except Exception as e:
-        logger.error(f"Dexcom sync failed for user {current_user.id}: {str(e)}")
+        logger.error(f"Dexcom sync failed for user {getattr(current_user, 'id', None)}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to sync Dexcom data: {str(e)}"
