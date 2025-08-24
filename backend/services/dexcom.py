@@ -150,7 +150,7 @@ class DexcomService:
         try:
             dexcom = await self._get_dexcom_client(user)
             current_bg = dexcom.get_current_glucose_reading()
-            
+
             if current_bg:
                 return GlucoseReading(
                     user_id=user.id,
@@ -164,9 +164,75 @@ class DexcomService:
                     is_low_alert=current_bg.value < 70,
                     is_high_alert=current_bg.value > 250
                 )
-            
+
             return None
-        
+
         except Exception as e:
             logger.error(f"Error getting current glucose: {str(e)}")
+            return None
+
+    # --- Stateless helpers ---
+    async def _get_dexcom_client_from_credentials(self, username: str, password: str, ous: bool = False) -> Dexcom:
+        """Create Dexcom client from raw credentials (stateless usage)."""
+        return Dexcom(username=username, password=password, ous=ous)
+
+    async def sync_glucose_data_stateless(self, username: str, password: str, ous: bool = False, hours: int = 24) -> List[dict]:
+        """Fetch glucose data from Dexcom using provided credentials and return list of dicts (no DB writes)."""
+        logger.info(f"Starting stateless Dexcom sync for username {username}, last {hours} hours")
+        try:
+            dexcom = await self._get_dexcom_client_from_credentials(username, password, ous)
+
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(hours=hours)
+            minutes = int(max(1, min(1440, (end_time - start_time).total_seconds() / 60)))
+
+            bg_readings = dexcom.get_glucose_readings(minutes=minutes)
+
+            results: List[dict] = []
+            for bg in bg_readings:
+                reading = {
+                    "id": 0,
+                    "user_id": None,
+                    "value": bg.value,
+                    "trend": self._map_dexcom_trend(bg.trend),
+                    "trend_rate": self._calculate_trend_rate(bg.trend),
+                    "timestamp": bg.time.isoformat() if hasattr(bg.time, 'isoformat') else str(bg.time),
+                    "source": "dexcom",
+                    "quality": "high",
+                    "is_high_alert": bg.value > 250,
+                    "is_low_alert": bg.value < 70,
+                    "is_urgent_low": bg.value < 54,
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                results.append(reading)
+
+            logger.info(f"Stateless Dexcom fetch completed: {len(results)} readings")
+            return results
+        except Exception as e:
+            logger.error(f"Stateless Dexcom sync error: {str(e)}")
+            raise
+
+    async def get_current_glucose_stateless(self, username: str, password: str, ous: bool = False) -> Optional[dict]:
+        """Get the most current glucose reading using raw credentials and return a dict (no DB)."""
+        try:
+            dexcom = await self._get_dexcom_client_from_credentials(username, password, ous)
+            current_bg = dexcom.get_current_glucose_reading()
+            if not current_bg:
+                return None
+            return {
+                "id": 0,
+                "user_id": None,
+                "value": current_bg.value,
+                "trend": self._map_dexcom_trend(current_bg.trend),
+                "trend_rate": self._calculate_trend_rate(current_bg.trend),
+                "timestamp": current_bg.time.isoformat() if hasattr(current_bg.time, 'isoformat') else str(current_bg.time),
+                "source": "dexcom",
+                "quality": "high",
+                "is_high_alert": current_bg.value > 250,
+                "is_low_alert": current_bg.value < 70,
+                "is_urgent_low": current_bg.value < 54,
+                "created_at": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Stateless get current glucose error: {str(e)}")
             return None

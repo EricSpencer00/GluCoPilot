@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc
 from datetime import datetime, timedelta
@@ -8,12 +8,19 @@ from core.database import get_db
 from models.user import User
 from models.glucose import GlucoseReading
 from schemas.glucose import GlucoseReadingCreate, GlucoseReadingResponse, GlucoseStats
+from schemas.dexcom import DexcomCredentials
 from services.auth import get_current_active_user
 from services.dexcom import DexcomService
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+# Simple in-memory rate limiter for stateless Dexcom calls
+_stateless_rate_limit = {}
+# Allow one stateless call per username per 30 seconds
+STATELESS_RATE_SECONDS = 30
+
 
 @router.get("/readings", response_model=List[GlucoseReadingResponse])
 async def get_glucose_readings(
@@ -207,3 +214,48 @@ async def sync_dexcom_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to sync Dexcom data: {str(e)}"
         )
+
+@router.post('/stateless/sync')
+async def stateless_sync_dexcom(
+    creds: DexcomCredentials = Body(...),
+    hours: int = Query(24, ge=1, le=72),
+    request: Request = None
+):
+    """Fetch Dexcom readings using provided credentials without any DB writes.
+    Rate-limited and intended for stateless usage where credentials are provided each call.
+    Returns a JSON object with `readings` list.
+    """
+    username = creds.username
+
+    # Rate limiting per username
+    now = datetime.utcnow().timestamp()
+    last = _stateless_rate_limit.get(username)
+    if last and (now - last) < STATELESS_RATE_SECONDS:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Rate limit exceeded. Try again in {int(STATELESS_RATE_SECONDS - (now - last))}s")
+    _stateless_rate_limit[username] = now
+
+    try:
+        dexcom_service = DexcomService()
+        results = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False, hours=hours)
+        return {"readings": results}
+    except Exception as e:
+        logger.error(f"Stateless Dexcom fetch failed for username {username}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch Dexcom data")
+
+
+@router.post('/stateless/latest')
+async def stateless_get_latest(
+    creds: DexcomCredentials = Body(...),
+):
+    """Return the most recent Dexcom reading using provided credentials (no DB writes)."""
+    try:
+        dexcom_service = DexcomService()
+        result = await dexcom_service.get_current_glucose_stateless(username=creds.username, password=creds.password, ous=creds.ous or False)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Dexcom reading available")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Stateless get latest Dexcom failed for username {creds.username}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch latest Dexcom reading")
