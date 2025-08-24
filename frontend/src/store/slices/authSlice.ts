@@ -1,3 +1,41 @@
+import jwtDecode from 'jwt-decode';
+// Helper to decode JWT and extract minimal user info
+function extractUserFromToken(token: string): Partial<User> | null {
+  try {
+    const decoded: any = jwtDecode(token);
+    // Map JWT claims to User fields as best as possible
+    return {
+      email: decoded.email || decoded.sub || '',
+      first_name: decoded.given_name || decoded.first_name || '',
+      last_name: decoded.family_name || decoded.last_name || '',
+      id: decoded.sub || '',
+      // Add more fields as needed
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Thunk to get current user, fallback to JWT decode if /auth/me 404s
+export const getCurrentUser = createAsyncThunk(
+  'auth/getCurrentUser',
+  async (token: string, { rejectWithValue }) => {
+    try {
+      const userRes = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return userRes.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        // Fallback: decode JWT for minimal user info
+        const user = extractUserFromToken(token);
+        if (user) return user;
+        return rejectWithValue('Could not extract user info from token');
+      }
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch user');
+    }
+  }
+);
 // Social login thunk
 export const socialLogin = createAsyncThunk(
   'auth/socialLogin',
@@ -36,12 +74,18 @@ export const socialLogin = createAsyncThunk(
         global.dispatch(setRefreshToken(refreshToken));
       }
 
-      // Fetch user profile
-      const userRes = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      return { user: userRes.data, token, refreshToken };
+      // Fetch user profile (handle stateless mode)
+      let user;
+      try {
+        user = await (await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })).data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          user = extractUserFromToken(token);
+        } else {
+          throw error;
+        }
+      }
+      return { user, token, refreshToken };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Social login failed');
     }
@@ -114,12 +158,18 @@ export const login = createAsyncThunk(
         global.dispatch(setRefreshToken(refreshToken));
       }
 
-      // Fetch user profile
-      const userRes = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      return { user: userRes.data, token, refreshToken };
+      // Fetch user profile (handle stateless mode)
+      let user;
+      try {
+        user = await (await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })).data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          user = extractUserFromToken(token);
+        } else {
+          throw error;
+        }
+      }
+      return { user, token, refreshToken };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Login failed');
     }
@@ -173,12 +223,18 @@ export const register = createAsyncThunk(
         global.dispatch(setRefreshToken(refreshToken));
       }
 
-      // Fetch user profile
-      const userRes = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      return { user: userRes.data, token, refreshToken };
+      // Fetch user profile (handle stateless mode)
+      let user;
+      try {
+        user = await (await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })).data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          user = extractUserFromToken(token);
+        } else {
+          throw error;
+        }
+      }
+      return { user, token, refreshToken };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Registration failed');
     }
