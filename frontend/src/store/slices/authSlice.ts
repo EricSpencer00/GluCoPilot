@@ -12,7 +12,6 @@ function extractUserFromToken(token: string): Partial<User> | null {
       email,
       first_name: decoded.given_name || decoded.first_name || '',
       last_name: decoded.family_name || decoded.last_name || '',
-      // Add more fields as needed
     };
   } catch (e) {
     return null;
@@ -83,7 +82,16 @@ export const socialLogin = createAsyncThunk(
         user = await (await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })).data;
       } catch (error: any) {
         if (error.response?.status === 404) {
-          user = extractUserFromToken(token);
+          // If backend doesn't have a user record yet, try to decode tokens.
+          const decodedAccess = extractUserFromToken(token);
+          const decodedIdToken = extractUserFromToken(idToken);
+          // Debug: show what we could decode from access and id tokens
+          // eslint-disable-next-line no-console
+          console.debug('socialLogin token decode', { hasAccessToken: !!token, hasIdToken: !!idToken, decodedAccess, decodedIdToken });
+          user = decodedAccess || decodedIdToken || null;
+          if (!user) {
+            return rejectWithValue('Could not extract user info from token');
+          }
         } else {
           throw error;
         }
