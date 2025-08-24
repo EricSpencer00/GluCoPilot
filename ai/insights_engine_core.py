@@ -7,6 +7,7 @@ import math
 import random
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+from typing import Dict, Any  # Ensure explicit import for type hints
 
 from core.config import settings
 from models.user import User
