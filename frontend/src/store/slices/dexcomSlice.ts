@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../../services/secureStorage';
 
 interface DexcomState {
   isConnected: boolean;
@@ -20,13 +21,21 @@ export const loginToDexcom = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await api.post('/auth/connect-dexcom', {
+      // Use stateless endpoint
+      const response = await api.post('/glucose/stateless/sync', {
         username,
         password,
-        ous: false // Default to US servers
+        ous: false
       });
-      
-      return response.data;
+
+      if (response.data?.readings) {
+        // Persist creds securely on device for future stateless calls
+        await secureStorage.setItem(DEXCOM_USERNAME_KEY, username);
+        await secureStorage.setItem(DEXCOM_PASSWORD_KEY, password);
+        await secureStorage.setItem(DEXCOM_OUS_KEY, 'false');
+        return { success: true, message: 'Connected', new_readings: response.data.readings.length };
+      }
+      return rejectWithValue('Unexpected response from Dexcom stateless sync');
     } catch (error: any) {
       console.error("Dexcom connection error:", error);
       return rejectWithValue(error.response?.data?.detail || 'Dexcom connection failed');

@@ -147,9 +147,16 @@ async def connect_dexcom(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Connect Dexcom account to user profile (if DB enabled). If stateless, reject storing passwords."""
+    """Connect Dexcom account to user profile (if DB enabled). Deprecated for stateless deployments.
+
+    In stateless mode, storing third-party credentials on the server is disabled. Use the
+    stateless endpoints under `/api/v1/glucose/stateless/*` which accept credentials per-call
+    and do not persist them on the server. This avoids storing Dexcom passwords and simplifies
+    compliance and deployment.
+    """
     if not settings.USE_DATABASE:
-        raise HTTPException(status_code=400, detail="Dexcom credential storage disabled in stateless mode")
+        raise HTTPException(status_code=410, detail="Deprecated in stateless mode. Use /api/v1/glucose/stateless/sync or /api/v1/glucose/stateless/latest instead.")
+
     try:
         encrypted_password = encrypt_password(credentials.password)
         current_user.dexcom_username = credentials.username
