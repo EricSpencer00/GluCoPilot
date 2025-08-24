@@ -12,18 +12,32 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///backend/glucopilot.db"
     DATABASE_ECHO: bool = False
+    # Allow disabling DB usage for stateless deployments
+    USE_DATABASE: bool = os.getenv("USE_DATABASE", "false").lower() in ("1", "true", "yes")
     
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Apple Sign In
+    APPLE_CLIENT_ID: str = os.getenv("APPLE_CLIENT_ID", "")
+    
+    # Dexcom Official API (OAuth2)
+    DEXCOM_CLIENT_ID: str = os.getenv("DEXCOM_CLIENT_ID", "")
+    DEXCOM_CLIENT_SECRET: str = os.getenv("DEXCOM_CLIENT_SECRET", "")
+    DEXCOM_REDIRECT_URI: str = os.getenv("DEXCOM_REDIRECT_URI", "")
+    DEXCOM_ENV: str = os.getenv("DEXCOM_ENV", "sandbox")  # 'sandbox' or 'production'
+    DEXCOM_API_BASE: str = os.getenv(
+        "DEXCOM_API_BASE",
+        "https://sandbox-api.dexcom.com"  # production: https://api.dexcom.com
+    )
     
     # API Configuration
     API_HOST: str = "0.0.0.0"  # Allow connections from any IP
     API_PORT: int = 8000
-    # CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:19006,exp://,http://192.168.1.36:8000,exp://192.168.1.36:19000,http://localhost:19000,http://localhost:19001,http://localhost:19002,*"
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     
-    # Dexcom
+    # Dexcom legacy (pydexcom) placeholders
     DEXCOM_USERNAME: str = ""
     DEXCOM_PASSWORD: str = ""
     DEXCOM_OUS: bool = False
@@ -70,6 +84,5 @@ settings = Settings()
 if settings.ENVIRONMENT.lower() == 'production':
     if settings.SECRET_KEY == "your-secret-key-change-this-in-production":
         raise RuntimeError("SECRET_KEY must be set in production")
-    # If not explicitly set, default CORS to empty in production (supply via env)
     if settings.CORS_ORIGINS == "*":
         settings.CORS_ORIGINS = ""
