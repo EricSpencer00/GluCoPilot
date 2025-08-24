@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../../services/secureStorage';
+import { fetchDexcomTrends } from '../../services/dexcomTrendsService';
 
 // Interfaces
 interface GlucoseReading {
@@ -46,6 +47,37 @@ export const fetchGlucoseData = createAsyncThunk(
       const days = Math.max(1, Math.ceil(hours / 24));
       console.log(`Fetching glucose data for ${hours} hours (${days} days)`);
 
+      // If we have Dexcom credentials stored on device, prefer stateless endpoints
+      const username = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+      const password = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+      const ousRaw = await secureStorage.getItem(DEXCOM_OUS_KEY);
+      const ous = ousRaw === 'true' || ousRaw === '1';
+
+      if (username && password) {
+        console.log('Using stateless Dexcom endpoints to fetch readings');
+        // Call stateless sync to fetch readings (no DB writes)
+        const syncRes = await api.post('/api/v1/glucose/stateless/sync', { username, password, ous, hours });
+        const readings = syncRes.data?.readings || [];
+        // Assume readings are ordered newest first; pick first as latest if available
+        const latest_reading = readings && readings.length > 0 ? readings[0] : null;
+        // Get trends/stats via the trends service (it will include creds if available)
+        let stats = null;
+        try {
+          stats = await fetchDexcomTrends(days);
+        } catch (e) {
+          console.warn('Failed to fetch Dexcom trends:', e);
+          stats = null;
+        }
+
+        console.log(`Fetched ${readings.length} stateless readings`);
+        return {
+          readings,
+          latest_reading,
+          stats,
+        };
+      }
+
+      // Fallback: server-backed endpoints that rely on a DB
       const [readingsRes, latestRes, statsRes] = await Promise.all([
         api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
         api.get('/api/v1/glucose/latest'),
