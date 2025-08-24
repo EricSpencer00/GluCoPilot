@@ -77,20 +77,31 @@ export const fetchGlucoseData = createAsyncThunk(
         };
       }
 
-      // Fallback: server-backed endpoints that rely on a DB
-      const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
-        api.get('/api/v1/glucose/latest'),
-        api.get('/api/v1/glucose/stats', { params: { days } }),
-      ]);
-
-      console.log(`Fetched ${readingsRes.data?.length || 0} readings`);
-      
+      // No Dexcom credentials available on device. In stateless deployments the server
+      // has no DB tables and calling the legacy endpoints will cause sqlite errors.
+      // Return an empty dataset so UI can prompt the user to connect Dexcom instead of
+      // making DB-backed requests.
+      console.warn('No Dexcom credentials found on device; skipping server DB-backed glucose requests');
       return {
-        readings: readingsRes.data || [],
-        latest_reading: latestRes.data || null,
-        stats: statsRes.data || null,
+        readings: [],
+        latest_reading: null,
+        stats: null,
       };
+
+      // Fallback: server-backed endpoints that rely on a DB
+      // const [readingsRes, latestRes, statsRes] = await Promise.all([
+      //   api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+      //   api.get('/api/v1/glucose/latest'),
+      //   api.get('/api/v1/glucose/stats', { params: { days } }),
+      // ]);
+      //
+      // console.log(`Fetched ${readingsRes.data?.length || 0} readings`);
+      //
+      // return {
+      //   readings: readingsRes.data || [],
+      //   latest_reading: latestRes.data || null,
+      //   stats: statsRes.data || null,
+      // };
     } catch (error: any) {
       console.error('Error fetching glucose data:', error.message);
       return rejectWithValue(
