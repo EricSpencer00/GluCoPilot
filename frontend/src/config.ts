@@ -6,7 +6,7 @@ const ENV = 'development'; // Force development environment for local dev
 // For iOS simulator, localhost won't work. Use your computer's local IP instead
 // For Android emulator, use 10.0.2.2 to reference your computer's localhost
 const LOCAL_IP = Platform.select({
-  ios: '192.168.1.36',
+  ios: '10.0.0.59',
   android: '10.0.2.2',
   default: 'localhost',
 });
