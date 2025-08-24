@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../../services/secureStorage';
 
 // Interfaces
 interface GlucoseReading {
@@ -73,8 +74,19 @@ export const syncDexcomData = createAsyncThunk(
     try {
       console.log('Syncing Dexcom data...');
       
-      // Trigger sync
-      await api.post('/api/v1/glucose/sync');
+      // Retrieve stored Dexcom credentials (if any)
+      const username = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+      const password = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+      const ousRaw = await secureStorage.getItem(DEXCOM_OUS_KEY);
+      const ous = ousRaw === 'true' || ousRaw === '1';
+
+      // If running stateless, the backend requires creds in the request body.
+      if (!username || !password) {
+        return rejectWithValue('Dexcom credentials not configured. Please connect Dexcom in Settings.');
+      }
+
+      // Trigger sync providing credentials
+      await api.post('/api/v1/glucose/sync', { username, password, ous });
       console.log('Sync completed, fetching updated data');
 
       // After sync, refresh data (default 24h)
