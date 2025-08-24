@@ -27,20 +27,28 @@ def verify_apple_token(id_token: str, audience: str | None = None) -> Dict:
     - Validates signature using Apple's JWKS
     - Validates iss, aud (if provided), and exp
     """
+
+    import logging
+    logger = logging.getLogger("uvicorn.error")
     try:
         headers = jwt.get_unverified_header(id_token)
     except Exception:
+        logger.error("Malformed id_token header for Apple token")
         raise AppleTokenError("Malformed id_token header")
 
     # Fetch Apple's JWKS and find matching key
     try:
         jwks = requests.get(APPLE_JWKS_URL, timeout=5).json()
+        all_kids = [k.get("kid") for k in jwks.get("keys", [])]
+        logger.info(f"Apple token kid: {headers.get('kid')}, JWKS kids: {all_kids}")
         key = next((k for k in jwks.get("keys", []) if k.get("kid") == headers.get("kid")), None)
         if not key:
-            raise AppleTokenError("No matching Apple public key")
+            logger.error(f"No matching Apple public key for kid {headers.get('kid')}. JWKS kids: {all_kids}")
+            raise AppleTokenError(f"No matching Apple public key for kid {headers.get('kid')}")
     except AppleTokenError:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to fetch Apple public keys: {e}")
         raise AppleTokenError("Failed to fetch Apple public keys")
 
     # Verify signature manually
