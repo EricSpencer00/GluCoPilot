@@ -2,8 +2,6 @@ from typing import List, Dict, Any, Optional, Union
 import json
 from datetime import datetime, timedelta
 import asyncio
-import numpy as np
-import pandas as pd
 from sqlalchemy.orm import Session
 
 from models.user import User
@@ -26,11 +24,21 @@ class PredictionService:
         self.initialized = False
     
     async def initialize(self):
-        """Initialize prediction service dependencies"""
+        """Initialize prediction service dependencies (optional for lightweight engine)"""
         if self.initialized:
             return
         
-        await self.ai_engine.initialize()
+        # Only initialize if the engine exposes an initialize method
+        try:
+            init_attr = getattr(self.ai_engine, "initialize", None)
+            if callable(init_attr):
+                if asyncio.iscoroutinefunction(init_attr):
+                    await init_attr()
+                else:
+                    init_attr()
+        except Exception as e:
+            logger.warning(f"AI engine optional initialize skipped: {e}")
+        
         self.initialized = True
         logger.info("Prediction service initialized")
     
