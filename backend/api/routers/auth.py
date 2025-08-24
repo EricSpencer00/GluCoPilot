@@ -42,7 +42,9 @@ async def social_login(
 
     apple_user_id = None
     if data.provider == 'apple':
+        logger.info(f"Apple id_token: {credentials.credentials}")
         claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
+        logger.info(f"Apple token claims: {claims}")
         apple_user_id = claims.get('sub')
         # Only check email match if both are present
         if claims.get("email") and data.email:
