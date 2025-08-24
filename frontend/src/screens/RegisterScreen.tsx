@@ -40,16 +40,9 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   // Apple only: No Google Auth
 
   const onSubmit = async () => {
+    // Switch registration to Apple-only flow
     if (!disclaimerAccepted) return;
-    if (!email.includes('@')) {
-      alert('Please enter a valid email address.');
-      return;
-    }
-    if (password.length < 6) {
-      alert('Password must be at least 6 characters long.');
-      return;
-    }
-    await dispatch(register({ email, password, first_name: firstName, last_name: lastName }) as any);
+    await handleAppleSignIn();
   };
 
   // Apple only: No Google Social Login
@@ -62,7 +55,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      const idToken = credential.identityToken;
+      const idToken = credential.identityToken as string;
       const firstName = credential.fullName?.givenName || '';
       const lastName = credential.fullName?.familyName || '';
       const userEmail = credential.email || '';
@@ -85,21 +78,11 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
           <TextInput label="Password" value={password} onChangeText={setPassword} secureTextEntry style={styles.input} />
           {error ? <HelperText type="error" visible={true}>{error}</HelperText> : null}
           <Button mode="contained" onPress={onSubmit} loading={isLoading} style={styles.button} disabled={!disclaimerAccepted}>
-            Register
+            Continue with Apple
           </Button>
 
           <View style={styles.socialContainer}>
-            <Text style={styles.socialText}>Or sign up with</Text>
-            {Platform.OS === 'ios' && appleAvailable && (
-              <Button
-                mode="outlined"
-                icon="apple"
-                onPress={handleAppleSignIn}
-                style={styles.socialButton}
-              >
-                Apple
-              </Button>
-            )}
+            {/* Apple-only registration; keep secondary Apple button hidden to avoid duplicates */}
           </View>
 
           <Button onPress={() => navigation.goBack()}>Back to Login</Button>

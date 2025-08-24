@@ -6,14 +6,20 @@ export const socialLogin = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      // Call your backend social login endpoint
-      const tokenRes = await api.post('/auth/social-login', {
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        provider,
-        id_token: idToken,
-      });
+      // Call your backend social login endpoint with Apple/Google token in Authorization header
+      const tokenRes = await api.post(
+        '/auth/social-login',
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          provider,
+          id_token: idToken,
+        },
+        {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
       const token: string = tokenRes.data.access_token;
       const refreshToken: string = tokenRes.data.refresh_token;
 
