@@ -30,3 +30,8 @@ export const secureStorage = {
 
 export const AUTH_TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
+
+// Dexcom credential keys (stored securely on-device)
+export const DEXCOM_USERNAME_KEY = 'dexcom_username';
+export const DEXCOM_PASSWORD_KEY = 'dexcom_password';
+export const DEXCOM_OUS_KEY = 'dexcom_ous';

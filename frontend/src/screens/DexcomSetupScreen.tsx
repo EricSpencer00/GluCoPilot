@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Switch, Text, Headline } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import api from '../services/api';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../services/secureStorage';
 
 const DexcomSetupScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -20,25 +21,27 @@ const DexcomSetupScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      // Connect Dexcom account
-      const response = await api.post('/api/v1/auth/connect-dexcom', {
+      // Call stateless sync endpoint using provided credentials
+      const response = await api.post('/api/v1/glucose/stateless/sync', {
         username,
         password,
         ous,
       });
 
-      if (response.data.success) {
-        Alert.alert('Success', 'Dexcom account connected successfully');
+      if (response.data.readings) {
+        Alert.alert('Success', 'Dexcom account connected and initial sync completed');
 
-        // Trigger data sync
-        await api.post('/api/v1/glucose/sync');
+        // Persist credentials securely on device for future stateless calls
+        await secureStorage.setItem(DEXCOM_USERNAME_KEY, username);
+        await secureStorage.setItem(DEXCOM_PASSWORD_KEY, password);
+        await secureStorage.setItem(DEXCOM_OUS_KEY, String(ous));
 
         // Navigate back
         navigation.goBack();
       } else {
         throw new Error('Unexpected response from server');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Dexcom connection error:', error);
       Alert.alert(
         'Connection Failed',
