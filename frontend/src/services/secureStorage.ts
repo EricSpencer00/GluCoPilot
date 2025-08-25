@@ -2,6 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
+const SECURESTORE_KEY_REGEX = /^[A-Za-z0-9._-]+$/;
+
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {
     try {
@@ -25,13 +27,25 @@ export const secureStorage = {
         }
       }
 
-      // Native platforms: prefer SecureStore but fall back to AsyncStorage on error (e.g., invalid key chars)
+      // Native platforms: prefer SecureStore but don't use it for keys that contain invalid chars
+      if (!SECURESTORE_KEY_REGEX.test(key)) {
+        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        try {
+          const v2 = await AsyncStorage.getItem(key);
+          console.log(`[secureStorage] AsyncStorage.getItem fallback for ${key}: ${v2 ? 'present' : 'null'}`);
+          return v2;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.getItem fallback error', asyncErr);
+          return null;
+        }
+      }
+
       try {
         const v = await SecureStore.getItemAsync(key);
         console.log(`[secureStorage] getItem result for ${key}: ${v ? 'present' : 'null'}`);
         return v;
       } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.getItemAsync failed, falling back to AsyncStorage', secureErr);
+        console.warn('[secureStorage] SecureStore.getItemAsync failed unexpectedly, falling back to AsyncStorage', secureErr);
         try {
           const v2 = await AsyncStorage.getItem(key);
           console.log(`[secureStorage] AsyncStorage.getItem fallback for ${key}: ${v2 ? 'present' : 'null'}`);
@@ -71,7 +85,20 @@ export const secureStorage = {
         throw new Error('Failed to persist to web storage');
       }
 
-      // Native: try SecureStore first, fall back to AsyncStorage if SecureStore rejects keys or errors
+      // Native: avoid SecureStore when key contains unsupported chars
+      if (!SECURESTORE_KEY_REGEX.test(key)) {
+        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        try {
+          await AsyncStorage.setItem(key, value);
+          console.log(`[secureStorage] AsyncStorage.setItem fallback completed for ${key}`);
+          return;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.setItem fallback error', asyncErr);
+          // no-op
+        }
+        return;
+      }
+
       try {
         await SecureStore.setItemAsync(key, value, {
           keychainService: 'glucopilot.secure',
@@ -79,7 +106,7 @@ export const secureStorage = {
         console.log(`[secureStorage] SecureStore.setItemAsync completed for ${key}`);
         return;
       } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.setItemAsync failed, attempting AsyncStorage fallback', secureErr);
+        console.warn('[secureStorage] SecureStore.setItemAsync failed unexpectedly, attempting AsyncStorage fallback', secureErr);
         try {
           await AsyncStorage.setItem(key, value);
           console.log(`[secureStorage] AsyncStorage.setItem fallback completed for ${key}`);
@@ -117,6 +144,19 @@ export const secureStorage = {
         return;
       }
 
+      // Native: avoid SecureStore when key contains unsupported chars
+      if (!SECURESTORE_KEY_REGEX.test(key)) {
+        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        try {
+          await AsyncStorage.removeItem(key);
+          console.log(`[secureStorage] AsyncStorage.removeItem fallback completed for ${key}`);
+          return;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.removeItem fallback error', asyncErr);
+        }
+        return;
+      }
+
       try {
         await SecureStore.deleteItemAsync(key, {
           keychainService: 'glucopilot.secure',
@@ -124,7 +164,7 @@ export const secureStorage = {
         console.log(`[secureStorage] SecureStore.deleteItemAsync completed for ${key}`);
         return;
       } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.deleteItemAsync failed, attempting AsyncStorage fallback', secureErr);
+        console.warn('[secureStorage] SecureStore.deleteItemAsync failed unexpectedly, attempting AsyncStorage fallback', secureErr);
         try {
           await AsyncStorage.removeItem(key);
           console.log(`[secureStorage] AsyncStorage.removeItem fallback completed for ${key}`);

@@ -36,6 +36,19 @@ const DexcomSetupScreen = ({ navigation }) => {
         await secureStorage.setItem(DEXCOM_PASSWORD_KEY, password);
         await secureStorage.setItem(DEXCOM_OUS_KEY, String(ous));
 
+        // Read-back verification to ensure credentials were persisted
+        try {
+          const vUser = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+          const vPass = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+          const vOus = await secureStorage.getItem(DEXCOM_OUS_KEY);
+          console.log('Post-persist stored dexcom check:', { hasUser: !!vUser, hasPass: !!vPass, ous: vOus });
+          if (!vUser || !vPass) {
+            Alert.alert('Warning', 'Dexcom connected but credentials could not be saved on this device. Please try again or check app storage permissions.');
+          }
+        } catch (e) {
+          console.error('Error verifying stored Dexcom credentials:', e);
+        }
+
         // Navigate back
         navigation.goBack();
       } else {

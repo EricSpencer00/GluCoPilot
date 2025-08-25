@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Button, Text, Card, HelperText } from 'react-native-paper';
@@ -9,7 +8,7 @@ import DisclaimerModal from '../components/DisclaimerModal';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
 
-export const RegisterScreen: React.FC<any> = () => {
+export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const dispatch = useDispatch();
   const { isLoading, error } = useSelector((state: RootState) => state.auth);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
@@ -63,6 +62,19 @@ export const RegisterScreen: React.FC<any> = () => {
       const lastName = credential.fullName?.familyName || '';
       const userEmail = credential.email || '';
       await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken }) as any);
+      // If socialLogin resulted in a new registration, navigate user to Dexcom connect flow
+      // We check the auth state after dispatch to avoid adding coupling in the thunk
+      setTimeout(async () => {
+        try {
+          const state = (await import('../store')).default.getState();
+          const isNew = state.auth?.isNewRegistration;
+          if (isNew) {
+            navigation.navigate('Profile', { screen: 'DexcomLogin', params: { fromRegistration: true } });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 250);
     } catch (error) {
       console.error('Apple Sign-In failed', error);
       alert('Apple Sign-In failed.');

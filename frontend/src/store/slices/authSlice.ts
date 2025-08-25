@@ -78,6 +78,7 @@ export const socialLogin = createAsyncThunk(
 
       // Fetch user profile (handle stateless mode)
       let user;
+      let isNewRegistration = false;
       try {
         user = await (await api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })).data;
       } catch (error: any) {
@@ -92,11 +93,13 @@ export const socialLogin = createAsyncThunk(
           if (!user) {
             return rejectWithValue('Could not extract user info from token');
           }
+          // Mark this as a new registration flow so UI can prompt Dexcom connection
+          isNewRegistration = true;
         } else {
           throw error;
         }
       }
-      return { user, token, refreshToken };
+      return { user, token, refreshToken, isNewRegistration };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Social login failed');
     }
@@ -325,6 +328,7 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.refreshToken = action.payload.refreshToken;
+      state.isNewRegistration = action.payload.isNewRegistration || false;
     });
     builder.addCase(socialLogin.rejected, (state, action) => {
       state.isLoading = false;
