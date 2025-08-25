@@ -25,9 +25,22 @@ export const secureStorage = {
         }
       }
 
-      const v = await SecureStore.getItemAsync(key);
-      console.log(`[secureStorage] getItem result for ${key}: ${v ? 'present' : 'null'}`);
-      return v;
+      // Native platforms: prefer SecureStore but fall back to AsyncStorage on error (e.g., invalid key chars)
+      try {
+        const v = await SecureStore.getItemAsync(key);
+        console.log(`[secureStorage] getItem result for ${key}: ${v ? 'present' : 'null'}`);
+        return v;
+      } catch (secureErr) {
+        console.warn('[secureStorage] SecureStore.getItemAsync failed, falling back to AsyncStorage', secureErr);
+        try {
+          const v2 = await AsyncStorage.getItem(key);
+          console.log(`[secureStorage] AsyncStorage.getItem fallback for ${key}: ${v2 ? 'present' : 'null'}`);
+          return v2;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.getItem fallback error', asyncErr);
+          return null;
+        }
+      }
     } catch (e) {
       console.error('[secureStorage] getItem error for', key, e);
       return null;
@@ -58,10 +71,24 @@ export const secureStorage = {
         throw new Error('Failed to persist to web storage');
       }
 
-      await SecureStore.setItemAsync(key, value, {
-        keychainService: 'glucopilot.secure',
-      });
-      console.log(`[secureStorage] setItem completed for ${key}`);
+      // Native: try SecureStore first, fall back to AsyncStorage if SecureStore rejects keys or errors
+      try {
+        await SecureStore.setItemAsync(key, value, {
+          keychainService: 'glucopilot.secure',
+        });
+        console.log(`[secureStorage] SecureStore.setItemAsync completed for ${key}`);
+        return;
+      } catch (secureErr) {
+        console.warn('[secureStorage] SecureStore.setItemAsync failed, attempting AsyncStorage fallback', secureErr);
+        try {
+          await AsyncStorage.setItem(key, value);
+          console.log(`[secureStorage] AsyncStorage.setItem fallback completed for ${key}`);
+          return;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.setItem fallback error', asyncErr);
+          // no-op
+        }
+      }
     } catch (e) {
       console.error('[secureStorage] setItem error for', key, e);
       // no-op
@@ -89,10 +116,23 @@ export const secureStorage = {
         }
         return;
       }
-      await SecureStore.deleteItemAsync(key, {
-        keychainService: 'glucopilot.secure',
-      });
-      console.log(`[secureStorage] removeItem completed for ${key}`);
+
+      try {
+        await SecureStore.deleteItemAsync(key, {
+          keychainService: 'glucopilot.secure',
+        });
+        console.log(`[secureStorage] SecureStore.deleteItemAsync completed for ${key}`);
+        return;
+      } catch (secureErr) {
+        console.warn('[secureStorage] SecureStore.deleteItemAsync failed, attempting AsyncStorage fallback', secureErr);
+        try {
+          await AsyncStorage.removeItem(key);
+          console.log(`[secureStorage] AsyncStorage.removeItem fallback completed for ${key}`);
+          return;
+        } catch (asyncErr) {
+          console.error('[secureStorage] AsyncStorage.removeItem fallback error', asyncErr);
+        }
+      }
     } catch (e) {
       console.error('[secureStorage] removeItem error for', key, e);
       // no-op
