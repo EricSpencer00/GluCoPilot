@@ -1,5 +1,4 @@
-
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from services.auth import get_current_active_user
 from core.database import get_db
@@ -9,6 +8,7 @@ from models.insulin import Insulin
 from models.food import Food
 from ai.insights_engine import AIInsightsEngine
 from schemas.recommendations import RecommendationOut
+from core.config import settings
 
 router = APIRouter()
 
@@ -20,6 +20,10 @@ async def get_recommendations(
     db: Session = Depends(get_db)
 ):
     """Return 5 recent AI-generated recommendations and available endpoints for the authenticated user."""
+    # If database usage is disabled, return 410 Gone with instructions to use client-side recommendations or enable DB
+    if not settings.USE_DATABASE:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Database disabled in stateless mode. Enable a database or fetch recommendations client-side.")
+
     ai_engine = AIInsightsEngine()
     # Gather user data (last 24h glucose, last 50 insulin, last 50 food)
     glucose_data = db.query(GlucoseReading).filter(GlucoseReading.user_id == current_user.id).order_by(GlucoseReading.timestamp.desc()).limit(288).all()
