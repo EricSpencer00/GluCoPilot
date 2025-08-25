@@ -1,26 +1,20 @@
-from backend.services.auth import get_current_active_user
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from core.database import get_db
-from core.models import User
-from services.dexcom import DexcomService
-from schemas.dexcom import DexcomLoginRequest, DexcomLoginResponse
+from fastapi import APIRouter, HTTPException, Depends, status
+from services.auth import get_current_user
+from schemas.dexcom import DexcomCredentials, DexcomLoginResponse
+from pydexcom import Dexcom
 
-router = APIRouter()
+router = APIRouter(prefix="/dexcom", tags=["Dexcom"])  
 
 @router.post("/login", response_model=DexcomLoginResponse)
-def dexcom_login(
-    login_request: DexcomLoginRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def dexcom_login(
+    body: DexcomCredentials,
+    _user=Depends(get_current_user),
 ):
-    """Login to Dexcom and fetch initial data."""
+    """Validate Dexcom credentials (stateless). Does not persist anything."""
     try:
-        dexcom_service = DexcomService()
-        dexcom_service.authenticate(
-            username=login_request.username, password=login_request.password
-        )
-        # Optionally fetch initial data here
+        client = Dexcom(username=body.username, password=body.password, ous=body.ous or False)
+        # Lightweight call to ensure credentials/session are valid
+        _ = client.get_current_glucose_reading()
         return {"message": "Dexcom login successful"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Dexcom login failed: {str(e)}")

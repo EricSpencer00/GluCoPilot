@@ -1,8 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/api';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../../services/secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AI_RECOMMENDATION_FETCH_INTERVAL } from '../../constants/ai';
 import { getDetailedInsight } from '../../services/insightsService';
+import api from '../../services/api';
 
 // Interfaces
 interface Recommendation {
@@ -50,28 +51,38 @@ export const fetchRecommendations = createAsyncThunk(
       const lastFetchStr = await AsyncStorage.getItem('ai_recommendations_last_fetch');
       const lastFetch = lastFetchStr ? parseInt(lastFetchStr, 10) : 0;
       if (now - lastFetch < AI_RECOMMENDATION_FETCH_INTERVAL) {
-        // Use cached recommendations if available
+        const cached = await AsyncStorage.getItem('ai_recommendations_cache');
+        if (cached) return JSON.parse(cached);
+        return [];
+      }
+
+      // Require on-device Dexcom creds to call backend stateless AI endpoint
+      const username = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+      const password = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+      const ousFlag = (await secureStorage.getItem(DEXCOM_OUS_KEY)) === 'true';
+      if (!username || !password) {
+        console.warn('No Dexcom credentials on device — skipping backend AI recommendations');
         const cached = await AsyncStorage.getItem('ai_recommendations_cache');
         if (cached) {
+          await AsyncStorage.setItem('ai_recommendations_last_fetch', now.toString());
           return JSON.parse(cached);
         }
         return [];
       }
-      const response = await api.get('/api/v1/recommendations/recommendations');
+
+      const payload = { username, password, ous: !!ousFlag };
+      const response = await api.post('/api/v1/recommendations/stateless', payload);
+
+      // Cache and return
       await AsyncStorage.setItem('ai_recommendations_last_fetch', now.toString());
-      // Format recommendations for frontend: split title/content if needed
-      let recommendations = response.data.recommendations;
-      // No string fallback needed; backend always returns array of objects
+      const recommendations = response.data.recommendations || response.data || [];
       await AsyncStorage.setItem('ai_recommendations_cache', JSON.stringify(recommendations));
       return recommendations;
     } catch (error: any) {
-      console.error('Error fetching AI recommendations:', error.message);
-      // On error, try to use cache
+      console.error('Error fetching AI recommendations from backend:', error?.message || error);
       const cached = await AsyncStorage.getItem('ai_recommendations_cache');
-      if (cached) {
-        return JSON.parse(cached);
-      }
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch recommendations');
+      if (cached) return JSON.parse(cached);
+      return rejectWithValue('Failed to fetch recommendations');
     }
   }
 );

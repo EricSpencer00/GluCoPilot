@@ -27,7 +27,7 @@ security = HTTPBearer()
 class SocialLoginRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
-    email: str
+    email: str | None = None
     provider: str  # 'apple' or 'google' (apple preferred)
     id_token: str
 
@@ -38,12 +38,21 @@ async def social_login(
     db: Session = Depends(get_db)
 ):
     """Authenticate via Apple/Google. If USE_DATABASE is False, do not persist users; just mint app JWT."""
-    logger.info(f"Social login attempt: {data.email} via {data.provider}")
+    logger.info(f"Social login attempt: {data.email or '[no email]'} via {data.provider}")
 
+    apple_user_id = None
     if data.provider == 'apple':
+        logger.info(f"Apple id_token: {credentials.credentials}")
         claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
-        if claims.get("email") and claims["email"].lower() != data.email.lower():
-            raise HTTPException(status_code=401, detail="Apple email mismatch")
+        logger.info(f"Apple token claims: {claims}")
+        apple_user_id = claims.get('sub')
+        # Only check email match if both are present
+        if claims.get("email") and data.email:
+            if claims["email"].lower() != data.email.lower():
+                raise HTTPException(status_code=401, detail="Apple email mismatch")
+        # If no email provided, set from claims if available
+        if not data.email and claims.get("email"):
+            data.email = claims["email"]
     else:
         # Basic Google id_token verification for compatibility
         token = data.id_token
@@ -63,9 +72,10 @@ async def social_login(
         else:
             raise HTTPException(status_code=400, detail="Unsupported token format for Google")
 
+
     # If stateless, mint app token without DB
     if not settings.USE_DATABASE:
-        subject = data.email
+        subject = data.email or apple_user_id
         access_token = create_access_token(data={"sub": subject})
         refresh_token = create_access_token(data={"sub": subject, "type": "refresh"}, expires_delta=timedelta(days=7))
         return {
@@ -76,11 +86,23 @@ async def social_login(
         }
 
     # Otherwise, persist/update user in DB
-    user = db.query(User).filter(User.email == data.email).first()
+    user = None
+    if data.provider == 'apple':
+        # Try to find user by email first, then by Apple user ID (sub)
+        if data.email:
+            user = db.query(User).filter(User.email == data.email).first()
+        if not user and apple_user_id:
+            user = db.query(User).filter(User.username == apple_user_id).first()
+    else:
+        if data.email:
+            user = db.query(User).filter(User.email == data.email).first()
+
     if not user:
+        # For Apple, use sub as username if available
+        username = apple_user_id if data.provider == 'apple' and apple_user_id else (data.email or "")
         user = User(
-            username=data.email,
-            email=data.email,
+            username=username,
+            email=data.email or "",
             first_name=data.first_name or "",
             last_name=data.last_name or "",
             is_active=True,
@@ -125,9 +147,16 @@ async def connect_dexcom(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Connect Dexcom account to user profile (if DB enabled). If stateless, reject storing passwords."""
+    """Connect Dexcom account to user profile (if DB enabled). Deprecated for stateless deployments.
+
+    In stateless mode, storing third-party credentials on the server is disabled. Use the
+    stateless endpoints under `/api/v1/glucose/stateless/*` which accept credentials per-call
+    and do not persist them on the server. This avoids storing Dexcom passwords and simplifies
+    compliance and deployment.
+    """
     if not settings.USE_DATABASE:
-        raise HTTPException(status_code=400, detail="Dexcom credential storage disabled in stateless mode")
+        raise HTTPException(status_code=410, detail="Deprecated in stateless mode. Use /api/v1/glucose/stateless/sync or /api/v1/glucose/stateless/latest instead.")
+
     try:
         encrypted_password = encrypt_password(credentials.password)
         current_user.dexcom_username = credentials.username
@@ -138,3 +167,28 @@ async def connect_dexcom(
     except Exception as e:
         logger.error(f"Failed to connect Dexcom: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to connect Dexcom account")
+
+@router.get('/me')
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Return current user profile. In stateless mode return a minimal payload so clients can use it."""
+    # If DB is enabled, current_user will be a User instance and is suitable to return
+    if settings.USE_DATABASE:
+        return current_user
+
+    # Stateless mode: current_user is a SimpleUser with minimal attributes.
+    # Construct a minimal response compatible with frontend expectations (id and email at minimum).
+    return {
+        "id": 0,
+        "username": getattr(current_user, "username", ""),
+        "email": getattr(current_user, "email", getattr(current_user, "username", "")),
+        "first_name": getattr(current_user, "first_name", ""),
+        "last_name": getattr(current_user, "last_name", ""),
+        "is_active": getattr(current_user, "is_active", True),
+        "is_verified": getattr(current_user, "is_verified", True),
+        "created_at": datetime.utcnow(),
+        "last_login": None,
+        "target_glucose_min": None,
+        "target_glucose_max": None,
+        "insulin_carb_ratio": None,
+        "insulin_sensitivity_factor": None,
+    }

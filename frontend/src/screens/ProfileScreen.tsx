@@ -12,6 +12,7 @@ import { useAppDispatch } from '../hooks/useAppDispatch';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import axios from 'axios';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_OUS_KEY } from '../services/secureStorage';
 
 type ProfileScreenNavigationProp = CompositeNavigationProp<
   StackNavigationProp<AuthStackParamList, 'Login'>,
@@ -38,7 +39,27 @@ const ProfileScreen: React.FC = () => {
     totalFoodEntries: 0,
     totalActivityLogs: 0
   });
+
+  // Stored Dexcom credentials on device (used when server is stateless)
+  const [storedDexcomUsername, setStoredDexcomUsername] = useState<string | null>(null);
+  const [storedDexcomOUS, setStoredDexcomOUS] = useState<boolean | null>(null);
   
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const su = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+        const ousRaw = await secureStorage.getItem(DEXCOM_OUS_KEY);
+        if (!mounted) return;
+        setStoredDexcomUsername(su || null);
+        setStoredDexcomOUS(ousRaw === 'true' || ousRaw === '1' ? true : ousRaw === 'false' || ousRaw === '0' ? false : null);
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   // Apple Health upload state
   const [uploading, setUploading] = useState(false);
   
@@ -226,8 +247,8 @@ const ProfileScreen: React.FC = () => {
               <Text variant="bodySmall">Insulin:Carb Ratio: {user.insulin_carb_ratio ? '1:' + user.insulin_carb_ratio : 'N/A'}</Text>
               <Text variant="bodySmall">Correction Factor: {user.insulin_sensitivity_factor || 'N/A'}</Text>
               <Divider style={{marginVertical: 8}} />
-              <Text variant="bodySmall">Dexcom Username: {user.dexcom_username || 'N/A'}</Text>
-              <Text variant="bodySmall">Dexcom OUS: {user.dexcom_ous ? 'Yes' : 'No'}</Text>
+              <Text variant="bodySmall">Dexcom Username: {user.dexcom_username || storedDexcomUsername || 'N/A'}</Text>
+              <Text variant="bodySmall">Dexcom OUS: {typeof user.dexcom_ous !== 'undefined' ? (user.dexcom_ous ? 'Yes' : 'No') : (storedDexcomOUS ? 'Yes' : storedDexcomOUS === false ? 'No' : 'N/A')}</Text>
               <Text variant="bodySmall">MyFitnessPal Username: {user.myfitnesspal_username || 'N/A'}</Text>
               <Text variant="bodySmall">Apple Health: {user.apple_health_authorized ? 'Connected' : 'Not Connected'}</Text>
               <Text variant="bodySmall">Google Fit: {user.google_fit_authorized ? 'Connected' : 'Not Connected'}</Text>

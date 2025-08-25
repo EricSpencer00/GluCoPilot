@@ -1,5 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { Alert, Platform } from 'react-native';
 import api from '../../services/api';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../../services/secureStorage';
+import { fetchDexcomTrends } from '../../services/dexcomTrendsService';
 
 // Interfaces
 interface GlucoseReading {
@@ -45,19 +48,66 @@ export const fetchGlucoseData = createAsyncThunk(
       const days = Math.max(1, Math.ceil(hours / 24));
       console.log(`Fetching glucose data for ${hours} hours (${days} days)`);
 
-      const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
-        api.get('/api/v1/glucose/latest'),
-        api.get('/api/v1/glucose/stats', { params: { days } }),
-      ]);
+      // If we have Dexcom credentials stored on device, prefer stateless endpoints
+      const username = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+      const password = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+      const ousRaw = await secureStorage.getItem(DEXCOM_OUS_KEY);
+      const ous = ousRaw === 'true' || ousRaw === '1';
 
-      console.log(`Fetched ${readingsRes.data?.length || 0} readings`);
-      
+      // Debug: log presence of stored Dexcom credentials (do not print full secrets)
+      console.log('stored dexcom creds presence:', { hasUser: !!username, hasPass: !!password, ous });
+      console.log('masked dexcom username:', username ? `${username.slice(0,3)}***` : null);
+
+      if (username && password) {
+        console.log('Using stateless Dexcom endpoints to fetch readings');
+        // Call stateless sync to fetch readings (no DB writes)
+        console.log('Calling stateless sync (masked user):', username ? `${username.slice(0,3)}***` : null);
+        const syncRes = await api.post('/api/v1/glucose/stateless/sync', { username, password, ous, hours });
+        const readings = syncRes.data?.readings || [];
+        // Assume readings are ordered newest first; pick first as latest if available
+        const latest_reading = readings && readings.length > 0 ? readings[0] : null;
+        // Get trends/stats via the trends service (it will include creds if available)
+        let stats = null;
+        try {
+          stats = await fetchDexcomTrends(days);
+        } catch (e) {
+          console.warn('Failed to fetch Dexcom trends:', e);
+          stats = null;
+        }
+
+        console.log(`Fetched ${readings.length} stateless readings`);
+        return {
+          readings,
+          latest_reading,
+          stats,
+        };
+      }
+
+      // No Dexcom credentials available on device. In stateless deployments the server
+      // has no DB tables and calling the legacy endpoints will cause sqlite errors.
+      // Return an empty dataset so UI can prompt the user to connect Dexcom instead of
+      // making DB-backed requests.
+      console.warn('No Dexcom credentials found on device; skipping server DB-backed glucose requests');
       return {
-        readings: readingsRes.data || [],
-        latest_reading: latestRes.data || null,
-        stats: statsRes.data || null,
+        readings: [],
+        latest_reading: null,
+        stats: null,
       };
+
+      // Fallback: server-backed endpoints that rely on a DB
+      // const [readingsRes, latestRes, statsRes] = await Promise.all([
+      //   api.get('/api/v1/glucose/readings', { params: { limit: hours * 12 } }), // ~5-min intervals
+      //   api.get('/api/v1/glucose/latest'),
+      //   api.get('/api/v1/glucose/stats', { params: { days } }),
+      // ]);
+      //
+      // console.log(`Fetched ${readingsRes.data?.length || 0} readings`);
+      //
+      // return {
+      //   readings: readingsRes.data || [],
+      //   latest_reading: latestRes.data || null,
+      //   stats: statsRes.data || null,
+      // };
     } catch (error: any) {
       console.error('Error fetching glucose data:', error.message);
       return rejectWithValue(
@@ -73,22 +123,53 @@ export const syncDexcomData = createAsyncThunk(
     try {
       console.log('Syncing Dexcom data...');
       
-      // Trigger sync
-      await api.post('/api/v1/glucose/sync');
-      console.log('Sync completed, fetching updated data');
+      // Retrieve stored Dexcom credentials (if any)
+      const username = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+      const password = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+      const ousRaw = await secureStorage.getItem(DEXCOM_OUS_KEY);
+      const ous = ousRaw === 'true' || ousRaw === '1';
 
-      // After sync, refresh data (default 24h)
-      const [readingsRes, latestRes, statsRes] = await Promise.all([
-        api.get('/api/v1/glucose/readings', { params: { limit: 24 * 12 } }),
-        api.get('/api/v1/glucose/latest'),
-        api.get('/api/v1/glucose/stats', { params: { days: 1 } }),
-      ]);
+      // Debug: surface presence and notify user if creds are missing
+      if (!username || !password) {
+        console.log('Dexcom credentials missing at syncDexcomData', { hasUser: !!username, hasPass: !!password });
+        if (Platform.OS === 'web') {
+          console.warn('Dexcom credentials not configured. Please connect Dexcom in Settings.');
+        } else {
+          Alert.alert('Dexcom not connected', 'Dexcom credentials not configured. Please connect Dexcom in Settings.');
+        }
+        return rejectWithValue('Dexcom credentials not configured. Please connect Dexcom in Settings.');
+      }
 
-      return {
-        readings: readingsRes.data || [],
-        latest_reading: latestRes.data || null,
-        stats: statsRes.data || null,
-      };
+      console.log('Calling stateless sync (masked user):', username ? `${username.slice(0,3)}***` : null);
+       
+       // Prefer stateless sync endpoint which returns readings directly (no DB writes)
+       try {
+         const statelessRes = await api.post('/api/v1/glucose/stateless/sync', { username, password, ous });
+         const readings = statelessRes.data?.readings || [];
+         const latest_reading = readings && readings.length > 0 ? readings[0] : null;
+         let stats = null;
+         try {
+           stats = await fetchDexcomTrends(1);
+         } catch (e) {
+           console.warn('Failed to fetch Dexcom trends after stateless sync:', e);
+           stats = null;
+         }
+
+         console.log('Stateless sync completed, returning readings');
+         return {
+           readings,
+           latest_reading,
+           stats,
+         };
+       } catch (statelessErr: any) {
+         // If stateless endpoint fails for some reason, surface the error to caller
+         console.error('Stateless Dexcom sync error:', statelessErr);
+         return rejectWithValue(statelessErr.response?.data?.detail || 'Failed to sync Dexcom data');
+       }
+
+      // NOTE: For DB-backed deployments the legacy flow would POST /api/v1/glucose/sync and
+      // then GET readings/latest/stats. That code is intentionally not executed in
+      // stateless deployments to avoid triggering missing-DB errors.
     } catch (error: any) {
       console.error('Error syncing Dexcom data:', error.message);
       return rejectWithValue(

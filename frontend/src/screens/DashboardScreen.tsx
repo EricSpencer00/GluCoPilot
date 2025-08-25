@@ -16,6 +16,7 @@ import { fetchGlucoseData, syncDexcomData } from '../store/slices/glucoseSlice';
 import { fetchRecommendations } from '../store/slices/aiSlice';
 import { clearNewRegistrationFlag } from '../store/slices/authSlice';
 import { styles } from '../styles/screens/DashboardScreen';
+import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY } from '../services/secureStorage';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -63,7 +64,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
         console.log('No auth token available, skipping dashboard data fetch');
         return;
       }
-      
+
       const now = Date.now();
       let shouldFetch = false;
       if (!lastSync) {
@@ -74,10 +75,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           shouldFetch = true;
         }
       }
-      
+
       if (shouldFetch && !didCancel) {
         try {
-          await dispatch(syncDexcomData() as any);
+          // Avoid attempting stateless Dexcom sync if device has no stored Dexcom credentials
+          const storedUsername = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+          const storedPassword = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+          console.log('Stored Dexcom creds check on dashboard load:', { hasUser: !!storedUsername, hasPass: !!storedPassword });
+          const hasDexcomCreds = !!(storedUsername && storedPassword);
+
+          if (hasDexcomCreds) {
+            await dispatch(syncDexcomData() as any);
+          } else {
+            console.log('No Dexcom credentials stored — skipping stateless sync');
+          }
           await loadDashboardData();
         } catch (error) {
           console.error('Error in dashboard data fetch:', error);
