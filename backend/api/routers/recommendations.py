@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Body
 from sqlalchemy.orm import Session
 from services.auth import get_current_active_user
 from core.database import get_db
@@ -9,6 +9,9 @@ from models.food import Food
 from ai.insights_engine import AIInsightsEngine
 from schemas.recommendations import RecommendationOut
 from core.config import settings
+from schemas.dexcom import DexcomCredentials
+from services.dexcom import DexcomService
+from datetime import datetime
 
 router = APIRouter()
 
@@ -62,3 +65,63 @@ async def get_recommendations(
     ]
 
     return {"recommendations": recs, "endpoints": endpoints}
+
+
+@router.post("/stateless", tags=["Recommendations"])
+async def get_recommendations_stateless(
+    creds: DexcomCredentials = Body(...),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Generate AI recommendations without using the database.
+    Fetch recent Dexcom readings using provided credentials, then run the AI engine.
+    """
+    try:
+        # Fetch recent glucose readings (no DB writes)
+        dex_service = DexcomService()
+        readings = await dex_service.sync_glucose_data_stateless(
+            username=creds.username,
+            password=creds.password,
+            ous=creds.ous or False,
+            hours=24,
+        )
+
+        # Convert to minimal objects with attributes expected by the engine
+        class _Reading:
+            def __init__(self, value, timestamp):
+                self.value = value
+                # Parse ISO timestamp to datetime when possible
+                try:
+                    self.timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00')) if isinstance(timestamp, str) else timestamp
+                except Exception:
+                    self.timestamp = datetime.utcnow()
+
+        glucose_objs = [_Reading(r.get("value"), r.get("timestamp")) for r in readings]
+
+        ai_engine = AIInsightsEngine()
+        recommendations = await ai_engine.generate_recommendations(
+            user=current_user,
+            glucose_data=glucose_objs,
+            insulin_data=[],
+            food_data=[],
+            db=None,
+        )
+
+        recs = []
+        for rec in recommendations[:5]:
+            recs.append({
+                "title": rec.get("title", ""),
+                "description": rec.get("description", ""),
+                "category": rec.get("category", "general"),
+                "priority": rec.get("priority", "medium"),
+                "confidence": rec.get("confidence", 0.8),
+                "action": rec.get("action", ""),
+                "timing": rec.get("timing", ""),
+                "context": rec.get("context", {}),
+            })
+
+        return {"recommendations": recs}
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Hide sensitive errors
+        raise HTTPException(status_code=500, detail="Failed to generate recommendations")
