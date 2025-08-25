@@ -41,7 +41,7 @@ export const secureStorage = {
       }
 
       try {
-        const v = await SecureStore.getItemAsync(key);
+        const v = await SecureStore.getItemAsync(key, { keychainService: 'glucopilot.secure' });
         console.log(`[secureStorage] getItem result for ${key}: ${v ? 'present' : 'null'}`);
         return v;
       } catch (secureErr) {
