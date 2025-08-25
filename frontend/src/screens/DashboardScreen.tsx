@@ -81,6 +81,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
           // Avoid attempting stateless Dexcom sync if device has no stored Dexcom credentials
           const storedUsername = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
           const storedPassword = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+          console.log('Stored Dexcom creds check on dashboard load:', { hasUser: !!storedUsername, hasPass: !!storedPassword });
           const hasDexcomCreds = !!(storedUsername && storedPassword);
 
           if (hasDexcomCreds) {

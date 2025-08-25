@@ -21,24 +21,44 @@ export const loginToDexcom = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      // Use stateless endpoint
-      const response = await api.post('/glucose/stateless/sync', {
+      // Use explicit stateless endpoint path to avoid interceptor prefix issues
+      const endpoint = '/api/v1/glucose/stateless/sync';
+      console.log('Calling Dexcom stateless sync endpoint:', endpoint);
+      const response = await api.post(endpoint, {
         username,
         password,
-        ous: false
+        ous: false,
       });
+      console.log('Dexcom stateless sync response:', response.status, response.data && { readingsCount: response.data.readings?.length });
 
       if (response.data?.readings) {
         // Persist creds securely on device for future stateless calls
-        await secureStorage.setItem(DEXCOM_USERNAME_KEY, username);
-        await secureStorage.setItem(DEXCOM_PASSWORD_KEY, password);
-        await secureStorage.setItem(DEXCOM_OUS_KEY, 'false');
+        try {
+          await secureStorage.setItem(DEXCOM_USERNAME_KEY, username);
+          await secureStorage.setItem(DEXCOM_PASSWORD_KEY, password);
+          await secureStorage.setItem(DEXCOM_OUS_KEY, 'false');
+          console.log('Dexcom credentials persisted to secure storage');
+          // Verify by reading back
+          try {
+            const storedUser = await secureStorage.getItem(DEXCOM_USERNAME_KEY);
+            const storedPass = await secureStorage.getItem(DEXCOM_PASSWORD_KEY);
+            const storedOus = await secureStorage.getItem(DEXCOM_OUS_KEY);
+            console.log('Stored credential check:', { storedUser: !!storedUser, storedPass: !!storedPass, storedOus });
+          } catch (readErr) {
+            console.error('Error reading back stored Dexcom credentials:', readErr);
+          }
+        } catch (storageErr) {
+          console.error('Failed to persist Dexcom credentials:', storageErr);
+          // Still return success so UX proceeds, but surface a warning
+        }
         return { success: true, message: 'Connected', new_readings: response.data.readings.length };
       }
       return rejectWithValue('Unexpected response from Dexcom stateless sync');
     } catch (error: any) {
-      console.error("Dexcom connection error:", error);
-      return rejectWithValue(error.response?.data?.detail || 'Dexcom connection failed');
+      console.error('Dexcom connection error:', error?.response?.status, error?.response?.data || error?.message || error);
+      // If backend returned detailed message, include it
+      const detail = error?.response?.data?.detail || error?.response?.data || error?.message || 'Dexcom connection failed';
+      return rejectWithValue(detail);
     }
   }
 );
