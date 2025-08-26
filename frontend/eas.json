@@ -10,6 +10,13 @@
     "preview": {
       "distribution": "internal"
     },
+    "adhoc": {
+      "ios": {
+        "distribution": "internal",
+        "enterpriseProvisioning": "adhoc",
+        "credentialsSource": "remote"
+      }
+    },
     "production": {
       "ios": {
         "distribution": "store"
