@@ -21,6 +21,13 @@ class Settings(BaseSettings):
 
     # Apple Sign In
     APPLE_CLIENT_ID: str = os.getenv("APPLE_CLIENT_ID", "")
+    APPLE_PRIVATE_KEY: str = os.getenv("APPLE_PRIVATE_KEY", "")
+    APPLE_KEY_ID: str = os.getenv("APPLE_KEY_ID", "")
+    APPLE_TEAM_ID: str = os.getenv("APPLE_TEAM_ID", "")
+
+    def get_apple_private_key(self) -> str:
+        """Return the Apple private key with newlines restored."""
+        return self.APPLE_PRIVATE_KEY.replace('\\n', '\n') if self.APPLE_PRIVATE_KEY else ""
     
     # Dexcom Official API (OAuth2)
     DEXCOM_CLIENT_ID: str = os.getenv("DEXCOM_CLIENT_ID", "")
