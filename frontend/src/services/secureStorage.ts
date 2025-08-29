@@ -1,35 +1,30 @@
-import * as SecureStore from 'expo-secure-store';
+import * as Keychain from 'react-native-keychain';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const SECURESTORE_KEY_REGEX = /^[A-Za-z0-9._-]+$/;
+const SERVICE_NAME = 'glucopilot.secure';
 
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {
     try {
       console.log(`[secureStorage] getItem key=${key} platform=${Platform.OS}`);
+      
+      // For web, use AsyncStorage only since keychain is not available
       if (Platform.OS === 'web') {
-        // Try AsyncStorage first (may not be available in all web setups), then fallback to localStorage
         try {
           const v = await AsyncStorage.getItem(key);
           console.log(`[secureStorage] AsyncStorage.getItem for ${key}: ${v ? 'present' : 'null'}`);
-          if (v !== null && v !== undefined) return v;
+          return v;
         } catch (e) {
-          console.warn('[secureStorage] AsyncStorage.getItem failed on web, falling back to localStorage', e);
-        }
-        try {
-          const v2 = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(key) : null;
-          console.log(`[secureStorage] localStorage.getItem for ${key}: ${v2 ? 'present' : 'null'}`);
-          return v2;
-        } catch (e) {
-          console.error('[secureStorage] localStorage.getItem error', e);
+          console.error('[secureStorage] AsyncStorage.getItem error on web', e);
           return null;
         }
       }
 
-      // Native platforms: prefer SecureStore but don't use it for keys that contain invalid chars
+      // Native platforms: prefer Keychain but fallback to AsyncStorage for problematic keys
       if (!SECURESTORE_KEY_REGEX.test(key)) {
-        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        console.warn(`[secureStorage] key contains unsupported characters for Keychain; using AsyncStorage fallback for key=${key}`);
         try {
           const v2 = await AsyncStorage.getItem(key);
           console.log(`[secureStorage] AsyncStorage.getItem fallback for ${key}: ${v2 ? 'present' : 'null'}`);
@@ -41,11 +36,16 @@ export const secureStorage = {
       }
 
       try {
-        const v = await SecureStore.getItemAsync(key, { keychainService: 'glucopilot.secure' });
-        console.log(`[secureStorage] getItem result for ${key}: ${v ? 'present' : 'null'}`);
-        return v;
-      } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.getItemAsync failed unexpectedly, falling back to AsyncStorage', secureErr);
+        const credentials = await Keychain.getInternetCredentials(key);
+        if (credentials && credentials.password) {
+          console.log(`[secureStorage] getItem result for ${key}: present`);
+          return credentials.password;
+        } else {
+          console.log(`[secureStorage] getItem result for ${key}: null`);
+          return null;
+        }
+      } catch (keychainErr) {
+        console.warn('[secureStorage] Keychain.getInternetCredentials failed unexpectedly, falling back to AsyncStorage', keychainErr);
         try {
           const v2 = await AsyncStorage.getItem(key);
           console.log(`[secureStorage] AsyncStorage.getItem fallback for ${key}: ${v2 ? 'present' : 'null'}`);
@@ -60,93 +60,74 @@ export const secureStorage = {
       return null;
     }
   },
+
   async setItem(key: string, value: string): Promise<void> {
     try {
       console.log(`[secureStorage] setItem key=${key} platform=${Platform.OS}`);
-      // Avoid printing secret values
+      
+      // For web, use AsyncStorage only
       if (Platform.OS === 'web') {
         try {
           await AsyncStorage.setItem(key, value);
           console.log(`[secureStorage] AsyncStorage.setItem completed (web) for ${key}`);
           return;
         } catch (e) {
-          console.warn('[secureStorage] AsyncStorage.setItem failed on web, falling back to localStorage', e);
+          console.error('[secureStorage] AsyncStorage.setItem error on web', e);
+          throw e;
         }
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem(key, value);
-            console.log(`[secureStorage] localStorage.setItem completed for ${key}`);
-            return;
-          }
-        } catch (e) {
-          console.error('[secureStorage] localStorage.setItem error', e);
-        }
-        // If both attempts failed, throw to be caught below
-        throw new Error('Failed to persist to web storage');
       }
 
-      // Native: avoid SecureStore when key contains unsupported chars
+      // Native: avoid Keychain when key contains unsupported chars
       if (!SECURESTORE_KEY_REGEX.test(key)) {
-        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        console.warn(`[secureStorage] key contains unsupported characters for Keychain; using AsyncStorage fallback for key=${key}`);
         try {
           await AsyncStorage.setItem(key, value);
           console.log(`[secureStorage] AsyncStorage.setItem fallback completed for ${key}`);
           return;
         } catch (asyncErr) {
           console.error('[secureStorage] AsyncStorage.setItem fallback error', asyncErr);
-          // no-op
+          return;
         }
-        return;
       }
 
       try {
-        await SecureStore.setItemAsync(key, value, {
-          keychainService: 'glucopilot.secure',
-        });
-        console.log(`[secureStorage] SecureStore.setItemAsync completed for ${key}`);
+        await Keychain.setInternetCredentials(key, key, value);
+        console.log(`[secureStorage] Keychain.setInternetCredentials completed for ${key}`);
         return;
-      } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.setItemAsync failed unexpectedly, attempting AsyncStorage fallback', secureErr);
+      } catch (keychainErr) {
+        console.warn('[secureStorage] Keychain.setInternetCredentials failed unexpectedly, attempting AsyncStorage fallback', keychainErr);
         try {
           await AsyncStorage.setItem(key, value);
           console.log(`[secureStorage] AsyncStorage.setItem fallback completed for ${key}`);
           return;
         } catch (asyncErr) {
           console.error('[secureStorage] AsyncStorage.setItem fallback error', asyncErr);
-          // no-op
         }
       }
     } catch (e) {
       console.error('[secureStorage] setItem error for', key, e);
-      // no-op
     }
   },
+
   async removeItem(key: string): Promise<void> {
     try {
       console.log(`[secureStorage] removeItem key=${key} platform=${Platform.OS}`);
+      
+      // For web, use AsyncStorage only
       if (Platform.OS === 'web') {
         try {
           await AsyncStorage.removeItem(key);
           console.log(`[secureStorage] AsyncStorage.removeItem completed (web) for ${key}`);
           return;
         } catch (e) {
-          console.warn('[secureStorage] AsyncStorage.removeItem failed on web, falling back to localStorage', e);
+          console.error('[secureStorage] AsyncStorage.removeItem error on web', e);
+          return;
         }
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.removeItem(key);
-            console.log(`[secureStorage] localStorage.removeItem completed for ${key}`);
-            return;
-          }
-        } catch (e) {
-          console.error('[secureStorage] localStorage.removeItem error', e);
-        }
-        return;
       }
 
-      // Native: avoid SecureStore when key contains unsupported chars
+      // Native: avoid Keychain when key contains unsupported chars
       if (!SECURESTORE_KEY_REGEX.test(key)) {
-        console.warn(`[secureStorage] key contains unsupported characters for SecureStore; using AsyncStorage fallback for key=${key}`);
+        console.warn(`[secureStorage] key contains unsupported characters for Keychain; using AsyncStorage fallback for key=${key}`);
         try {
           await AsyncStorage.removeItem(key);
           console.log(`[secureStorage] AsyncStorage.removeItem fallback completed for ${key}`);
@@ -158,13 +139,11 @@ export const secureStorage = {
       }
 
       try {
-        await SecureStore.deleteItemAsync(key, {
-          keychainService: 'glucopilot.secure',
-        });
-        console.log(`[secureStorage] SecureStore.deleteItemAsync completed for ${key}`);
+        await Keychain.resetInternetCredentials(key);
+        console.log(`[secureStorage] Keychain.resetInternetCredentials completed for ${key}`);
         return;
-      } catch (secureErr) {
-        console.warn('[secureStorage] SecureStore.deleteItemAsync failed unexpectedly, attempting AsyncStorage fallback', secureErr);
+      } catch (keychainErr) {
+        console.warn('[secureStorage] Keychain.resetInternetCredentials failed unexpectedly, attempting AsyncStorage fallback', keychainErr);
         try {
           await AsyncStorage.removeItem(key);
           console.log(`[secureStorage] AsyncStorage.removeItem fallback completed for ${key}`);
@@ -175,7 +154,6 @@ export const secureStorage = {
       }
     } catch (e) {
       console.error('[secureStorage] removeItem error for', key, e);
-      // no-op
     }
   },
 };

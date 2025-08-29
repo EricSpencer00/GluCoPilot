@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Alert } from 'react-native';
 import { Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
+import { store } from '../store/store';
 import DisclaimerModal from '../components/DisclaimerModal';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import appleAuth from '@invertase/react-native-apple-authentication';
 
 
 export const RegisterScreen: React.FC<any> = ({ navigation }) => {
@@ -17,16 +18,18 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   const onAcceptDisclaimer = () => setDisclaimerAccepted(true);
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS === 'ios') {
-        try {
-          const available = await AppleAuthentication.isAvailableAsync();
+    const checkAppleSignInAvailability = async () => {
+      try {
+        if (Platform.OS === 'ios') {
+          const available = await appleAuth.isSupported;
           setAppleAvailable(available);
-        } catch (e) {
-          setAppleAvailable(false);
         }
+      } catch (error) {
+        console.log('Apple Sign-In availability check failed', error);
+        setAppleAvailable(false);
       }
-    })();
+    };
+    checkAppleSignInAvailability();
   }, []);
 
   const onSubmit = async () => {
@@ -36,37 +39,38 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
 
   const handleAppleSignIn = async () => {
     try {
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
+      const appleAuthRequestResponse = await appleAuth.performRequest({
+        requestedOperation: appleAuth.Operation.LOGIN,
+        requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
       });
-      const idToken = credential.identityToken as string;
+
+      const { identityToken, fullName, email } = appleAuthRequestResponse;
+      const idToken = identityToken as string;
       if (!idToken) {
-        alert('Apple did not return a valid identityToken. This usually happens on a simulator or with a test Apple account. Please use a real device and a real Apple ID.');
+        Alert.alert('Error', 'Apple did not return a valid identityToken. This usually happens on a simulator or with a test Apple account. Please use a real device and a real Apple ID.');
         return;
       }
       // Check alg in header (should be RS256)
       try {
         const header = JSON.parse(atob(idToken.split('.')[0]));
         if (header.alg !== 'RS256') {
-          alert('Apple identityToken is not signed with RS256. This is not a real Apple token. Please use a real device and a real Apple ID.');
+          Alert.alert('Error', 'Apple identityToken is not signed with RS256. This is not a real Apple token. Please use a real device and a real Apple ID.');
           return;
         }
       } catch (e) {
         // Ignore header parse errors
       }
       // Always use Apple-provided info only
-      const firstName = credential.fullName?.givenName || '';
-      const lastName = credential.fullName?.familyName || '';
-      const userEmail = credential.email || '';
+      const firstName = fullName?.givenName || '';
+      const lastName = fullName?.familyName || '';
+      const userEmail = email || '';
       await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken }) as any);
       // If socialLogin resulted in a new registration, navigate user to Dexcom connect flow
       // We check the auth state after dispatch to avoid adding coupling in the thunk
       setTimeout(async () => {
         try {
-          const state = (await import('../store')).default.getState();
+          // Use the imported store directly
+          const state = store.getState();
           const isNew = state.auth?.isNewRegistration;
           if (isNew) {
             navigation.navigate('Profile', { screen: 'DexcomLogin', params: { fromRegistration: true } });
@@ -77,7 +81,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
       }, 250);
     } catch (error) {
       console.error('Apple Sign-In failed', error);
-      alert('Apple Sign-In failed.');
+      Alert.alert('Error', 'Apple Sign-In failed.');
     }
   };
 

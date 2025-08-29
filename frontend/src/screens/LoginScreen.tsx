@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Alert } from 'react-native';
 import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { login, socialLogin } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
-// import * as WebBrowser from 'expo-web-browser';
-// import * as Google from 'expo-auth-session/providers/google';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
-
-// WebBrowser.maybeCompleteAuthSession();
+import appleAuth from '@invertase/react-native-apple-authentication';
 
 export const LoginScreen: React.FC<any> = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -21,12 +15,12 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
   // Apple only: No Google Auth
 
   const onSubmit = async () => {
-    if (!email.includes('@')) {
-      alert('Please enter a valid email address.');
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      alert('Password must be at least 6 characters long.');
+    if (!password || password.length < 6) {
+      Alert.alert('Invalid Password', 'Password must be at least 6 characters long.');
       return;
     }
     await dispatch(login({ email, password }) as any);
@@ -36,20 +30,19 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
 
   const handleAppleSignIn = async () => {
     try {
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
+      const appleAuthRequestResponse = await appleAuth.performRequest({
+        requestedOperation: appleAuth.Operation.LOGIN,
+        requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
       });
-      const idToken = credential.identityToken;
-      const firstName = credential.fullName?.givenName || '';
-      const lastName = credential.fullName?.familyName || '';
-      const userEmail = credential.email || '';
-      await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken }) as any);
+
+      const { identityToken, fullName, email } = appleAuthRequestResponse;
+      const firstName = fullName?.givenName || '';
+      const lastName = fullName?.familyName || '';
+      const userEmail = email || '';
+      await dispatch(socialLogin({ firstName, lastName, email: userEmail, provider: 'apple', idToken: identityToken || '' }) as any);
     } catch (error) {
       console.error('Apple Sign-In failed', error);
-      alert('Apple Sign-In failed.');
+      Alert.alert('Error', 'Apple Sign-In failed.');
     }
   };
 
