@@ -85,7 +85,7 @@
       "/ios/"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!(react-native|@react-native|expo|@expo|@unimodules|unimodules|sentry-expo|native-base|react-clone-referenced-element|@react-native-community|expo-.*|@expo/.*|react-navigation|@react-navigation/.*|@sentry/.*|react-native-svg|react-native-chart-kit)/)"
+      "node_modules/(?!(react-native|@react-native|@unimodules|unimodules|native-base|react-clone-referenced-element|@react-native-community|react-navigation|@react-navigation/.*|@sentry/.*|react-native-svg|react-native-chart-kit)/)"
     ]
   },
   "private": true,
@@ -101,7 +101,6 @@
     "cgm",
     "health",
     "react-native",
-    "expo",
     "ai",
     "healthcare"
   ]

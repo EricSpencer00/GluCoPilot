@@ -174,7 +174,7 @@ const ProfileScreen: React.FC = () => {
       // Note: Document picker functionality needs to be implemented with react-native-document-picker
       // For now, show a placeholder message
       setSnackbarMessage('Document picker not implemented in React Native CLI version yet');
-      setShowSnackbar(true);
+      setSnackbarVisible(true);
       setUploading(false);
       return;
       
@@ -200,6 +200,7 @@ const ProfileScreen: React.FC = () => {
         });
         showSnackbar(response.data.message || 'Apple Health data imported!');
       }
+      */
     } catch (e) {
       showSnackbar('Failed to upload Apple Health file.');
     } finally {
