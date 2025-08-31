@@ -98,11 +98,6 @@ export default function LogsScreen() {
     (!search || (l.name?.toLowerCase().includes(search.toLowerCase()) || l.insulin_type?.toLowerCase().includes(search.toLowerCase()) || l.notes?.toLowerCase().includes(search.toLowerCase()) ))
   );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchLogs();
-    setRefreshing(false);
-  }, []);
   return (
     <View style={styles.container}>
       {/* Quick Add Card */}

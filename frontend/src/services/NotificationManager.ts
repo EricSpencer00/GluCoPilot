@@ -1,4 +1,4 @@
-import PushNotification from 'react-native-push-notification';
+import PushNotification, { PushNotificationObject } from 'react-native-push-notification';
 import { Platform, PermissionsAndroid } from 'react-native';
 
 export class NotificationManager {
@@ -51,15 +51,15 @@ export class NotificationManager {
   }
 
   static async scheduleGlucoseAlert(title: string, body: string) {
-    PushNotification.localNotification({
-      title,
+    const notificationOptions: PushNotificationObject = {
       message: body,
       channelId: 'default',
       playSound: true,
       soundName: 'default',
       priority: 'high',
       importance: 'high',
-    });
+    };
+    PushNotification.localNotification(notificationOptions);
   }
 
   private static handleNotificationReceived(notification: any) {

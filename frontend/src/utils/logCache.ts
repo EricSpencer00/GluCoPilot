@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOGS_KEY = 'cached_logs';
 
-export async function cacheLog(log) {
+export async function cacheLog(log: any) {
   try {
     const existing = await AsyncStorage.getItem(LOGS_KEY);
     const logs = existing ? JSON.parse(existing) : [];
