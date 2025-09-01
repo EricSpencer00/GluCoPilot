@@ -140,7 +140,7 @@ struct DataSyncView: View {
             Text(errorMessage)
         }
         .sheet(isPresented: $showDexcomSetup) {
-            DexcomSetupView(
+            DexcomSetupSheetView(
                 apiManager: apiManager,
                 dexcomManager: dexcomManager,
                 username: $dexcomUsername,
@@ -271,7 +271,7 @@ struct DataSourceCard: View {
     }
 }
 
-struct DexcomSetupView: View {
+struct DexcomSetupSheetView: View {
     let apiManager: APIManager
     let dexcomManager: DexcomManager
     @Binding var username: String
@@ -437,9 +437,11 @@ struct SyncResultsView: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        DataSyncView()
-            .environmentObject(HealthKitManager())
+struct DataSyncView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            DataSyncView()
+                .environmentObject(HealthKitManager())
+        }
     }
 }

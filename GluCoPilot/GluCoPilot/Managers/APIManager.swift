@@ -74,6 +74,7 @@ enum APIManagerError: Error, LocalizedError {
     case maintenanceMode
     case invalidResponse
     case invalidData
+    case invalidCredentials
     
     var errorDescription: String? {
         switch self {
@@ -97,6 +98,8 @@ enum APIManagerError: Error, LocalizedError {
             return "Invalid response from server"
         case .invalidData:
             return "Invalid data format"
+        case .invalidCredentials:
+            return "Invalid or missing credentials"
         }
     }
 }

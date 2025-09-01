@@ -194,7 +194,7 @@ struct OnboardingView: View {
     let dexcomManager: DexcomManager
     let healthKitManager: HealthKitManager
     let onComplete: () -> Void
-    
+
     @State private var currentPage = 0
     @State private var showDexcomSetup = false
     @State private var dexcomUsername = ""
@@ -203,8 +203,8 @@ struct OnboardingView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
-    
-    private let onboardingPages = [
+
+    private let onboardingPages: [OnboardingPage] = [
         OnboardingPage(
             title: "Welcome to GluCoPilot",
             subtitle: "Your AI-powered diabetes management companion",
@@ -234,113 +234,18 @@ struct OnboardingView: View {
             color: .green
         )
     ]
-    
+
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(.systemBackground), onboardingPages[currentPage].color.opacity(0.1)],
+                colors: [Color(.systemBackground), currentPage < onboardingPages.count ? onboardingPages[currentPage].color.opacity(0.1) : Color.blue.opacity(0.1)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
-            
-            VStack {
-                // Onboarding content
-                TabView(selection: $currentPage) {
-                    ForEach(Array(onboardingPages.enumerated()), id: \.offset) { index, page in
-                        OnboardingPageView(page: page)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                
-                // Page indicators and navigation
-                VStack(spacing: 30) {
-                    // Custom page indicator
-                    HStack(spacing: 8) {
-                        ForEach(0..<onboardingPages.count, id: \.self) { index in
-                            Circle()
-                                .fill(index == currentPage ? onboardingPages[currentPage].color : Color.gray.opacity(0.3))
-                                .frame(width: 8, height: 8)
-                                .scaleEffect(index == currentPage ? 1.2 : 1.0)
-                                .animation(.spring(), value: currentPage)
-                        }
-                    }
-                    
-                    // Navigation buttons
-                    HStack {
-                        if currentPage > 0 {
-                            Button("Previous") {
-                                withAnimation(.spring()) {
-                                    currentPage -= 1
-                                }
-                            }
-                            .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        if currentPage < onboardingPages.count - 1 {
-                            Button("Next") {
-                                withAnimation(.spring()) {
-                                    currentPage += 1
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.large)
-                        } else {
-                            Button("Connect Data Sources") {
-                                showDataConnectionOptions()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.bottom, 30)
-            }
-            .sheet(isPresented: $showDexcomSetup) {
-                DexcomSetupView(
-                    apiManager: apiManager,
-                    dexcomManager: dexcomManager,
-                    username: $dexcomUsername,
-                    password: $dexcomPassword,
-                    isInternational: $isInternational,
-                    isConnecting: $isConnecting,
-                    showError: $showError,
-                    errorMessage: $errorMessage
-                )
-            }
-        }
-    }
-    
-    @State private var showingDataConnectionView = false
-    
-    private func showDataConnectionOptions() {
-        withAnimation(.spring()) {
-            // The final page will be a custom data connection page
-            currentPage = onboardingPages.count
-        }
-    }
-    
-    private func completeOnboarding() {
-        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
-        onComplete()
-    }
-    
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(.systemBackground), currentPage < onboardingPages.count ? onboardingPages[currentPage].color.opacity(0.1) : .blue.opacity(0.1)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
+
             VStack {
                 if currentPage < onboardingPages.count {
-                    // Regular onboarding pages
                     TabView(selection: $currentPage) {
                         ForEach(Array(onboardingPages.enumerated()), id: \.offset) { index, page in
                             OnboardingPageView(page: page)
@@ -348,10 +253,8 @@ struct OnboardingView: View {
                         }
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                    
-                    // Page indicators and navigation
+
                     VStack(spacing: 30) {
-                        // Custom page indicator
                         HStack(spacing: 8) {
                             ForEach(0..<onboardingPages.count, id: \.self) { index in
                                 Circle()
@@ -359,27 +262,22 @@ struct OnboardingView: View {
                                     .frame(width: 8, height: 8)
                             }
                         }
-                        
+
                         HStack {
                             if currentPage > 0 {
                                 Button("Back") {
-                                    withAnimation(.spring()) {
-                                        currentPage -= 1
-                                    }
+                                    withAnimation(.spring()) { currentPage -= 1 }
                                 }
                                 .buttonStyle(.bordered)
                             } else {
-                                Spacer()
-                                    .frame(width: 60)
+                                Spacer().frame(width: 60)
                             }
-                            
+
                             Spacer()
-                            
+
                             if currentPage < onboardingPages.count - 1 {
                                 Button("Next") {
-                                    withAnimation(.spring()) {
-                                        currentPage += 1
-                                    }
+                                    withAnimation(.spring()) { currentPage += 1 }
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.large)
@@ -401,43 +299,29 @@ struct OnboardingView: View {
                             Image(systemName: "link.circle.fill")
                                 .font(.system(size: 60))
                                 .foregroundColor(.blue)
-                            
+
                             Text("Connect Your Data")
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
-                            
+
                             Text("Choose which data sources to connect")
                                 .font(.body)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.top, 40)
-                        
-                        Spacer()
-                            .frame(height: 20)
-                        
-                        // HealthKit Button
-                        Button(action: {
-                            healthKitManager.requestHealthKitPermissions()
-                        }) {
+
+                        Spacer().frame(height: 20)
+
+                        Button(action: { healthKitManager.requestHealthKitPermissions() }) {
                             HStack {
-                                Image(systemName: "heart.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.red)
-                                
+                                Image(systemName: "heart.fill").font(.title2).foregroundColor(.red)
                                 VStack(alignment: .leading) {
-                                    Text("Apple Health")
-                                        .font(.headline)
-                                    
-                                    Text("Connect activity, nutrition & more")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    Text("Apple Health").font(.headline)
+                                    Text("Connect activity, nutrition & more").font(.caption).foregroundColor(.secondary)
                                 }
-                                
                                 Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right").foregroundColor(.secondary)
                             }
                             .padding()
                             .background(Color(.secondarySystemBackground))
@@ -445,29 +329,16 @@ struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.horizontal)
-                        
-                        // Dexcom Button
-                        Button(action: {
-                            showDexcomSetup = true
-                        }) {
+
+                        Button(action: { showDexcomSetup = true }) {
                             HStack {
-                                Image(systemName: "drop.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.blue)
-                                
+                                Image(systemName: "drop.fill").font(.title2).foregroundColor(.blue)
                                 VStack(alignment: .leading) {
-                                    Text("Dexcom CGM")
-                                        .font(.headline)
-                                    
-                                    Text("Connect your Dexcom Share account")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    Text("Dexcom CGM").font(.headline)
+                                    Text("Connect your Dexcom Share account").font(.caption).foregroundColor(.secondary)
                                 }
-                                
                                 Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right").foregroundColor(.secondary)
                             }
                             .padding()
                             .background(Color(.secondarySystemBackground))
@@ -475,10 +346,9 @@ struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.horizontal)
-                        
+
                         Spacer()
-                        
-                        // Get Started button
+
                         Button(action: completeOnboarding) {
                             Text("Get Started")
                                 .font(.headline)
@@ -493,6 +363,29 @@ struct OnboardingView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showDexcomSetup) {
+                DexcomSetupView(
+                    apiManager: apiManager,
+                    dexcomManager: dexcomManager,
+                    username: $dexcomUsername,
+                    password: $dexcomPassword,
+                    isInternational: $isInternational,
+                    isConnecting: $isConnecting,
+                    showError: $showError,
+                    errorMessage: $errorMessage
+                )
+            }
+        }
+    }
+
+    private func showDataConnectionOptions() {
+        withAnimation(.spring()) { currentPage = onboardingPages.count }
+    }
+
+    private func completeOnboarding() {
+        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+        onComplete()
+    }
 }
 
 struct OnboardingPage {
@@ -667,6 +560,8 @@ struct OnboardingPageView: View {
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }
