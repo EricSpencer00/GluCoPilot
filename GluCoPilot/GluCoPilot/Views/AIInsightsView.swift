@@ -112,6 +112,12 @@ struct AIInsightsView: View {
             }
         }
         .onAppear {
+            // Show cached insights immediately (if any)
+            if insights.isEmpty, !apiManager.cachedInsights.isEmpty {
+                insights = apiManager.cachedInsights
+                lastUpdateDate = Date()
+            }
+
             if insights.isEmpty {
                 refreshInsights()
             }

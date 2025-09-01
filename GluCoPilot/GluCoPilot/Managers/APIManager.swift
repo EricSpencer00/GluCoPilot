@@ -150,6 +150,16 @@ class APIManagerKeychainHelper {
 
 @MainActor
 class APIManager: ObservableObject {
+    @Published var cachedInsights: [AIInsight] = []
+    private let cachedInsightsKey = "cached_ai_insights_v1"
+    
+    init() {
+        if let data = UserDefaults.standard.data(forKey: cachedInsightsKey) {
+            if let decoded = try? JSONDecoder().decode([AIInsight].self, from: data) {
+                self.cachedInsights = decoded
+            }
+        }
+    }
     private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
     private let session = URLSession.shared
     private let keychain = APIManagerKeychainHelper()
@@ -496,64 +506,66 @@ class APIManager: ObservableObject {
             throw APIManagerError.unauthorized
         }
 
-        let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
-        
-        // Request insights for the last 24 hours
-        let body: [String: Any] = [
-            "timeframe": "24h",
-            "include_recommendations": true
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
+        // Prefer stateless recommendations endpoint if Dexcom creds are present
+        var useStateless = false
+        var dexcomBody: [String: Any] = [:]
+        if let username = keychain.getValue(for: "dexcom_username"),
+           let password = keychain.getValue(for: "dexcom_password") {
+            useStateless = true
+            let isInternational = (keychain.getValue(for: "dexcom_is_international") == "true")
+            dexcomBody = ["username": username, "password": password, "ous": isInternational]
+        }
+
+        let request: URLRequest
+        if useStateless {
+            var req = URLRequest(url: URL(string: "\(baseURL)/api/v1/recommendations/stateless")!)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+            req.httpBody = try JSONSerialization.data(withJSONObject: dexcomBody)
+            request = req
+        } else {
+            var req = URLRequest(url: URL(string: "\(baseURL)/api/v1/recommendations/recommendations")!)
+            req.httpMethod = "GET"
+            req.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+            request = req
+        }
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
+
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw APIManagerError.unauthorized
+            } else if httpResponse.statusCode == 429 {
+                throw APIManagerError.rateLimited
             } else {
                 let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
                 throw APIManagerError.serverError(errorMessage)
             }
         }
-        
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        
-        // Parse the response
+
         do {
             let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
-            
-            // Convert to AIInsight objects
+            // Recommendations endpoints return { "recommendations": [...] }
+            let recs = responseData?["recommendations"] as? [[String: Any]] ?? []
+
             var insights: [AIInsight] = []
-            
-            for insightData in insightsArray {
-                guard let title = insightData["title"] as? String,
-                      let description = insightData["description"] as? String,
-                      let typeString = insightData["type"] as? String,
-                      let priorityString = insightData["priority"] as? String else {
-                    continue
-                }
-                
-                let actionItems = insightData["action_items"] as? [String] ?? []
-                let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
-                
-                // Map API insight type to our InsightType
+            for rec in recs {
+                let title = rec["title"] as? String ?? "Insight"
+                let description = rec["description"] as? String ?? ""
+                let category = rec["category"] as? String ?? "general"
+                let priorityString = rec["priority"] as? String ?? "medium"
+                let action = rec["action"] as? String ?? ""
+
+                // Map category to InsightType
                 let type: AIInsight.InsightType
-                switch typeString {
-                case "blood_sugar": type = .bloodSugar
+                switch category.lowercased() {
+                case "blood_sugar", "glucose": type = .bloodSugar
                 case "diet": type = .diet
                 case "exercise": type = .exercise
                 case "medication": type = .medication
@@ -561,17 +573,25 @@ class APIManager: ObservableObject {
                 case "pattern": type = .pattern
                 default: type = .pattern
                 }
-                
-                // Map API priority to our InsightPriority
+
                 let priority: AIInsight.InsightPriority
-                switch priorityString {
+                switch priorityString.lowercased() {
                 case "low": priority = .low
                 case "medium": priority = .medium
                 case "high": priority = .high
                 case "critical": priority = .critical
                 default: priority = .medium
                 }
-                
+
+                let actionItems: [String]
+                if let act = rec["action_items"] as? [String] {
+                    actionItems = act
+                } else if !action.isEmpty {
+                    actionItems = [action]
+                } else {
+                    actionItems = []
+                }
+
                 let insight = AIInsight(
                     title: title,
                     description: description,
@@ -579,20 +599,25 @@ class APIManager: ObservableObject {
                     priority: priority,
                     timestamp: Date(),
                     actionItems: actionItems,
-                    dataPoints: dataPoints
+                    dataPoints: [:]
                 )
-                
+
                 insights.append(insight)
             }
-            
-            // If no insights from API, provide some default ones
+
             if insights.isEmpty {
                 insights = getDefaultInsights()
             }
-            
+
+            // Cache insights for quick startup display
+            if let encoded = try? JSONEncoder().encode(insights) {
+                UserDefaults.standard.set(encoded, forKey: cachedInsightsKey)
+                self.cachedInsights = insights
+            }
+
             return insights
         } catch {
-            print("Error parsing insights response: \(error.localizedDescription)")
+            print("Error parsing recommendations response: \(error.localizedDescription)")
             throw APIManagerError.decodingError(error)
         }
     }
