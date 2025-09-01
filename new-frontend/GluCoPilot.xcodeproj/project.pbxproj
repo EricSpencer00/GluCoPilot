@@ -20,6 +20,8 @@
 		4A1234567890ABD7 /* DexcomManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1234567890ABCB /* DexcomManager.swift */; };
 		4A1234567890ABD8 /* APIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1234567890ABCC /* APIManager.swift */; };
 		4A1234567890ABD9 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1234567890ABCE /* KeychainHelper.swift */; };
+		4A1234567890ABDA /* LaunchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1234567890ABCF /* LaunchScreen.swift */; };
+		4A1234567890ABDB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A1234567890ABD0 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +41,8 @@
 		4A1234567890ABCD /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Utilities/KeychainHelper.swift"; sourceTree = "<group>"; };
 		4A1234567890ABCE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4A1234567890ABCF /* GluCoPilot.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GluCoPilot.entitlements; sourceTree = "<group>"; };
+		4A1234567890ABD0 /* LaunchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/LaunchScreen.swift"; sourceTree = "<group>"; };
+		4A1234567890ABD1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +71,7 @@
 				4A1234567890ABC2 /* ContentView.swift */,
 				4A1234567890ABCE /* Info.plist */,
 				4A1234567890ABCF /* GluCoPilot.entitlements */,
+				4A1234567890ABD1 /* Assets.xcassets */,
 				4A1234567890ABD0 /* Views */,
 				4A1234567890ABD1 /* Managers */,
 				4A1234567890ABD2 /* Utilities */,
@@ -91,6 +96,7 @@
 				4A1234567890ABC6 /* DataSyncView.swift */,
 				4A1234567890ABC7 /* AIInsightsView.swift */,
 				4A1234567890ABC8 /* SettingsView.swift */,
+				4A1234567890ABD0 /* LaunchScreen.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
