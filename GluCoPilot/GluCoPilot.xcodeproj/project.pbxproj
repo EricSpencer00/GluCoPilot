@@ -1,0 +1,563 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		97C4CB2D2E65244A00D4F5BF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C4CB172E65244500D4F5BF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 97C4CB1E2E65244500D4F5BF;
+			remoteInfo = GluCoPilot;
+		};
+		97C4CB372E65244A00D4F5BF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C4CB172E65244500D4F5BF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 97C4CB1E2E65244500D4F5BF;
+			remoteInfo = GluCoPilot;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		97C4CB1F2E65244500D4F5BF /* GluCoPilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GluCoPilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		97C4CB2C2E65244A00D4F5BF /* GluCoPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		97C4CB212E65244500D4F5BF /* GluCoPilot */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GluCoPilot;
+			sourceTree = "<group>";
+		};
+		97C4CB2F2E65244A00D4F5BF /* GluCoPilotTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GluCoPilotTests;
+			sourceTree = "<group>";
+		};
+		97C4CB392E65244A00D4F5BF /* GluCoPilotUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GluCoPilotUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		97C4CB1C2E65244500D4F5BF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB292E65244A00D4F5BF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB332E65244A00D4F5BF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		97C4CB162E65244500D4F5BF = {
+			isa = PBXGroup;
+			children = (
+				97C4CB212E65244500D4F5BF /* GluCoPilot */,
+				97C4CB2F2E65244A00D4F5BF /* GluCoPilotTests */,
+				97C4CB392E65244A00D4F5BF /* GluCoPilotUITests */,
+				97C4CB202E65244500D4F5BF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		97C4CB202E65244500D4F5BF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				97C4CB1F2E65244500D4F5BF /* GluCoPilot.app */,
+				97C4CB2C2E65244A00D4F5BF /* GluCoPilotTests.xctest */,
+				97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		97C4CB1E2E65244500D4F5BF /* GluCoPilot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 97C4CB402E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilot" */;
+			buildPhases = (
+				97C4CB1B2E65244500D4F5BF /* Sources */,
+				97C4CB1C2E65244500D4F5BF /* Frameworks */,
+				97C4CB1D2E65244500D4F5BF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				97C4CB212E65244500D4F5BF /* GluCoPilot */,
+			);
+			name = GluCoPilot;
+			packageProductDependencies = (
+			);
+			productName = GluCoPilot;
+			productReference = 97C4CB1F2E65244500D4F5BF /* GluCoPilot.app */;
+			productType = "com.apple.product-type.application";
+		};
+		97C4CB2B2E65244A00D4F5BF /* GluCoPilotTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 97C4CB432E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilotTests" */;
+			buildPhases = (
+				97C4CB282E65244A00D4F5BF /* Sources */,
+				97C4CB292E65244A00D4F5BF /* Frameworks */,
+				97C4CB2A2E65244A00D4F5BF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				97C4CB2E2E65244A00D4F5BF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				97C4CB2F2E65244A00D4F5BF /* GluCoPilotTests */,
+			);
+			name = GluCoPilotTests;
+			packageProductDependencies = (
+			);
+			productName = GluCoPilotTests;
+			productReference = 97C4CB2C2E65244A00D4F5BF /* GluCoPilotTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		97C4CB352E65244A00D4F5BF /* GluCoPilotUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 97C4CB462E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilotUITests" */;
+			buildPhases = (
+				97C4CB322E65244A00D4F5BF /* Sources */,
+				97C4CB332E65244A00D4F5BF /* Frameworks */,
+				97C4CB342E65244A00D4F5BF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				97C4CB382E65244A00D4F5BF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				97C4CB392E65244A00D4F5BF /* GluCoPilotUITests */,
+			);
+			name = GluCoPilotUITests;
+			packageProductDependencies = (
+			);
+			productName = GluCoPilotUITests;
+			productReference = 97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		97C4CB172E65244500D4F5BF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					97C4CB1E2E65244500D4F5BF = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					97C4CB2B2E65244A00D4F5BF = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 97C4CB1E2E65244500D4F5BF;
+					};
+					97C4CB352E65244A00D4F5BF = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 97C4CB1E2E65244500D4F5BF;
+					};
+				};
+			};
+			buildConfigurationList = 97C4CB1A2E65244500D4F5BF /* Build configuration list for PBXProject "GluCoPilot" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 97C4CB162E65244500D4F5BF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 97C4CB202E65244500D4F5BF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				97C4CB1E2E65244500D4F5BF /* GluCoPilot */,
+				97C4CB2B2E65244A00D4F5BF /* GluCoPilotTests */,
+				97C4CB352E65244A00D4F5BF /* GluCoPilotUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		97C4CB1D2E65244500D4F5BF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB2A2E65244A00D4F5BF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB342E65244A00D4F5BF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		97C4CB1B2E65244500D4F5BF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB282E65244A00D4F5BF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		97C4CB322E65244A00D4F5BF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		97C4CB2E2E65244A00D4F5BF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 97C4CB1E2E65244500D4F5BF /* GluCoPilot */;
+			targetProxy = 97C4CB2D2E65244A00D4F5BF /* PBXContainerItemProxy */;
+		};
+		97C4CB382E65244A00D4F5BF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 97C4CB1E2E65244500D4F5BF /* GluCoPilot */;
+			targetProxy = 97C4CB372E65244A00D4F5BF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		97C4CB3E2E65244A00D4F5BF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		97C4CB3F2E65244A00D4F5BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		97C4CB412E65244A00D4F5BF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilot;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		97C4CB422E65244A00D4F5BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilot;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		97C4CB442E65244A00D4F5BF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GluCoPilot.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GluCoPilot";
+			};
+			name = Debug;
+		};
+		97C4CB452E65244A00D4F5BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GluCoPilot.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GluCoPilot";
+			};
+			name = Release;
+		};
+		97C4CB472E65244A00D4F5BF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GluCoPilot;
+			};
+			name = Debug;
+		};
+		97C4CB482E65244A00D4F5BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QAWD9U9CF6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GluCoPilot;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		97C4CB1A2E65244500D4F5BF /* Build configuration list for PBXProject "GluCoPilot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97C4CB3E2E65244A00D4F5BF /* Debug */,
+				97C4CB3F2E65244A00D4F5BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		97C4CB402E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97C4CB412E65244A00D4F5BF /* Debug */,
+				97C4CB422E65244A00D4F5BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		97C4CB432E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilotTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97C4CB442E65244A00D4F5BF /* Debug */,
+				97C4CB452E65244A00D4F5BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		97C4CB462E65244A00D4F5BF /* Build configuration list for PBXNativeTarget "GluCoPilotUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97C4CB472E65244A00D4F5BF /* Debug */,
+				97C4CB482E65244A00D4F5BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 97C4CB172E65244500D4F5BF /* Project object */;
+}
