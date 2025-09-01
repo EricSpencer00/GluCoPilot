@@ -175,14 +175,16 @@ class DexcomManager: ObservableObject {
         } catch {
             print("Error fetching glucose reading: \(error.localizedDescription)")
             // If rate limited, attempt to use cached readings from APIManager
-            if let apiError = error as? APIManagerError, apiError == .rateLimited {
-                if let cached = apiManager.getCachedGlucoseReadings(timeframe: "1d")?.readings.first {
-                    await MainActor.run {
-                        self.latestGlucoseReading = GlucoseReading(id: UUID(), value: cached.value, trend: cached.trend, timestamp: cached.timestamp, unit: cached.unit)
-                        self.lastUpdate = apiManager.getCachedGlucoseReadings(timeframe: "1d")?.timestamp
-                        self.lastUpdateSource = "cached"
+            if let apiError = error as? APIManagerError {
+                if case .rateLimited = apiError {
+                    if let cached = apiManager.getCachedGlucoseReadings(timeframe: "1d")?.readings.first {
+                        await MainActor.run {
+                            self.latestGlucoseReading = GlucoseReading(id: UUID(), value: cached.value, trend: cached.trend, timestamp: cached.timestamp, unit: cached.unit)
+                            self.lastUpdate = apiManager.getCachedGlucoseReadings(timeframe: "1d")?.timestamp
+                            self.lastUpdateSource = "cached"
+                        }
+                        return
                     }
-                    return
                 }
             }
             throw error
@@ -229,16 +231,18 @@ class DexcomManager: ObservableObject {
         } catch {
             print("Error fetching glucose readings: \(error.localizedDescription)")
             // On rate limit, return cached readings if available
-            if let apiError = error as? APIManagerError, apiError == .rateLimited {
-                if let cached = apiManager.getCachedGlucoseReadings(timeframe: timeframe) {
-                    await MainActor.run {
-                        self.lastUpdate = cached.timestamp
-                        self.lastUpdateSource = "cached"
+            if let apiError = error as? APIManagerError {
+                if case .rateLimited = apiError {
+                    if let cached = apiManager.getCachedGlucoseReadings(timeframe: timeframe) {
+                        await MainActor.run {
+                            self.lastUpdate = cached.timestamp
+                            self.lastUpdateSource = "cached"
+                        }
+                        let mapped = cached.readings.map { api in
+                            GlucoseReading(id: UUID(), value: api.value, trend: api.trend, timestamp: api.timestamp, unit: api.unit)
+                        }
+                        return mapped
                     }
-                    let mapped = cached.readings.map { api in
-                        GlucoseReading(id: UUID(), value: api.value, trend: api.trend, timestamp: api.timestamp, unit: api.unit)
-                    }
-                    return mapped
                 }
             }
             throw error
