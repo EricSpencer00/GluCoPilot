@@ -61,7 +61,8 @@ class HealthKitManager: ObservableObject {
         HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
         HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
         HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
-        HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!
+        HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!,
+        HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
     ]
     
     init() {
@@ -364,6 +365,60 @@ class HealthKitManager: ObservableObject {
                 } else {
                     let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
                     continuation.resume(returning: value)
+                }
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    // Fetch glucose readings from HealthKit
+    func fetchGlucoseReadings(from startDate: Date, to endDate: Date) async throws -> [GlucoseReading] {
+        guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
+            throw HealthKitManagerError.dataFetchFailed
+        }
+        
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: glucoseType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+            ) { _, samples, error in
+                if let error = error {
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No glucose data available for the specified time range. Returning empty array.")
+                        continuation.resume(returning: [])
+                    } else {
+                        print("Error fetching glucose data: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
+                } else {
+                    var readings: [GlucoseReading] = []
+                    
+                    if let samples = samples as? [HKQuantitySample] {
+                        for sample in samples {
+                            // Convert to mg/dL for consistency with Dexcom readings
+                            // HealthKit stores blood glucose in mmol/L by default
+                            let mgdlUnit = HKUnit.gramUnit(with: .milli).unitDivided(by: HKUnit.literUnit(with: .deci))
+                            let value = sample.quantity.doubleValue(for: mgdlUnit)
+                            
+                            let reading = GlucoseReading(
+                                id: UUID(),
+                                value: Int(round(value)), // Round to nearest integer to match Dexcom format
+                                trend: "NONE", // HealthKit doesn't provide trend information
+                                timestamp: sample.endDate,
+                                unit: "mg/dL"
+                            )
+                            
+                            readings.append(reading)
+                        }
+                    }
+                    
+                    continuation.resume(returning: readings)
                 }
             }
             

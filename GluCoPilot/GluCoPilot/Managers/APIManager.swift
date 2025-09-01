@@ -328,6 +328,101 @@ class APIManager: ObservableObject {
         }
     }
     
+    // Fetch historical glucose readings for a given timeframe
+    func fetchGlucoseReadings(timeframe: String, count: Int = 100) async throws -> [APIManagerGlucoseReading] {
+        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+            throw APIManagerError.unauthorized
+        }
+        
+        // Ensure we have Dexcom credentials
+        guard let username = keychain.getValue(for: "dexcom_username"),
+              let password = keychain.getValue(for: "dexcom_password"),
+              let isInternationalString = keychain.getValue(for: "dexcom_is_international") else {
+            throw APIManagerError.invalidCredentials
+        }
+        
+        let isInternational = isInternationalString == "true" || isInternationalString == "1"
+
+        let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Apple id_token (JWT) for authentication
+        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+        
+        let body: [String: Any] = [
+            "username": username,
+            "password": password,
+            "ous": isInternational,
+            "timeframe": timeframe,
+            "count": count
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIManagerError.unauthorized
+            } else {
+                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
+                throw APIManagerError.serverError(errorMessage)
+            }
+        }
+        
+        do {
+            // Parse the response data
+            let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let readings = responseData?["readings"] as? [[String: Any]] ?? []
+            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            var glucoseReadings: [APIManagerGlucoseReading] = []
+            
+            for reading in readings {
+                guard let value = reading["value"] as? Int,
+                      let trend = reading["trend"] as? String,
+                      let timestampString = reading["timestamp"] as? String else {
+                    continue
+                }
+                
+                // Try with fractional seconds first, then without if that fails
+                let timestamp: Date
+                if let date = formatter.date(from: timestampString) {
+                    timestamp = date
+                } else {
+                    formatter.formatOptions = [.withInternetDateTime]
+                    timestamp = formatter.date(from: timestampString) ?? Date()
+                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                }
+                
+                let unit = reading["unit"] as? String ?? "mg/dL"
+                
+                let glucoseReading = APIManagerGlucoseReading(
+                    value: value,
+                    trend: trend,
+                    timestamp: timestamp,
+                    unit: unit
+                )
+                
+                glucoseReadings.append(glucoseReading)
+            }
+            
+            return glucoseReadings
+        } catch {
+            print("Error parsing glucose readings: \(error.localizedDescription)")
+            throw APIManagerError.decodingError(error)
+        }
+    }
+    
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
         guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {

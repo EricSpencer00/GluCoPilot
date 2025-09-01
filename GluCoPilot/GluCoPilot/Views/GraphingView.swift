@@ -3,6 +3,8 @@ import Charts
 
 struct GraphingView: View {
     @EnvironmentObject private var apiManager: APIManager
+    @EnvironmentObject private var dexcomManager: DexcomManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var selectedTimeframe: Timeframe = .day
     @State private var showGlucose: Bool = true
     @State private var showFood: Bool = true
@@ -12,6 +14,15 @@ struct GraphingView: View {
     @State private var foodEntries: [FoodEntry] = []
     @State private var workouts: [WorkoutData] = []
     @State private var error: String? = nil
+    @State private var dataSource: DataSource = .dexcom
+    
+    enum DataSource: String, CaseIterable, Identifiable {
+        case dexcom = "Dexcom"
+        case healthKit = "HealthKit"
+        case sample = "Sample Data"
+        
+        var id: String { self.rawValue }
+    }
     
     enum Timeframe: String, CaseIterable, Identifiable {
         case day = "24h"
@@ -35,6 +46,14 @@ struct GraphingView: View {
             case .month: return 24 * 30
             }
         }
+        
+        var apiString: String {
+            switch self {
+            case .day: return "1d"
+            case .week: return "7d"
+            case .month: return "30d"
+            }
+        }
     }
     
     var body: some View {
@@ -56,6 +75,26 @@ struct GraphingView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
+                    }
+                    
+                    // Data Source Selector
+                    VStack(alignment: .leading) {
+                        Text("Data Source")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        Picker("Data Source", selection: $dataSource) {
+                            if dexcomManager.isConnected {
+                                Text("Dexcom").tag(DataSource.dexcom)
+                            }
+                            Text("HealthKit").tag(DataSource.healthKit)
+                            Text("Sample Data").tag(DataSource.sample)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .onChange(of: dataSource) { _, _ in
+                            loadData()
+                        }
                     }
                     
                     // Timeframe Selector
@@ -177,11 +216,92 @@ struct GraphingView: View {
     }
     
     private func loadDataAsync() async {
-        // In a real implementation, we would fetch this data from the backend
-        // For now, we'll generate sample data (no throwing operations)
-        generateSampleData()
-        await MainActor.run {
-            isLoading = false
+        do {
+            await MainActor.run {
+                error = nil
+            }
+            
+            switch dataSource {
+            case .dexcom:
+                if dexcomManager.isConnected {
+                    // Fetch Dexcom data from the backend API
+                    let readings = try await dexcomManager.fetchGlucoseReadings(
+                        timeframe: selectedTimeframe.apiString,
+                        count: selectedTimeframe == .day ? 24 : (selectedTimeframe == .week ? 168 : 720),
+                        apiManager: apiManager
+                    )
+                    
+                    await MainActor.run {
+                        glucoseReadings = readings
+                    }
+                } else {
+                    await MainActor.run {
+                        error = "Dexcom is not connected. Please connect Dexcom or choose a different data source."
+                        dataSource = .healthKit // Fallback to HealthKit
+                    }
+                    return
+                }
+                
+            case .healthKit:
+                // Fetch HealthKit data
+                if healthKitManager.authorizationStatus == .sharingAuthorized {
+                    let endDate = Date()
+                    let startDate = Calendar.current.date(
+                        byAdding: .hour,
+                        value: -selectedTimeframe.hours,
+                        to: endDate
+                    )!
+                    
+                    let readings = try await healthKitManager.fetchGlucoseReadings(
+                        from: startDate,
+                        to: endDate
+                    )
+                    
+                    await MainActor.run {
+                        glucoseReadings = readings
+                    }
+                } else {
+                    await MainActor.run {
+                        error = "HealthKit is not authorized. Please authorize HealthKit access or choose a different data source."
+                        dataSource = .sample // Fallback to sample data
+                    }
+                    return
+                }
+                
+            case .sample:
+                // Generate sample data
+                generateSampleData()
+            }
+            
+            // Fetch food and workout data from HealthKit regardless of glucose data source
+            if healthKitManager.authorizationStatus == .sharingAuthorized {
+                let endDate = Date()
+                let startDate = Calendar.current.date(
+                    byAdding: .hour,
+                    value: -selectedTimeframe.hours,
+                    to: endDate
+                )!
+                
+                // In a real implementation, we would fetch this data from HealthKit
+                // For now, we'll continue using sample data for food and workouts
+            }
+            
+            await MainActor.run {
+                isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                self.isLoading = false
+                
+                // If Dexcom or HealthKit fails, fall back to sample data
+                if self.dataSource != .sample {
+                    self.dataSource = .sample
+                    Task {
+                        await self.loadDataAsync()
+                    }
+                }
+            }
         }
     }
     
@@ -232,6 +352,7 @@ struct GraphingView: View {
             }
             
             let reading = GlucoseReading(
+                id: UUID(),
                 value: value,
                 trend: trend,
                 timestamp: date,
@@ -297,9 +418,11 @@ struct GraphingView: View {
         }
         
         // Sort everything by timestamp
-        glucoseReadings = newGlucoseReadings.sorted(by: { $0.timestamp > $1.timestamp })
-        foodEntries = newFoodEntries.sorted(by: { $0.timestamp > $1.timestamp })
-        workouts = newWorkouts.sorted(by: { $0.startDate > $1.startDate })
+        Task { @MainActor in
+            glucoseReadings = newGlucoseReadings.sorted(by: { $0.timestamp > $1.timestamp })
+            foodEntries = newFoodEntries.sorted(by: { $0.timestamp > $1.timestamp })
+            workouts = newWorkouts.sorted(by: { $0.startDate > $1.startDate })
+        }
     }
 }
 

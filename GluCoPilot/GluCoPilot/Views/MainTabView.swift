@@ -22,34 +22,27 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            // Glucose/Dexcom Tab
-            DexcomConnectionView()
-                .environmentObject(dexcomManager)
-                .environmentObject(apiManager)
-                .tabItem {
-                    Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
-                    Text("Glucose")
-                }
-                .tag(1)
-            
             // Data Tab
             DataSyncView()
                 .environmentObject(healthKitManager)
+                .environmentObject(dexcomManager)
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
+                    Image(systemName: selectedTab == 1 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
                     Text("Data")
                 }
-                .tag(2)
+                .tag(1)
             
             // Graph Tab
             GraphingView()
                 .environmentObject(apiManager)
+                .environmentObject(dexcomManager)
+                .environmentObject(healthKitManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
+                    Image(systemName: selectedTab == 2 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
                     Text("Graphs")
                 }
-                .tag(3)
+                .tag(2)
             
             // AI Insights Tab
             AIInsightsView()

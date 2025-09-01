@@ -175,4 +175,46 @@ class DexcomManager: ObservableObject {
             throw error
         }
     }
+    
+    func fetchGlucoseReadings(timeframe: String = "1d", count: Int = 100, apiManager: APIManager) async throws -> [GlucoseReading] {
+        guard isConnected else {
+            throw DexcomManagerError.notConnected
+        }
+        
+        isLoading = true
+        defer {
+            isLoading = false
+        }
+        
+        do {
+            let apiReadings = try await apiManager.fetchGlucoseReadings(timeframe: timeframe, count: count)
+            
+            // Convert APIManagerGlucoseReading array to GlucoseReading array
+            let readings = apiReadings.map { apiReading in
+                GlucoseReading(
+                    id: UUID(),
+                    value: apiReading.value,
+                    trend: apiReading.trend,
+                    timestamp: apiReading.timestamp,
+                    unit: apiReading.unit
+                )
+            }
+            
+            if !readings.isEmpty {
+                // Update the latest reading with the most recent one
+                await MainActor.run {
+                    if let mostRecent = readings.sorted(by: { $0.timestamp > $1.timestamp }).first {
+                        self.latestGlucoseReading = mostRecent
+                    }
+                    self.lastUpdate = Date()
+                }
+            }
+            
+            print("Successfully fetched \(readings.count) glucose readings")
+            return readings
+        } catch {
+            print("Error fetching glucose readings: \(error.localizedDescription)")
+            throw error
+        }
+    }
 }

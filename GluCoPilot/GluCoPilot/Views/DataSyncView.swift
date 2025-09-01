@@ -3,12 +3,19 @@ import HealthKit
 
 struct DataSyncView: View {
     @EnvironmentObject private var healthManager: HealthKitManager
+    @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var apiManager: APIManager
     @State private var isSyncing = false
     @State private var lastSyncDate: Date?
     @State private var syncResults: SyncResults?
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showDexcomSetup = false
+    @State private var dexcomUsername = ""
+    @State private var dexcomPassword = ""
+    @State private var isInternational = false
+    @State private var isConnectingDexcom = false
+    @State private var dexcomErrorMessage = ""
     
     var body: some View {
         ScrollView {
@@ -19,11 +26,11 @@ struct DataSyncView: View {
                         .font(.system(size: 60))
                         .foregroundStyle(.green.gradient)
                     
-                    Text("Data Sync")
+                    Text("Data Sources")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    Text("Import health data from the last 24 hours to enhance your AI insights")
+                    Text("Connect and manage your health data sources")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -32,18 +39,40 @@ struct DataSyncView: View {
                 
                 // Data Sources
                 VStack(spacing: 16) {
-                    DataSourceCard(
-                        icon: "heart.fill",
-                        title: "Apple Health",
-                        description: "Activity, steps, sleep, heart rate",
-                        isAvailable: healthManager.isHealthKitAvailable
-                    )
+                    // HealthKit Card
+                    Button(action: {
+                        healthManager.requestHealthKitPermissions()
+                    }) {
+                        DataSourceCard(
+                            icon: "heart.fill",
+                            title: "Apple Health",
+                            description: "Activity, steps, sleep, heart rate",
+                            isAvailable: healthManager.isHealthKitAvailable,
+                            isConnected: healthManager.authorizationStatus == .sharingAuthorized
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Dexcom Card
+                    Button(action: {
+                        showDexcomSetup = true
+                    }) {
+                        DataSourceCard(
+                            icon: "drop.fill",
+                            title: "Dexcom CGM",
+                            description: "Continuous glucose monitoring data",
+                            isAvailable: true,
+                            isConnected: dexcomManager.isConnected
+                        )
+                    }
+                    .buttonStyle(.plain)
                     
                     DataSourceCard(
                         icon: "fork.knife",
                         title: "MyFitnessPal",
                         description: "Nutrition and food logs (via Apple Health)",
-                        isAvailable: healthManager.isHealthKitAvailable
+                        isAvailable: healthManager.isHealthKitAvailable,
+                        isConnected: healthManager.authorizationStatus == .sharingAuthorized
                     )
                 }
                 .padding(.horizontal)
@@ -103,12 +132,24 @@ struct DataSyncView: View {
             }
             .padding(.vertical)
         }
-        .navigationTitle("Data Sync")
+        .navigationTitle("Data Sources")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Sync Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
             Text(errorMessage)
+        }
+        .sheet(isPresented: $showDexcomSetup) {
+            DexcomSetupView(
+                apiManager: apiManager,
+                dexcomManager: dexcomManager,
+                username: $dexcomUsername,
+                password: $dexcomPassword,
+                isInternational: $isInternational,
+                isConnecting: $isConnectingDexcom,
+                showError: $showError,
+                errorMessage: $dexcomErrorMessage
+            )
         }
         .onAppear {
             // Request HealthKit permissions if not already granted
@@ -191,6 +232,7 @@ struct DataSourceCard: View {
     let title: String
     let description: String
     let isAvailable: Bool
+    var isConnected: Bool = false
     
     var body: some View {
         HStack(spacing: 16) {
@@ -211,13 +253,145 @@ struct DataSourceCard: View {
             
             Spacer()
             
-            Image(systemName: isAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(isAvailable ? .green : .red)
+            if isConnected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else if isAvailable {
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(.blue)
+            } else {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+            }
         }
         .padding()
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+struct DexcomSetupView: View {
+    let apiManager: APIManager
+    let dexcomManager: DexcomManager
+    @Binding var username: String
+    @Binding var password: String
+    @Binding var isInternational: Bool
+    @Binding var isConnecting: Bool
+    @Binding var showError: Bool
+    @Binding var errorMessage: String
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 30) {
+                    // Header
+                    VStack(spacing: 16) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.blue.gradient)
+                        
+                        Text("Connect Dexcom")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        Text("Enter your Dexcom Share account credentials to sync your CGM data.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    
+                    // Form
+                    VStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Username")
+                                .font(.headline)
+                            
+                            TextField("Dexcom Share username", text: $username)
+                                .textFieldStyle(.roundedBorder)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Password")
+                                .font(.headline)
+                            
+                            SecureField("Dexcom Share password", text: $password)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        
+                        Toggle("Outside US (International)", isOn: $isInternational)
+                            .font(.subheadline)
+                            .padding(.vertical, 8)
+                        
+                        Button(action: connectDexcom) {
+                            if isConnecting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Text("Connect")
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                        .disabled(username.isEmpty || password.isEmpty || isConnecting)
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("Connect Dexcom")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert(isPresented: $showError) {
+                Alert(
+                    title: Text("Connection Error"),
+                    message: Text(errorMessage),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        }
+    }
+    
+    private func connectDexcom() {
+        isConnecting = true
+        
+        Task {
+            do {
+                try await dexcomManager.connect(
+                    username: username,
+                    password: password,
+                    isInternational: isInternational,
+                    apiManager: apiManager
+                )
+                
+                await MainActor.run {
+                    isConnecting = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isConnecting = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
+            }
+        }
     }
 }
 
