@@ -22,7 +22,7 @@ class AuthenticationManager: NSObject, ObservableObject {
     
     func checkAuthenticationState() {
         // Check if we have stored credentials
-        if let userID = keychain.getValue(for: "apple_user_id") {
+        if keychain.getValue(for: "apple_user_id") != nil {
             isAuthenticated = true
             userDisplayName = keychain.getValue(for: "user_display_name")
             userEmail = keychain.getValue(for: "user_email")

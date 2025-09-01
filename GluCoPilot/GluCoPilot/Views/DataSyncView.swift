@@ -127,6 +127,8 @@ struct DataSyncView: View {
                 let healthData = try await healthManager.fetchLast24HoursData()
                 
                 // Convert HealthKitManagerHealthData to APIManagerHealthData
+                let nutritionSource = healthData.nutrition.first
+
                 let apiHealthData = APIManagerHealthData(
                     glucose: healthData.workouts.map { workout in
                         APIManagerGlucoseReading(
@@ -146,12 +148,12 @@ struct DataSyncView: View {
                         )
                     },
                     nutrition: [APIManagerNutritionData(
-                        name: "Daily Nutrition",
-                        calories: healthData.nutrition.calories,
-                        carbs: healthData.nutrition.carbs,
-                        protein: healthData.nutrition.protein,
-                        fat: healthData.nutrition.fat,
-                        timestamp: Date()
+                        name: nutritionSource?.name ?? "Daily Nutrition",
+                        calories: nutritionSource?.calories ?? 0,
+                        carbs: nutritionSource?.carbs ?? 0,
+                        protein: nutritionSource?.protein ?? 0,
+                        fat: nutritionSource?.fat ?? 0,
+                        timestamp: nutritionSource?.timestamp ?? Date()
                     )],
                     timestamp: Date()
                 )

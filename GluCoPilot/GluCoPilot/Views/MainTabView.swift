@@ -1,9 +1,9 @@
 import SwiftUI
-import UIKit
 
 struct MainTabView: View {
     @StateObject private var dexcomManager = DexcomManager()
     @StateObject private var healthKitManager = HealthKitManager()
+    @StateObject private var apiManager = APIManager()
     @State private var selectedTab = 0
     
     var body: some View {
@@ -12,6 +12,7 @@ struct MainTabView: View {
             DashboardView()
                 .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text("Home")
@@ -21,6 +22,7 @@ struct MainTabView: View {
             // Glucose/Dexcom Tab
             DexcomConnectionView()
                 .environmentObject(dexcomManager)
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
                     Text("Glucose")
@@ -30,6 +32,7 @@ struct MainTabView: View {
             // Data Tab
             DataSyncView()
                 .environmentObject(healthKitManager)
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 2 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
                     Text("Data")
@@ -38,6 +41,7 @@ struct MainTabView: View {
             
             // Graph Tab
             GraphingView()
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
                     Text("Graphs")
@@ -46,6 +50,7 @@ struct MainTabView: View {
             
             // AI Insights Tab
             AIInsightsView()
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 4 ? "brain.head.profile.fill" : "brain.head.profile")
                     Text("Insights")
@@ -56,14 +61,16 @@ struct MainTabView: View {
             SettingsView()
                 .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 5 ? "gearshape.fill" : "gearshape")
                     Text("Settings")
                 }
                 .tag(5)
-        }
-        .accentColor(.accentColor)
-        .onAppear {
+    }
+    .environmentObject(apiManager)
+    .accentColor(.accentColor)
+    .onAppear {
             setupTabBarAppearance()
         }
     }
@@ -81,6 +88,7 @@ struct MainTabView: View {
 struct DashboardView: View {
     @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
     @State private var currentTime = Date()
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -119,7 +127,7 @@ struct DashboardView: View {
     private func refreshDashboard() {
         // Refresh all data
         Task {
-            try? await dexcomManager.fetchLatestGlucoseReading()
+            try? await dexcomManager.fetchLatestGlucoseReading(apiManager: apiManager)
         }
         healthKitManager.requestHealthKitPermissions()
     }
@@ -244,9 +252,10 @@ struct LatestGlucoseView: View {
                     .foregroundColor(.secondary)
             }
             
-            if let reading = dexcomManager.latestGlucoseReading,
-               let value = reading["value"] as? Int,
-               let trend = reading["trend"] as? String {
+            if let reading = dexcomManager.latestGlucoseReading {
+                let value = reading.value
+                let trend = reading.trend
+
                 HStack {
                     VStack(alignment: .leading) {
                         Text("\(value)")
@@ -257,9 +266,9 @@ struct LatestGlucoseView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     VStack {
                         Image(systemName: getTrendIcon(trend))
                             .font(.title)
@@ -283,8 +292,8 @@ struct LatestGlucoseView: View {
     }
     
     private func getTimestamp() -> String {
-        guard let reading = dexcomManager.latestGlucoseReading,
-              let timestamp = reading["timestamp"] as? Date else { return "" }
+    guard let reading = dexcomManager.latestGlucoseReading else { return "" }
+    let timestamp = reading.timestamp
         let formatter = RelativeDateTimeFormatter()
         return formatter.localizedString(for: timestamp, relativeTo: Date())
     }
@@ -298,21 +307,23 @@ struct LatestGlucoseView: View {
     }
     
     private func getTrendIcon(_ trend: String) -> String {
-        switch trend.lowercased() {
-        case "rising quickly": return "arrow.up.circle.fill"
+        let normalized = trend.replacingOccurrences(of: "_", with: " ").lowercased()
+        switch normalized {
+        case "rising quickly", "rising_quickly": return "arrow.up.circle.fill"
         case "rising": return "arrow.up.right.circle.fill"
-        case "stable": return "arrow.right.circle.fill"
+        case "stable", "flat": return "arrow.right.circle.fill"
         case "falling": return "arrow.down.right.circle.fill"
-        case "falling quickly": return "arrow.down.circle.fill"
+        case "falling quickly", "falling_quickly": return "arrow.down.circle.fill"
         default: return "questionmark.circle.fill"
         }
     }
-    
+
     private func getTrendColor(_ trend: String) -> Color {
-        switch trend.lowercased() {
-        case "rising quickly", "falling quickly": return .red
+        let normalized = trend.replacingOccurrences(of: "_", with: " ").lowercased()
+        switch normalized {
+        case "rising quickly", "falling quickly", "rising_quickly", "falling_quickly": return .red
         case "rising", "falling": return .orange
-        case "stable": return .green
+        case "stable", "flat": return .green
         default: return .gray
         }
     }

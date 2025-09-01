@@ -36,6 +36,9 @@ struct NutritionData: Codable, Identifiable {
     let timestamp: Date
 }
 
+// Backwards-compatible alias: some views expect a `FoodEntry` type
+typealias FoodEntry = NutritionData
+
 struct AIInsight: Codable, Identifiable {
     var id = UUID()
     let title: String
