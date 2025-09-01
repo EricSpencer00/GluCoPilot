@@ -4,7 +4,6 @@ import UIKit
 struct MainTabView: View {
     @StateObject private var dexcomManager = DexcomManager()
     @StateObject private var healthKitManager = HealthKitManager()
-    @StateObject private var apiManager = APIManager()
     @State private var selectedTab = 0
     
     var body: some View {
@@ -13,7 +12,6 @@ struct MainTabView: View {
             DashboardView()
                 .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
-                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text("Home")
@@ -32,35 +30,38 @@ struct MainTabView: View {
             // Data Tab
             DataSyncView()
                 .environmentObject(healthKitManager)
-                .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
+                    Image(systemName: selectedTab == 2 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
                     Text("Data")
                 }
                 .tag(2)
             
-            // AI Insights Tab
-            AIInsightsView()
-                .environmentObject(apiManager)
+            // Graph Tab
+            GraphingView()
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "brain.head.profile.fill" : "brain.head.profile")
-                    Text("Insights")
+                    Image(systemName: selectedTab == 3 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
+                    Text("Graphs")
                 }
                 .tag(3)
+            
+            // AI Insights Tab
+            AIInsightsView()
+                .tabItem {
+                    Image(systemName: selectedTab == 4 ? "brain.head.profile.fill" : "brain.head.profile")
+                    Text("Insights")
+                }
+                .tag(4)
             
             // Settings Tab
             SettingsView()
                 .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 4 ? "gearshape.fill" : "gearshape")
+                    Image(systemName: selectedTab == 5 ? "gearshape.fill" : "gearshape")
                     Text("Settings")
                 }
-                .tag(4)
+                .tag(5)
         }
-        .environmentObject(dexcomManager)
-        .environmentObject(healthKitManager)
-        .environmentObject(apiManager)
         .accentColor(.accentColor)
         .onAppear {
             setupTabBarAppearance()

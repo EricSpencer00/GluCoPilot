@@ -1,14 +1,15 @@
 import SwiftUI
+import Charts
 
 struct AIInsightsView: View {
-    // Note: These should be proper manager types when module resolution is complete
-    @State private var apiManager: Any? = nil
-    @State private var dexcomManager: Any? = nil
+    @EnvironmentObject private var apiManager: APIManager
     @State private var insights: [AIInsight] = []
     @State private var isLoading = false
     @State private var lastUpdateDate: Date?
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var selectedInsight: AIInsight?
+    @State private var showDetailView = false
     
     var body: some View {
         ScrollView {
@@ -63,6 +64,10 @@ struct AIInsightsView: View {
                 LazyVStack(spacing: 16) {
                     ForEach(insights) { insight in
                         InsightCard(insight: insight)
+                            .onTapGesture {
+                                selectedInsight = insight
+                                showDetailView = true
+                            }
                     }
                 }
                 .padding(.horizontal)
@@ -101,6 +106,11 @@ struct AIInsightsView: View {
         } message: {
             Text(errorMessage)
         }
+        .sheet(isPresented: $showDetailView) {
+            if let insight = selectedInsight {
+                InsightDetailView(insight: insight)
+            }
+        }
         .onAppear {
             if insights.isEmpty {
                 refreshInsights()
@@ -117,33 +127,218 @@ struct AIInsightsView: View {
     }
     
     private func refreshInsightsAsync() async {
-        // For now, create mock insights until API integration is complete
-        let mockInsights = [
-                AIInsight(
-                    title: "Blood Sugar Trend",
-                    description: "Your blood sugar has been trending upward over the past 3 days.",
-                    type: .bloodSugar,
-                    priority: .medium,
-                    timestamp: Date(),
-                    actionItems: ["Monitor carbohydrate intake", "Check medication timing"],
-                    dataPoints: ["average": 140.5, "change": 15.2]
-                ),
-                AIInsight(
-                    title: "Exercise Impact",
-                    description: "Regular exercise is helping stabilize your glucose levels.",
-                    type: .exercise,
-                    priority: .low,
-                    timestamp: Date(),
-                    actionItems: ["Continue current exercise routine"],
-                    dataPoints: ["correlation": 0.8, "improvement": 12.3]
-                )
-            ]
+        do {
+            let aiInsights = try await apiManager.aggregateDataAndGenerateInsights()
             
             await MainActor.run {
                 isLoading = false
-                insights = mockInsights
+                insights = aiInsights
                 lastUpdateDate = Date()
             }
+        } catch {
+            print("Error fetching insights: \(error.localizedDescription)")
+            
+            await MainActor.run {
+                isLoading = false
+                errorMessage = "Failed to generate insights: \(error.localizedDescription)"
+                showError = true
+                
+                // If there are no existing insights, create some defaults
+                if insights.isEmpty {
+                    insights = [
+                        AIInsight(
+                            title: "Blood Sugar Trend",
+                            description: "Your blood sugar has been trending upward over the past 3 days.",
+                            type: .bloodSugar,
+                            priority: .medium,
+                            timestamp: Date(),
+                            actionItems: ["Monitor carbohydrate intake", "Check medication timing"],
+                            dataPoints: ["average": 140.5, "change": 15.2]
+                        ),
+                        AIInsight(
+                            title: "Exercise Impact",
+                            description: "Regular exercise is helping stabilize your glucose levels.",
+                            type: .exercise,
+                            priority: .low,
+                            timestamp: Date(),
+                            actionItems: ["Continue current exercise routine"],
+                            dataPoints: ["correlation": 0.8, "improvement": 12.3]
+                        )
+                    ]
+                }
+            }
+        }
+    }
+}
+
+
+struct InsightDetailView: View {
+    let insight: AIInsight
+    @State private var selectedTimeframe: Timeframe = .day
+    
+    enum Timeframe: String, CaseIterable {
+        case day = "24h"
+        case week = "7d"
+        case month = "30d"
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header
+                    HStack {
+                        Image(systemName: insight.icon)
+                            .font(.largeTitle)
+                            .foregroundStyle(insight.priorityColor)
+                        
+                        VStack(alignment: .leading) {
+                            Text(insight.title)
+                                .font(.title)
+                                .fontWeight(.bold)
+                            
+                            Text(insight.category)
+                                .font(.subheadline)
+                                .textCase(.uppercase)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Description
+                    Text("Analysis")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    
+                    Text(insight.description)
+                        .font(.body)
+                    
+                    Divider()
+                    
+                    // Glucose Visualization (if blood sugar related)
+                    if insight.type == .bloodSugar {
+                        Text("Glucose Trends")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        // Time Selector
+                        Picker("Timeframe", selection: $selectedTimeframe) {
+                            ForEach(Timeframe.allCases, id: \.self) { timeframe in
+                                Text(timeframe.rawValue).tag(timeframe)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.bottom)
+                        
+                        // Sample glucose chart
+                        GlucoseChartView(timeframe: selectedTimeframe)
+                            .frame(height: 200)
+                            .padding(.bottom)
+                        
+                        Divider()
+                    }
+                    
+                    // Action Items
+                    if !insight.actionItems.isEmpty {
+                        Text("Recommended Actions")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(insight.actionItems, id: \.self) { action in
+                                HStack(alignment: .top) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.body)
+                                    
+                                    Text(action)
+                                        .font(.body)
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                    }
+                    
+                    // Data Visualization
+                    if !insight.dataPoints.isEmpty {
+                        Text("Data Points")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        // Chart for data points
+                        Chart {
+                            ForEach(Array(insight.dataPoints.keys.sorted()), id: \.self) { key in
+                                if let value = insight.dataPoints[key] {
+                                    BarMark(
+                                        x: .value("Category", key.capitalized),
+                                        y: .value("Value", value)
+                                    )
+                                    .foregroundStyle(insight.priorityColor.gradient)
+                                }
+                            }
+                        }
+                        .frame(height: 200)
+                        .padding(.bottom)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Insight Details")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+struct GlucoseChartView: View {
+    let timeframe: InsightDetailView.Timeframe
+    
+    // Sample data for preview
+    let sampleData: [(Date, Double)] = (0..<24).map { hour in
+        let date = Calendar.current.date(byAdding: .hour, value: -hour, to: Date())!
+        let value = Double.random(in: 80...200)
+        return (date, value)
+    }
+    
+    var body: some View {
+        Chart {
+            ForEach(sampleData, id: \.0) { item in
+                LineMark(
+                    x: .value("Time", item.0),
+                    y: .value("Glucose", item.1)
+                )
+                .foregroundStyle(.red.gradient)
+                .interpolationMethod(.catmullRom)
+                
+                AreaMark(
+                    x: .value("Time", item.0),
+                    y: .value("Glucose", item.1)
+                )
+                .foregroundStyle(.red.opacity(0.1))
+                .interpolationMethod(.catmullRom)
+            }
+            
+            // Target range
+            RectangleMark(
+                yStart: 70,
+                yEnd: 180
+            )
+            .foregroundStyle(.green.opacity(0.1))
+        }
+        .chartYScale(domain: 40...300)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: timeframe == .day ? 4 : 24)) { value in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour())
+            }
+        }
+        .chartYAxis {
+            AxisMarks(values: .stride(by: 50)) { value in
+                AxisGridLine()
+                AxisValueLabel()
+            }
+        }
     }
 }
 
@@ -195,7 +390,7 @@ struct InsightCard: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
                     
-                    ForEach(insight.actionItems, id: \.self) { action in
+                    ForEach(insight.actionItems.prefix(2), id: \.self) { action in
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "checkmark.circle")
                                 .font(.caption)
@@ -209,6 +404,12 @@ struct InsightCard: View {
                             Spacer()
                         }
                     }
+                    
+                    if insight.actionItems.count > 2 {
+                        Text("... and \(insight.actionItems.count - 2) more")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             
@@ -221,7 +422,7 @@ struct InsightCard: View {
             }
         }
         .padding()
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
@@ -230,5 +431,6 @@ struct InsightCard: View {
 #Preview {
     NavigationStack {
         AIInsightsView()
+            .environmentObject(APIManager())
     }
 }

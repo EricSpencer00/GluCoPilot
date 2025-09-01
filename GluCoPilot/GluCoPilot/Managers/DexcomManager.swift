@@ -69,8 +69,9 @@ enum DexcomManagerError: LocalizedError {
 @MainActor
 class DexcomManager: ObservableObject {
     @Published var isConnected = false
-    @Published var latestGlucoseReading: [String: Any]? // Use dictionary to avoid type conflicts
+    @Published var latestGlucoseReading: GlucoseReading?
     @Published var isLoading = false
+    @Published var lastUpdate: Date? = nil
     
     private let keychain = KeychainStorage()
     
@@ -86,24 +87,39 @@ class DexcomManager: ObservableObject {
         }
     }
     
-    func connect(username: String, password: String, isInternational: Bool, apiManager: Any) async throws {
+    func connect(username: String, password: String, isInternational: Bool, apiManager: APIManager) async throws {
         isLoading = true
         defer {
             isLoading = false
         }
         
-        // For now, we'll handle the connection without API validation
-        // This can be updated once the module structure is properly resolved
-        
-        // Store credentials securely (assuming they're valid for now)
-        keychain.setValue(username, for: "dexcom_username")
-        keychain.setValue(password, for: "dexcom_password")
-        keychain.setValue(String(isInternational), for: "dexcom_is_international")
-        
-        isConnected = true
-        
-        // Note: Actual API validation will be added once module structure is resolved
-        print("Dexcom credentials stored. API validation will be implemented.")
+        // Validate credentials through the API
+        do {
+            let isValid = try await apiManager.validateDexcomCredentials(
+                username: username,
+                password: password,
+                isInternational: isInternational
+            )
+            
+            if isValid {
+                // Store credentials securely
+                keychain.setValue(username, for: "dexcom_username")
+                keychain.setValue(password, for: "dexcom_password")
+                keychain.setValue(String(isInternational), for: "dexcom_is_international")
+                
+                isConnected = true
+                
+                // Fetch initial glucose reading
+                try await fetchLatestGlucoseReading(apiManager: apiManager)
+                
+                print("Dexcom credentials validated and stored successfully.")
+            } else {
+                throw DexcomManagerError.invalidCredentials
+            }
+        } catch {
+            print("Failed to validate Dexcom credentials: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     func disconnect() {
@@ -114,38 +130,49 @@ class DexcomManager: ObservableObject {
         
         isConnected = false
         latestGlucoseReading = nil
+        lastUpdate = nil
     }
     
-    func fetchLatestGlucoseReading(apiManager: Any? = nil) async throws {
+    func fetchLatestGlucoseReading(apiManager: APIManager) async throws {
         guard isConnected,
-              let _ = keychain.getValue(for: "dexcom_username"),
-              let _ = keychain.getValue(for: "dexcom_password"),
-              let _ = keychain.getValue(for: "dexcom_is_international") else {
+              let username = keychain.getValue(for: "dexcom_username"),
+              let password = keychain.getValue(for: "dexcom_password"),
+              let isInternationalString = keychain.getValue(for: "dexcom_is_international") else {
             throw DexcomManagerError.notConnected
         }
         
-        // For now, create a mock glucose reading as dictionary
-        // This will be replaced with actual API call once module structure is resolved
-        let mockReading: [String: Any] = [
-            "id": UUID().uuidString,
-            "value": Int.random(in: 80...200),
-            "trend": "flat",
-            "timestamp": Date(),
-            "unit": "mg/dL"
-        ]
+        let isInternational = isInternationalString == "true" || isInternationalString == "1"
         
-        await MainActor.run {
-            latestGlucoseReading = mockReading
+        isLoading = true
+        defer {
+            isLoading = false
         }
         
-        print("Mock glucose reading created. Actual API integration will be implemented.")
+        do {
+            let apiReading = try await apiManager.fetchLatestGlucoseReading(
+                username: username,
+                password: password,
+                isInternational: isInternational
+            )
+            
+            // Convert APIManagerGlucoseReading to GlucoseReading for use in the app
+            let reading = GlucoseReading(
+                id: UUID(),
+                value: apiReading.value,
+                trend: apiReading.trend,
+                timestamp: apiReading.timestamp,
+                unit: apiReading.unit
+            )
+            
+            await MainActor.run {
+                self.latestGlucoseReading = reading
+                self.lastUpdate = Date()
+            }
+            
+            print("Successfully fetched latest glucose reading: \(reading.value) \(reading.unit)")
+        } catch {
+            print("Error fetching glucose reading: \(error.localizedDescription)")
+            throw error
+        }
     }
-    }
-    
-    // Convenience method for backwards compatibility
-    func fetchLatestReading() async {
-        // This method can be called without APIManager for simple status updates
-        // The actual data fetching should be done through the other method
-        print("Note: Use fetchLatestGlucoseReading(apiManager:) for actual data fetching")
-    }
-
+}

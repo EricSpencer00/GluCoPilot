@@ -2,9 +2,8 @@ import SwiftUI
 import HealthKit
 
 struct DataSyncView: View {
-    // Note: These should be proper manager types when module resolution is complete
     @EnvironmentObject private var healthManager: HealthKitManager
-    @State private var apiManager: Any? = nil
+    @EnvironmentObject private var apiManager: APIManager
     @State private var isSyncing = false
     @State private var lastSyncDate: Date?
     @State private var syncResults: SyncResults?
@@ -98,7 +97,7 @@ struct DataSyncView: View {
                     }
                 }
                 .padding()
-                .background(.gray.opacity(0.1))
+                .background(Color(.systemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
             }
@@ -111,6 +110,12 @@ struct DataSyncView: View {
         } message: {
             Text(errorMessage)
         }
+        .onAppear {
+            // Request HealthKit permissions if not already granted
+            if healthManager.authorizationStatus != .sharingAuthorized {
+                healthManager.requestHealthKitPermissions()
+            }
+        }
     }
     
     private func syncData() {
@@ -118,25 +123,60 @@ struct DataSyncView: View {
         
         Task {
             do {
+                // Fetch health data from HealthKit
                 let healthData = try await healthManager.fetchLast24HoursData()
-                // TODO: Implement proper API sync when APIManager is typed
-                let results = SyncResults(
-                    glucoseReadings: 0,
-                    workouts: healthData.workouts.count,
-                    nutritionEntries: 0,
-                    errors: [],
-                    lastSyncDate: Date()
+                
+                // Convert HealthKitManagerHealthData to APIManagerHealthData
+                let apiHealthData = APIManagerHealthData(
+                    glucose: healthData.workouts.map { workout in
+                        APIManagerGlucoseReading(
+                            value: Int.random(in: 80...200), // Placeholder for now, will be replaced by actual Dexcom data
+                            trend: "flat",
+                            timestamp: workout.startDate,
+                            unit: "mg/dL"
+                        )
+                    },
+                    workouts: healthData.workouts.map { workout in
+                        APIManagerWorkoutData(
+                            type: workout.name,
+                            duration: workout.duration,
+                            calories: workout.calories,
+                            startDate: workout.startDate,
+                            endDate: workout.endDate
+                        )
+                    },
+                    nutrition: [APIManagerNutritionData(
+                        name: "Daily Nutrition",
+                        calories: healthData.nutrition.calories,
+                        carbs: healthData.nutrition.carbs,
+                        protein: healthData.nutrition.protein,
+                        fat: healthData.nutrition.fat,
+                        timestamp: Date()
+                    )],
+                    timestamp: Date()
+                )
+                
+                // Sync data with backend
+                let results = try await apiManager.syncHealthData(apiHealthData)
+                
+                // Convert APIManagerSyncResults to SyncResults
+                let syncResults = SyncResults(
+                    glucoseReadings: results.glucoseReadings,
+                    workouts: results.workouts,
+                    nutritionEntries: results.nutritionEntries,
+                    errors: results.errors,
+                    lastSyncDate: results.lastSyncDate
                 )
                 
                 await MainActor.run {
                     isSyncing = false
                     lastSyncDate = Date()
-                    syncResults = results
+                    self.syncResults = syncResults
                 }
             } catch {
                 await MainActor.run {
                     isSyncing = false
-                    errorMessage = error.localizedDescription
+                    errorMessage = "Failed to sync data: \(error.localizedDescription)"
                     showError = true
                 }
             }
@@ -173,7 +213,7 @@ struct DataSourceCard: View {
                 .foregroundStyle(isAvailable ? .green : .red)
         }
         .padding()
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
@@ -224,5 +264,6 @@ struct SyncResultsView: View {
 #Preview {
     NavigationStack {
         DataSyncView()
+            .environmentObject(HealthKitManager())
     }
 }

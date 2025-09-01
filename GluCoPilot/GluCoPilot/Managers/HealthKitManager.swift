@@ -159,15 +159,6 @@ class HealthKitManager: ObservableObject {
         }
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
-        let query = HKStatisticsQuery(
-            quantityType: stepType,
-            quantitySamplePredicate: predicate,
-            options: .cumulativeSum
-        ) { _, result, error in
-            if let error = error {
-                print("Error fetching step count: \(error.localizedDescription)")
-            }
-        }
         
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
@@ -176,7 +167,14 @@ class HealthKitManager: ObservableObject {
                 options: .cumulativeSum
             ) { _, result, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No step count data available for the specified time range. Returning 0.")
+                        continuation.resume(returning: 0)
+                    } else {
+                        print("Error fetching step count: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let steps = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
                     continuation.resume(returning: Int(steps))
@@ -201,7 +199,14 @@ class HealthKitManager: ObservableObject {
                 options: .cumulativeSum
             ) { _, result, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No active calories data available for the specified time range. Returning 0.")
+                        continuation.resume(returning: 0)
+                    } else {
+                        print("Error fetching active calories: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let calories = result?.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
                     continuation.resume(returning: Int(calories))
@@ -226,7 +231,14 @@ class HealthKitManager: ObservableObject {
                 options: .discreteAverage
             ) { _, result, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No heart rate data available for the specified time range. Returning 0.")
+                        continuation.resume(returning: 0)
+                    } else {
+                        print("Error fetching heart rate: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let heartRate = result?.averageQuantity()?.doubleValue(for: .count().unitDivided(by: .minute())) ?? 0
                     continuation.resume(returning: Int(heartRate))
@@ -248,7 +260,14 @@ class HealthKitManager: ObservableObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
             ) { _, samples, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No workout data available for the specified time range. Returning empty array.")
+                        continuation.resume(returning: [])
+                    } else {
+                        print("Error fetching workouts: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let workouts = (samples as? [HKWorkout])?.map { workout in
                         HealthKitManagerWorkoutData(
@@ -282,7 +301,14 @@ class HealthKitManager: ObservableObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
             ) { _, samples, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No sleep data available for the specified time range. Returning 0.")
+                        continuation.resume(returning: 0.0)
+                    } else {
+                        print("Error fetching sleep data: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let sleepSamples = samples as? [HKCategorySample] ?? []
                     let totalSleepTime = sleepSamples.reduce(0) { total, sample in
@@ -327,7 +353,14 @@ class HealthKitManager: ObservableObject {
                 options: .cumulativeSum
             ) { _, result, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    // Handle the specific "No data available" error gracefully
+                    if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+                        print("No nutrition data available for \(identifier) in the specified time range. Returning 0.")
+                        continuation.resume(returning: 0.0)
+                    } else {
+                        print("Error fetching nutrition data for \(identifier): \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
                     continuation.resume(returning: value)

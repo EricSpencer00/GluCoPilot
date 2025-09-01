@@ -7,6 +7,11 @@ class AuthenticationManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
     @Published var userDisplayName: String?
     @Published var userEmail: String?
+    @Published var isRegistering = false
+    @Published var showDexcomPrompt = false
+    
+    // This dependency is initialized in ContentView and passed to AuthManager
+    var apiManager: APIManager?
     
     private let keychain = KeychainHelper()
     
@@ -21,6 +26,11 @@ class AuthenticationManager: NSObject, ObservableObject {
             isAuthenticated = true
             userDisplayName = keychain.getValue(for: "user_display_name")
             userEmail = keychain.getValue(for: "user_email")
+            
+            // Check if Dexcom should be prompted
+            if keychain.getValue(for: "has_seen_dexcom_prompt") != "true" {
+                showDexcomPrompt = true
+            }
         }
     }
     
@@ -46,7 +56,8 @@ class AuthenticationManager: NSObject, ObservableObject {
     
     private func handleSuccessfulSignIn(credential: ASAuthorizationAppleIDCredential) {
         let userID = credential.user
-        let displayName = credential.fullName?.formatted() ?? "User"
+        let fullName = credential.fullName
+        let displayName = fullName?.formatted() ?? "User"
         let email = credential.email
         
         // Store credentials securely
@@ -60,8 +71,46 @@ class AuthenticationManager: NSObject, ObservableObject {
         isAuthenticated = true
         userDisplayName = displayName
         userEmail = email
+        showDexcomPrompt = true
+        
+        // Register with backend
+        Task {
+            await registerWithBackend(userID: userID, fullName: displayName, email: email)
+        }
         
         print("Apple Sign In successful for user: \(displayName)")
+    }
+    
+    private func registerWithBackend(userID: String, fullName: String, email: String?) async {
+        guard let apiManager = apiManager else {
+            print("APIManager not available for registration")
+            return
+        }
+        
+        isRegistering = true
+        
+        do {
+            let success = try await apiManager.registerWithAppleID(
+                userID: userID,
+                fullName: fullName,
+                email: email
+            )
+            
+            if success {
+                print("Successfully registered with backend")
+            }
+        } catch {
+            print("Error registering with backend: \(error.localizedDescription)")
+            // We don't fail the sign-in if backend registration fails
+            // The app should still work locally
+        }
+        
+        isRegistering = false
+    }
+    
+    func acknowledgeeDexcomPrompt() {
+        keychain.setValue("true", for: "has_seen_dexcom_prompt")
+        showDexcomPrompt = false
     }
     
     func signOut() {
@@ -69,11 +118,13 @@ class AuthenticationManager: NSObject, ObservableObject {
         keychain.removeValue(for: "apple_user_id")
         keychain.removeValue(for: "user_display_name")
         keychain.removeValue(for: "user_email")
+        keychain.removeValue(for: "has_seen_dexcom_prompt")
         
         // Clear state
         isAuthenticated = false
         userDisplayName = nil
         userEmail = nil
+        showDexcomPrompt = false
         
         print("User signed out")
     }
