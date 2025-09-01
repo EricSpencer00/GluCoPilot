@@ -3,21 +3,22 @@ import { Platform, PermissionsAndroid } from 'react-native';
 
 export class NotificationManager {
   static async initialize() {
-    // Configure push notifications
-    PushNotification.configure({
-      onNotification: this.handleNotificationReceived,
-      requestPermissions: Platform.OS === 'ios',
-    });
+    try {
+      // Configure push notifications
+      PushNotification.configure({
+        onNotification: this.handleNotificationReceived,
+        requestPermissions: Platform.OS === 'ios',
+      });
 
-    // Request permissions
-    await this.requestPermissions();
+      // Request permissions
+      await this.requestPermissions();
 
-    // Create default channel for Android
-    if (Platform.OS === 'android') {
-      PushNotification.createChannel(
-        {
-          channelId: 'default',
-          channelName: 'Default Channel',
+      // Create default channel for Android
+      if (Platform.OS === 'android') {
+        PushNotification.createChannel(
+          {
+            channelId: 'default',
+            channelName: 'Default Channel',
           channelDescription: 'GluCoPilot notifications',
           soundName: 'default',
           importance: 4,
