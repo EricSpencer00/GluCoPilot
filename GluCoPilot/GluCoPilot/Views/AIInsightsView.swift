@@ -1,13 +1,6 @@
 import SwiftUI
 import Charts
 
-// Forward declare to resolve circular dependency
-struct AppleSignInDebugView: View {
-    var body: some View {
-        Text("Apple Sign In Debug View")
-    }
-}
-
 struct AIInsightsView: View {
     @EnvironmentObject private var apiManager: APIManager
     @State private var insights: [AIInsight] = []
