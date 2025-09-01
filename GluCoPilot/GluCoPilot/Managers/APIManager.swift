@@ -1,25 +1,128 @@
 import Foundation
 
-// MARK: - Helper Classes (Inline to avoid import issues)
+// MARK: - Data Models
+struct GlucoseReading: Codable, Identifiable {
+    let id = UUID()
+    let value: Int
+    let trend: String
+    let timestamp: Date
+    let unit: String
+}
+
+struct HealthData: Codable {
+    let glucose: [GlucoseReading]
+    let workouts: [WorkoutData]?
+    let nutrition: [NutritionData]?
+    let timestamp: Date
+}
+
+struct WorkoutData: Codable, Identifiable {
+    let id = UUID()
+    let type: String
+    let duration: TimeInterval
+    let calories: Double?
+    let startDate: Date
+    let endDate: Date
+}
+
+struct NutritionData: Codable, Identifiable {
+    let id = UUID()
+    let name: String
+    let calories: Double
+    let carbs: Double
+    let protein: Double
+    let fat: Double
+    let timestamp: Date
+}
+
+struct AIInsight: Codable, Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+    let type: InsightType
+    let priority: InsightPriority
+    let timestamp: Date
+    let actionItems: [String]
+    let dataPoints: [String: Double]
+    
+    enum InsightType: String, Codable, CaseIterable {
+        case bloodSugar = "blood_sugar"
+        case diet = "diet"
+        case exercise = "exercise"
+        case medication = "medication"
+        case lifestyle = "lifestyle"
+        case pattern = "pattern"
+    }
+    
+    enum InsightPriority: String, Codable, CaseIterable {
+        case low = "low"
+        case medium = "medium"
+        case high = "high"
+        case critical = "critical"
+    }
+}
+
+struct SyncResults: Codable {
+    let glucoseReadings: Int
+    let workouts: Int
+    let nutritionEntries: Int
+    let errors: [String]
+    let lastSyncDate: Date
+    
+    var isSuccessful: Bool {
+        return errors.isEmpty
+    }
+    
+    var totalSyncedItems: Int {
+        return glucoseReadings + workouts + nutritionEntries
+    }
+}
+
+// MARK: - Error Types
+enum APIError: Error, LocalizedError {
+    case invalidURL
+    case noData
+    case decodingError(Error)
+    case networkError(Error)
+    case serverError(String)
+    case unauthorized
+    case rateLimited
+    case maintenanceMode
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL provided"
+        case .noData:
+            return "No data received from server"
+        case .decodingError(let error):
+            return "Failed to decode response: \(error.localizedDescription)"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .serverError(let message):
+            return "Server error: \(message)"
+        case .unauthorized:
+            return "Authentication required"
+        case .rateLimited:
+            return "Too many requests. Please try again later."
+        case .maintenanceMode:
+            return "Service is temporarily unavailable"
+        }
+    }
+}
+
+// MARK: - Keychain Helper
 class KeychainHelper {
     func setValue(_ value: String, for key: String) {
         let data = value.data(using: .utf8)!
-        
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecValueData as String: data
         ]
         
-        // Delete any existing item
         SecItemDelete(query as CFDictionary)
-        
-        // Add the new item
-        let status = SecItemAdd(query as CFDictionary, nil)
-        
-        if status != errSecSuccess {
-            print("Error storing keychain item: \(status)")
-        }
+        SecItemAdd(query as CFDictionary, nil)
     }
     
     func getValue(for key: String) -> String? {
@@ -33,126 +136,22 @@ class KeychainHelper {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         
-        if status == errSecSuccess,
-           let data = result as? Data,
-           let value = String(data: data, encoding: .utf8) {
-            return value
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
         }
         
-        return nil
+        return string
     }
     
-    func deleteValue(for key: String) {
+    func removeValue(for key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key
         ]
         
         SecItemDelete(query as CFDictionary)
-    }
-}
-
-// MARK: - Data Models
-struct GlucoseReading: Codable, Identifiable {
-    var id: UUID { UUID() }
-    let value: Int
-    let trend: String
-    let timestamp: Date
-    let unit: String
-    
-    var trendArrow: String {
-        switch trend.lowercased() {
-        case "rising rapidly", "doubleup": return "⇈"
-        case "rising", "singleup": return "↗"
-        case "rising slightly", "fortyfiveup": return "↗"
-        case "steady", "flat": return "→"
-        case "falling slightly", "fortyfivedown": return "↘"
-        case "falling", "singledown": return "↘"
-        case "falling rapidly", "doubledown": return "⇊"
-        default: return "?"
-        }
-    }
-    
-    var isInRange: Bool {
-        return value >= 70 && value <= 180
-    }
-    
-    var isHigh: Bool {
-        return value > 180
-    }
-    
-    var isLow: Bool {
-        return value < 70
-    }
-}
-
-struct HealthData: Codable {
-    let steps: Int
-    let activeCalories: Int
-    let averageHeartRate: Int
-    let workouts: [WorkoutData]
-    let sleepHours: Double
-    let nutrition: NutritionData
-    let startDate: Date
-    let endDate: Date
-}
-
-struct WorkoutData: Codable {
-    let type: String
-    let duration: TimeInterval
-    let calories: Double
-    let startDate: Date
-    let endDate: Date
-}
-
-struct NutritionData: Codable {
-    let calories: Double
-    let carbohydrates: Double
-    let protein: Double
-    let fat: Double
-}
-
-struct AIInsight: Identifiable, Codable {
-    var id: UUID { UUID() }
-    let title: String
-    let description: String
-    let category: String
-    let priority: Priority
-    let actionItems: [String]
-    let timestamp: Date
-    
-    enum Priority: String, Codable, CaseIterable {
-        case low = "Low"
-        case medium = "Medium"
-        case high = "High"
-    }
-}
-
-struct SyncResults: Codable {
-    let recordCount: Int
-    let stepCount: Int
-    let workoutCount: Int
-    let sleepHours: Double
-}
-
-// MARK: - Error Models
-enum APIError: LocalizedError {
-    case invalidResponse
-    case invalidData
-    case serverError(String)
-    case networkError
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            return "Invalid server response"
-        case .invalidData:
-            return "Invalid data received from server"
-        case .serverError(let message):
-            return message
-        case .networkError:
-            return "Network connection error"
-        }
     }
 }
 

@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Helper Classes (Inline to avoid import issues)
-class KeychainHelper {
+// Simple keychain storage class to avoid name conflicts
+class KeychainStorage {
     func setValue(_ value: String, for key: String) {
         let data = value.data(using: .utf8)!
         
@@ -12,15 +12,8 @@ class KeychainHelper {
             kSecValueData as String: data
         ]
         
-        // Delete any existing item
         SecItemDelete(query as CFDictionary)
-        
-        // Add the new item
-        let status = SecItemAdd(query as CFDictionary, nil)
-        
-        if status != errSecSuccess {
-            print("Error storing keychain item: \(status)")
-        }
+        SecItemAdd(query as CFDictionary, nil)
     }
     
     func getValue(for key: String) -> String? {
@@ -53,41 +46,6 @@ class KeychainHelper {
     }
 }
 
-// MARK: - Data Models
-struct GlucoseReading: Codable, Identifiable {
-    var id: UUID { UUID() }
-    let value: Int
-    let trend: String
-    let timestamp: Date
-    let unit: String
-    
-    var trendArrow: String {
-        switch trend.lowercased() {
-        case "rising rapidly", "doubleup": return "⇈"
-        case "rising", "singleup": return "↗"
-        case "rising slightly", "fortyfiveup": return "→"
-        case "stable", "flat": return "→"
-        case "falling slightly", "fortyfivedown": return "↘"
-        case "falling", "singledown": return "↓"
-        case "falling rapidly", "doubledown": return "⇊"
-        default: return "?"
-        }
-    }
-    
-    var isInRange: Bool {
-        return value >= 80 && value <= 180
-    }
-    
-    var color: String {
-        if value < 70 { return "red" }
-        else if value < 80 { return "orange" }
-        else if value <= 180 { return "green" }
-        else if value <= 250 { return "orange" }
-        else { return "red" }
-    }
-}
-
-// MARK: - Error Models
 enum DexcomError: LocalizedError {
     case notConnected
     case invalidCredentials
@@ -111,11 +69,10 @@ enum DexcomError: LocalizedError {
 @MainActor
 class DexcomManager: ObservableObject {
     @Published var isConnected = false
-    @Published var latestGlucoseReading: GlucoseReading?
+    @Published var latestGlucoseReading: [String: Any]? // Use dictionary to avoid type conflicts
     @Published var isLoading = false
     
-    private let keychain = KeychainHelper()
-    // Note: Will use environment object for APIManager to avoid circular dependency
+    private let keychain = KeychainStorage()
     
     init() {
         checkConnectionStatus()
@@ -167,14 +124,15 @@ class DexcomManager: ObservableObject {
             throw DexcomError.notConnected
         }
         
-        // For now, create a mock glucose reading
+        // For now, create a mock glucose reading as dictionary
         // This will be replaced with actual API call once module structure is resolved
-        let mockReading = GlucoseReading(
-            value: Int.random(in: 80...200),
-            trend: "flat",
-            timestamp: Date(),
-            unit: "mg/dL"
-        )
+        let mockReading: [String: Any] = [
+            "id": UUID().uuidString,
+            "value": Int.random(in: 80...200),
+            "trend": "flat",
+            "timestamp": Date(),
+            "unit": "mg/dL"
+        ]
         
         await MainActor.run {
             latestGlucoseReading = mockReading

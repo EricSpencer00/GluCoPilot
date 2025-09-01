@@ -1,6 +1,23 @@
 import SwiftUI
 import HealthKit
 
+// MARK: - Sync Results Model
+struct SyncResults: Codable {
+    let glucoseReadings: Int
+    let workouts: Int
+    let nutritionEntries: Int
+    let errors: [String]
+    let lastSyncDate: Date
+    
+    var isSuccessful: Bool {
+        return errors.isEmpty
+    }
+    
+    var totalSyncedItems: Int {
+        return glucoseReadings + workouts + nutritionEntries
+    }
+}
+
 struct DataSyncView: View {
     @EnvironmentObject var healthManager: HealthKitManager
     @EnvironmentObject var apiManager: APIManager

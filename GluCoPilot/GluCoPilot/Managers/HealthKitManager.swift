@@ -2,6 +2,41 @@ import Foundation
 import HealthKit
 import SwiftUI
 
+// MARK: - Health Data Models
+struct HealthData: Codable {
+    let glucose: [GlucoseReading]
+    let workouts: [WorkoutData]?
+    let nutrition: [NutritionData]?
+    let timestamp: Date
+}
+
+struct WorkoutData: Codable, Identifiable {
+    let id = UUID()
+    let type: String
+    let duration: TimeInterval
+    let calories: Double?
+    let startDate: Date
+    let endDate: Date
+}
+
+struct NutritionData: Codable, Identifiable {
+    let id = UUID()
+    let name: String
+    let calories: Double
+    let carbs: Double
+    let protein: Double
+    let fat: Double
+    let timestamp: Date
+}
+
+struct GlucoseReading: Codable, Identifiable {
+    let id = UUID()
+    let value: Int
+    let trend: String
+    let timestamp: Date
+    let unit: String
+}
+
 @MainActor
 class HealthKitManager: ObservableObject {
     @Published var isHealthKitAvailable = false

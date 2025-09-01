@@ -1,5 +1,33 @@
 import SwiftUI
 
+// MARK: - AI Insight Model
+struct AIInsight: Codable, Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+    let type: InsightType
+    let priority: InsightPriority
+    let timestamp: Date
+    let actionItems: [String]
+    let dataPoints: [String: Double]
+    
+    enum InsightType: String, Codable, CaseIterable {
+        case bloodSugar = "blood_sugar"
+        case diet = "diet"
+        case exercise = "exercise"
+        case medication = "medication"
+        case lifestyle = "lifestyle"
+        case pattern = "pattern"
+    }
+    
+    enum InsightPriority: String, Codable, CaseIterable {
+        case low = "low"
+        case medium = "medium"
+        case high = "high"
+        case critical = "critical"
+    }
+}
+
 struct AIInsightsView: View {
     @EnvironmentObject var apiManager: APIManager
     @EnvironmentObject var dexcomManager: DexcomManager
