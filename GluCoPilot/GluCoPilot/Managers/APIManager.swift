@@ -275,8 +275,8 @@ class APIManager: ObservableObject {
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
-    // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
-    _ = try await getValidAppleIdToken()
+    // Get a valid Apple token (we inspect it for simulator fallback detection)
+    let appleIdToken = try await getValidAppleIdToken()
         
         // Detect simulator fallback token
         let isSimulatorToken = appleIdToken.starts(with: "dev_simulator_token_")
