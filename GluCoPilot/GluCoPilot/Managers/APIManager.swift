@@ -234,11 +234,49 @@ class APIManager: ObservableObject {
             throw APIManagerError.unauthorized
         }
     }
+
+    /// Prefer app access token (minted by backend) for Authorization header; fall back to Apple id_token
+    private func getAuthHeader() async throws -> String {
+        // If we already have an app-specific access token, use it (and validate age)
+        if let appToken = keychain.getValue(for: "app_access_token") {
+            if let ts = UserDefaults.standard.object(forKey: "app_access_token_timestamp") as? Date {
+                let age = Date().timeIntervalSince(ts)
+                // Refresh app token proactively if older than 25 minutes
+                if age < 25 * 60 {
+                    return "Bearer \(appToken)"
+                } else {
+                    print("[APIManager] App access token appears old (\(Int(age/60))m), attempting refresh")
+                }
+            } else {
+                // No timestamp available; use the token but attempt a refresh in background
+                return "Bearer \(appToken)"
+            }
+        }
+
+        // Try to refresh app token by performing social login with Apple identity
+        if let appleUser = keychain.getValue(for: "apple_user_id") {
+            let displayName = keychain.getValue(for: "user_display_name")
+            let email = keychain.getValue(for: "user_email")
+            do {
+                print("[APIManager] Attempting to refresh app token via social-login for user: \(appleUser.prefix(8))...")
+                let _ = try await registerWithAppleID(userID: appleUser, fullName: displayName, email: email)
+                if let newToken = keychain.getValue(for: "app_access_token") {
+                    return "Bearer \(newToken)"
+                }
+            } catch {
+                print("[APIManager] social-login refresh failed: \(error.localizedDescription)")
+            }
+        }
+
+        // Fallback to using Apple id_token directly (will attempt to refresh it if missing)
+        let appleToken = try await getValidAppleIdToken()
+        return "Bearer \(appleToken)"
+    }
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
-        // Get a valid token using our helper
-        let appleIdToken = try await getValidAppleIdToken()
+    // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
+    _ = try await getValidAppleIdToken()
         
         // Detect simulator fallback token
         let isSimulatorToken = appleIdToken.starts(with: "dev_simulator_token_")
@@ -253,8 +291,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header (prefer app token, else Apple id_token)
+    let authHeader = try await getAuthHeader()
+    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "username": username,
@@ -264,12 +303,12 @@ class APIManager: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
-        
+    var (data, response) = try await session.data(for: request)
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
+
         if httpResponse.statusCode == 200 {
             return true
         } else {
@@ -286,66 +325,81 @@ class APIManager: ObservableObject {
             }
             #endif
             
+            // If unauthorized, attempt a token refresh and retry once
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                print("[APIManager] validateDexcomCredentials unauthorized - clearing tokens and retrying once")
+                keychain.removeValue(for: "app_access_token")
+                keychain.removeValue(for: "apple_id_token")
+                let newAuth = try await getAuthHeader()
+                request.setValue(newAuth, forHTTPHeaderField: "Authorization")
+                (data, response) = try await session.data(for: request)
+                if let retryResponse = response as? HTTPURLResponse, retryResponse.statusCode == 200 {
+                    return true
+                }
+            }
+
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMessage = errorData?["detail"] as? String ?? bodyStr
             throw APIManagerError.serverError(errorMessage)
         }
     }
     
-    // Register a user with Apple ID
+    // Register / social-login with Apple ID: call backend /social-login which will verify the Apple id_token
     func registerWithAppleID(userID: String, fullName: String?, email: String?) async throws -> Bool {
-        // Get a valid token using our helper
+        // Ensure we have an Apple id_token for social login verification
         let appleIdToken = try await getValidAppleIdToken()
 
-        let url = URL(string: "\(baseURL)/api/v1/auth/apple/register")!
+        let url = URL(string: "\(baseURL)/api/v1/social-login")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+        // Send the Apple id_token in the Authorization header (backend expects Bearer <id_token>)
+        let authHeader = try await getAuthHeader()
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+
         var body: [String: Any] = [
-            "apple_id": userID
+            "provider": "apple",
+            "id_token": appleIdToken
         ]
-        
-        if let fullName = fullName {
-            body["full_name"] = fullName
-        }
-        
-        if let email = email {
-            body["email"] = email
-        }
-        
-    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let f = fullName { body["first_name"] = f }
+        if let e = email { body["email"] = e }
 
-    request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-    let (data, response) = try await session.data(for: request)
-        
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
+
+        let responseBody = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+
         if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-            // Store the user ID in keychain
+            // Store the user ID and app access token if present
             keychain.setValue(userID, for: "apple_user_id")
+            if let accessToken = responseBody["access_token"] as? String {
+                keychain.setValue(accessToken, for: "app_access_token")
+                // store timestamp for token bookkeeping
+                UserDefaults.standard.set(Date(), forKey: "app_access_token_timestamp")
+            }
             return true
         } else {
-            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let errorMessage = errorData?["detail"] as? String ?? "Registration failed"
+            let errorMessage = responseBody["detail"] as? String ?? "Registration failed"
             throw APIManagerError.serverError(errorMessage)
         }
     }
     
     func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
-        // Get a valid token using our helper
-        let appleIdToken = try await getValidAppleIdToken()
+    // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
+    _ = try await getValidAppleIdToken()
 
         let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header (prefer app token, else Apple id_token)
+    let authHeader = try await getAuthHeader()
+    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "username": username,
@@ -355,15 +409,24 @@ class APIManager: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await session.data(for: request)
+        var (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
-        guard httpResponse.statusCode == 200 else {
+
+        if httpResponse.statusCode != 200 {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                throw APIManagerError.unauthorized
+                // Attempt a single refresh if possible
+                print("[APIManager] Unauthorized when fetching latest glucose; clearing tokens and retrying once")
+                keychain.removeValue(for: "app_access_token")
+                keychain.removeValue(for: "apple_id_token")
+                let newAuth = try await getAuthHeader()
+                request.setValue(newAuth, forHTTPHeaderField: "Authorization")
+                (data, response) = try await session.data(for: request)
+                guard let retryResponse = response as? HTTPURLResponse, retryResponse.statusCode == 200 else {
+                    throw APIManagerError.unauthorized
+                }
             } else if httpResponse.statusCode == 429 {
                 throw APIManagerError.rateLimited
             } else {
@@ -417,8 +480,8 @@ class APIManager: ObservableObject {
     
     // Fetch historical glucose readings for a given timeframe
     func fetchGlucoseReadings(timeframe: String, count: Int = 100) async throws -> [APIManagerGlucoseReading] {
-        // Get a valid token using our helper
-        let appleIdToken = try await getValidAppleIdToken()
+    // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
+    _ = try await getValidAppleIdToken()
         
         // Ensure we have Dexcom credentials
         guard let username = keychain.getValue(for: "dexcom_username"),
@@ -434,8 +497,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header (prefer app token, else Apple id_token)
+    let authHeader = try await getAuthHeader()
+    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "username": username,
@@ -447,15 +511,23 @@ class APIManager: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await session.data(for: request)
+    var (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
-        guard httpResponse.statusCode == 200 else {
+
+        if httpResponse.statusCode != 200 {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                throw APIManagerError.unauthorized
+                print("[APIManager] Unauthorized when fetching glucose readings; clearing tokens and retrying once")
+                keychain.removeValue(for: "app_access_token")
+                keychain.removeValue(for: "apple_id_token")
+                let newAuth = try await getAuthHeader()
+                request.setValue(newAuth, forHTTPHeaderField: "Authorization")
+                (data, response) = try await session.data(for: request)
+                guard let retryResponse = response as? HTTPURLResponse, retryResponse.statusCode == 200 else {
+                    throw APIManagerError.unauthorized
+                }
             } else if httpResponse.statusCode == 429 {
                 throw APIManagerError.rateLimited
             } else {
@@ -532,30 +604,39 @@ class APIManager: ObservableObject {
     
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
-        // Get a valid token using our helper
-        let appleIdToken = try await getValidAppleIdToken()
+        // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
+        _ = try await getValidAppleIdToken()
 
-        let url = URL(string: "\(baseURL)/api/v1/health/sync")!
+    let url = URL(string: "\(baseURL)/api/v1/integrations/health/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header (prefer app token, else Apple id_token)
+    let authHeader = try await getAuthHeader()
+    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         request.httpBody = try encoder.encode(healthData)
         
-        let (data, response) = try await session.data(for: request)
-        
+        var (data, response) = try await session.data(for: request)
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
-        guard httpResponse.statusCode == 200 else {
+
+        if httpResponse.statusCode != 200 {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                throw APIManagerError.unauthorized
+                print("[APIManager] Unauthorized when syncing health data; clearing tokens and retrying once")
+                keychain.removeValue(for: "app_access_token")
+                keychain.removeValue(for: "apple_id_token")
+                let newAuth = try await getAuthHeader()
+                request.setValue(newAuth, forHTTPHeaderField: "Authorization")
+                (data, response) = try await session.data(for: request)
+                guard let retryResponse = response as? HTTPURLResponse, retryResponse.statusCode == 200 else {
+                    throw APIManagerError.unauthorized
+                }
             } else {
                 let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
@@ -563,7 +644,7 @@ class APIManager: ObservableObject {
             }
         }
         
-        // Parse sync results
+    // Parse sync results
         do {
             let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             
@@ -595,8 +676,8 @@ class APIManager: ObservableObject {
     
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
-        // Get a valid token or throw error
-        let appleIdToken = try await getValidAppleIdToken()
+        // Get an authorization header (prefer app token, else Apple id_token)
+        let authHeader = try await getAuthHeader()
 
         // Prefer stateless recommendations endpoint if Dexcom creds are present
         var useStateless = false
@@ -613,18 +694,19 @@ class APIManager: ObservableObject {
             var req = URLRequest(url: URL(string: "\(baseURL)/api/v1/recommendations/stateless")!)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+            req.setValue(authHeader, forHTTPHeaderField: "Authorization")
             req.httpBody = try JSONSerialization.data(withJSONObject: dexcomBody)
             request = req
         } else {
             var req = URLRequest(url: URL(string: "\(baseURL)/api/v1/recommendations/recommendations")!)
             req.httpMethod = "GET"
-            req.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+            req.setValue(authHeader, forHTTPHeaderField: "Authorization")
             request = req
         }
 
-        // Add debug log
-        print("[APIManager] Making insights request with Authorization: Bearer \(appleIdToken.prefix(15))...")
+        // Add debug log (mask tokens)
+        let masked = authHeader.replacingOccurrences(of: "Bearer ", with: "")
+        print("[APIManager] Making insights request with Authorization: Bearer \(masked.prefix(15))...")
 
         let (data, response) = try await session.data(for: request)
 
@@ -632,15 +714,17 @@ class APIManager: ObservableObject {
             throw APIManagerError.invalidResponse
         }
 
-        guard httpResponse.statusCode == 200 else {
+        if httpResponse.statusCode != 200 {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 // Log the actual response to help debug authentication issues
                 let responseBody = String(data: data, encoding: .utf8) ?? "<no body>"
                 print("[APIManager] Authentication failed for insights request. Status: \(httpResponse.statusCode), response: \(responseBody)")
                 
-                // If token was invalid, clear it so next request will get fresh token
-                if responseBody.contains("Invalid token") || responseBody.contains("expired") {
-                    print("[APIManager] Clearing invalid/expired token")
+                // If token was invalid, clear stored tokens so next request will get fresh token
+                let bodyStr = responseBody.lowercased()
+                if bodyStr.contains("could not validate") || bodyStr.contains("invalid token") || bodyStr.contains("expired") {
+                    print("[APIManager] Clearing stored app and apple tokens due to auth failure")
+                    keychain.removeValue(for: "app_access_token")
                     keychain.removeValue(for: "apple_id_token")
                 }
                 
