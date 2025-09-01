@@ -348,6 +348,12 @@ class APIManager: ObservableObject {
             throw APIManagerError.decodingError(error)
         }
     }
+
+    // Cache the single latest reading (used by DexcomManager fallback)
+    private func cacheLatestGlucoseReading(_ reading: APIManagerGlucoseReading) {
+        cacheGlucoseReadings([reading], timeframe: "1d")
+    }
+    
     
     // Fetch historical glucose readings for a given timeframe
     func fetchGlucoseReadings(timeframe: String, count: Int = 100) async throws -> [APIManagerGlucoseReading] {
@@ -438,7 +444,10 @@ class APIManager: ObservableObject {
                 
                 glucoseReadings.append(glucoseReading)
             }
-            
+
+            // Cache successful fetch for this timeframe
+            cacheGlucoseReadings(glucoseReadings, timeframe: timeframe)
+
             return glucoseReadings
         } catch {
             print("Error parsing glucose readings: \(error.localizedDescription)")

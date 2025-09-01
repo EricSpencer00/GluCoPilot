@@ -173,7 +173,9 @@ class DexcomManager: ObservableObject {
             
             print("Successfully fetched latest glucose reading: \(reading.value) \(reading.unit)")
         } catch {
-            print("Error fetching glucose reading: \(error.localizedDescription)")
+            if error is CancellationError {
+                throw error
+            }
             // If rate limited, attempt to use cached readings from APIManager
             if let apiError = error as? APIManagerError {
                 if case .rateLimited = apiError {
@@ -229,7 +231,9 @@ class DexcomManager: ObservableObject {
             print("Successfully fetched \(readings.count) glucose readings")
             return readings
         } catch {
-            print("Error fetching glucose readings: \(error.localizedDescription)")
+            if error is CancellationError {
+                throw error
+            }
             // On rate limit, return cached readings if available
             if let apiError = error as? APIManagerError {
                 if case .rateLimited = apiError {
