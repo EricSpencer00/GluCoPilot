@@ -1,0 +1,20 @@
+# Workspace Copilot / editor hints
+# Purpose: Inform editors or automation that the `new-frontend` folder is reference-only
+
+version: 1
+description: |
+  Project contains a reference-only `new-frontend` folder. This folder is not used by the main build
+  and should not be modified or compiled. Use the main mobile frontends under `GluCoPilot/` or
+  `frontend/` instead.
+
+reference_only:
+  - path: new-frontend/**
+  - reason: "Reference-only. Do not modify or run."
+
+editor_integration_suggestions:
+  - vscode: |
+      Add the following to `.vscode/settings.json` to hide/exclude the folder from Explorer and Search:
+      {
+        "files.exclude": { "new-frontend/": true },
+        "search.exclude": { "new-frontend/": true }
+      }

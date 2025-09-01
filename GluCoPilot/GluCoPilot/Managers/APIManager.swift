@@ -157,6 +157,14 @@ class APIManager: ObservableObject {
         guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
             throw APIManagerError.unauthorized
         }
+        
+        // Detect simulator fallback token
+        let isSimulatorToken = appleIdToken.starts(with: "dev_simulator_token_")
+        #if targetEnvironment(simulator)
+        if isSimulatorToken {
+            print("[APIManager] Using simulator fallback token - some features may be limited")
+        }
+        #endif
 
         let url = URL(string: "\(baseURL)/api/v1/dexcom/signin")!
         var request = URLRequest(url: url)
@@ -174,7 +182,7 @@ class APIManager: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-    let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
@@ -186,6 +194,16 @@ class APIManager: ObservableObject {
             // Debug output: include response body to help diagnose auth issues (sanitized)
             let bodyStr = String(data: data, encoding: .utf8) ?? "<no body>"
             print("[APIManager] validateDexcomCredentials -> status: \(httpResponse.statusCode), body: \(bodyStr)")
+            
+            // Special handling for simulator mode with fallback token
+            #if targetEnvironment(simulator)
+            if isSimulatorToken && (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) {
+                print("[APIManager] Simulator fallback token rejected by server as expected")
+                print("[APIManager] In simulator mode, returning mock success for testing UI")
+                return true // Return mock success for simulator testing
+            }
+            #endif
+            
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMessage = errorData?["detail"] as? String ?? bodyStr
             throw APIManagerError.serverError(errorMessage)
