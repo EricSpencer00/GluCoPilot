@@ -1,26 +1,10 @@
 import SwiftUI
 import HealthKit
 
-// MARK: - Sync Results Model
-struct SyncResults: Codable {
-    let glucoseReadings: Int
-    let workouts: Int
-    let nutritionEntries: Int
-    let errors: [String]
-    let lastSyncDate: Date
-    
-    var isSuccessful: Bool {
-        return errors.isEmpty
-    }
-    
-    var totalSyncedItems: Int {
-        return glucoseReadings + workouts + nutritionEntries
-    }
-}
-
 struct DataSyncView: View {
-    @EnvironmentObject var healthManager: HealthKitManager
-    @EnvironmentObject var apiManager: APIManager
+    // Note: These should be proper manager types when module resolution is complete
+    @State private var healthManager: Any? = nil
+    @State private var apiManager: Any? = nil
     @State private var isSyncing = false
     @State private var lastSyncDate: Date?
     @State private var syncResults: SyncResults?
@@ -233,7 +217,5 @@ struct SyncResultsView: View {
 #Preview {
     NavigationStack {
         DataSyncView()
-            .environmentObject(HealthKitManager())
-            .environmentObject(APIManager())
     }
 }

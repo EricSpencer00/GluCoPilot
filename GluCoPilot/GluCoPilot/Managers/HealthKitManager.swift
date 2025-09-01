@@ -2,62 +2,6 @@ import Foundation
 import HealthKit
 import SwiftUI
 
-// MARK: - Health Data Models
-struct HealthData: Codable {
-    let glucose: [GlucoseReading]
-    let workouts: [WorkoutData]?
-    let nutrition: [NutritionData]?
-    let timestamp: Date
-}
-
-struct WorkoutData: Codable, Identifiable {
-    var id = UUID()
-    let type: String
-    let duration: TimeInterval
-    let calories: Double?
-    let startDate: Date
-    let endDate: Date
-}
-
-struct NutritionData: Codable, Identifiable {
-    var id = UUID()
-    let name: String
-    let calories: Double
-    let carbs: Double
-    let protein: Double
-    let fat: Double
-    let timestamp: Date
-}
-
-struct GlucoseReading: Codable, Identifiable {
-    var id = UUID()
-    let value: Int
-    let trend: String
-    let timestamp: Date
-    let unit: String
-}
-
-// MARK: - HealthKit Error Types
-enum HealthKitError: Error, LocalizedError {
-    case notAvailable
-    case notAuthorized
-    case invalidType
-    case noData
-    
-    var errorDescription: String? {
-        switch self {
-        case .notAvailable:
-            return "HealthKit is not available on this device"
-        case .notAuthorized:
-            return "HealthKit access not authorized"
-        case .invalidType:
-            return "Invalid HealthKit data type"
-        case .noData:
-            return "No data available"
-        }
-    }
-}
-
 @MainActor
 class HealthKitManager: ObservableObject {
     @Published var isHealthKitAvailable = false

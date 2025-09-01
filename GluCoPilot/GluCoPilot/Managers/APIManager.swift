@@ -1,7 +1,7 @@
 import Foundation
 
-// MARK: - Data Models
-struct GlucoseReading: Codable, Identifiable {
+// MARK: - API Manager Models (Isolated to avoid conflicts)
+struct APIManagerGlucoseReading: Codable, Identifiable {
     var id = UUID()
     let value: Int
     let trend: String
@@ -9,14 +9,14 @@ struct GlucoseReading: Codable, Identifiable {
     let unit: String
 }
 
-struct HealthData: Codable {
-    let glucose: [GlucoseReading]
-    let workouts: [WorkoutData]?
-    let nutrition: [NutritionData]?
+struct APIManagerHealthData: Codable {
+    let glucose: [APIManagerGlucoseReading]
+    let workouts: [APIManagerWorkoutData]?
+    let nutrition: [APIManagerNutritionData]?
     let timestamp: Date
 }
 
-struct WorkoutData: Codable, Identifiable {
+struct APIManagerWorkoutData: Codable, Identifiable {
     var id = UUID()
     let type: String
     let duration: TimeInterval
@@ -25,7 +25,7 @@ struct WorkoutData: Codable, Identifiable {
     let endDate: Date
 }
 
-struct NutritionData: Codable, Identifiable {
+struct APIManagerNutritionData: Codable, Identifiable {
     var id = UUID()
     let name: String
     let calories: Double
@@ -35,34 +35,18 @@ struct NutritionData: Codable, Identifiable {
     let timestamp: Date
 }
 
-struct AIInsight: Codable, Identifiable {
+struct APIManagerAIInsight: Codable, Identifiable {
     var id = UUID()
     let title: String
     let description: String
-    let type: InsightType
-    let priority: InsightPriority
+    let type: String
+    let priority: String
     let timestamp: Date
     let actionItems: [String]
     let dataPoints: [String: Double]
-    
-    enum InsightType: String, Codable, CaseIterable {
-        case bloodSugar = "blood_sugar"
-        case diet = "diet"
-        case exercise = "exercise"
-        case medication = "medication"
-        case lifestyle = "lifestyle"
-        case pattern = "pattern"
-    }
-    
-    enum InsightPriority: String, Codable, CaseIterable {
-        case low = "low"
-        case medium = "medium"
-        case high = "high"
-        case critical = "critical"
-    }
 }
 
-struct SyncResults: Codable {
+struct APIManagerSyncResults: Codable {
     let glucoseReadings: Int
     let workouts: Int
     let nutritionEntries: Int
@@ -79,7 +63,7 @@ struct SyncResults: Codable {
 }
 
 // MARK: - Error Types
-enum APIError: Error, LocalizedError {
+enum APIManagerError: Error, LocalizedError {
     case invalidURL
     case noData
     case decodingError(Error)
@@ -88,6 +72,8 @@ enum APIError: Error, LocalizedError {
     case unauthorized
     case rateLimited
     case maintenanceMode
+    case invalidResponse
+    case invalidData
     
     var errorDescription: String? {
         switch self {
@@ -107,12 +93,16 @@ enum APIError: Error, LocalizedError {
             return "Too many requests. Please try again later."
         case .maintenanceMode:
             return "Service is temporarily unavailable"
+        case .invalidResponse:
+            return "Invalid response from server"
+        case .invalidData:
+            return "Invalid data format"
         }
     }
 }
 
 // MARK: - Keychain Helper
-class KeychainHelper {
+class APIManagerKeychainHelper {
     func setValue(_ value: String, for key: String) {
         let data = value.data(using: .utf8)!
         let query: [String: Any] = [
@@ -159,7 +149,7 @@ class KeychainHelper {
 class APIManager: ObservableObject {
     private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
     private let session = URLSession.shared
-    private let keychain = KeychainHelper()
+    private let keychain = APIManagerKeychainHelper()
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {

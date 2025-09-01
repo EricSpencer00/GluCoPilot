@@ -1,61 +1,5 @@
 import SwiftUI
 
-// MARK: - AI Insight Model
-struct AIInsight: Codable, Identifiable {
-    var id = UUID()
-    let title: String
-    let description: String
-    let type: InsightType
-    let priority: InsightPriority
-    let timestamp: Date
-    let actionItems: [String]
-    let dataPoints: [String: Double]
-    
-    enum InsightType: String, Codable, CaseIterable {
-        case bloodSugar = "blood_sugar"
-        case diet = "diet"
-        case exercise = "exercise"
-        case medication = "medication"
-        case lifestyle = "lifestyle"
-        case pattern = "pattern"
-        
-        var icon: String {
-            switch self {
-            case .bloodSugar: return "drop.fill"
-            case .diet: return "fork.knife"
-            case .exercise: return "figure.run"
-            case .medication: return "pills.fill"
-            case .lifestyle: return "heart.fill"
-            case .pattern: return "chart.line.uptrend.xyaxis"
-            }
-        }
-    }
-    
-    enum InsightPriority: String, Codable, CaseIterable {
-        case low = "low"
-        case medium = "medium"
-        case high = "high"
-        case critical = "critical"
-        
-        var color: Color {
-            switch self {
-            case .low: return .green
-            case .medium: return .orange
-            case .high: return .red
-            case .critical: return .purple
-            }
-        }
-    }
-    
-    var icon: String {
-        return type.icon
-    }
-    
-    var priorityColor: Color {
-        return priority.color
-    }
-}
-
 struct AIInsightsView: View {
     // Note: These should be proper manager types when module resolution is complete
     @State private var apiManager: Any? = nil
@@ -173,21 +117,33 @@ struct AIInsightsView: View {
     }
     
     private func refreshInsightsAsync() async {
-        do {
-            let newInsights = try await apiManager.generateInsights()
+        // For now, create mock insights until API integration is complete
+        let mockInsights = [
+                AIInsight(
+                    title: "Blood Sugar Trend",
+                    description: "Your blood sugar has been trending upward over the past 3 days.",
+                    type: .bloodSugar,
+                    priority: .medium,
+                    timestamp: Date(),
+                    actionItems: ["Monitor carbohydrate intake", "Check medication timing"],
+                    dataPoints: ["average": 140.5, "change": 15.2]
+                ),
+                AIInsight(
+                    title: "Exercise Impact",
+                    description: "Regular exercise is helping stabilize your glucose levels.",
+                    type: .exercise,
+                    priority: .low,
+                    timestamp: Date(),
+                    actionItems: ["Continue current exercise routine"],
+                    dataPoints: ["correlation": 0.8, "improvement": 12.3]
+                )
+            ]
             
             await MainActor.run {
                 isLoading = false
-                insights = newInsights
+                insights = mockInsights
                 lastUpdateDate = Date()
             }
-        } catch {
-            await MainActor.run {
-                isLoading = false
-                errorMessage = error.localizedDescription
-                showError = true
-            }
-        }
     }
 }
 
