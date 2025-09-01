@@ -66,9 +66,9 @@ class AuthenticationManager: NSObject, ObservableObject {
     
     func signOut() {
         // Clear keychain
-        keychain.deleteValue(for: "apple_user_id")
-        keychain.deleteValue(for: "user_display_name")
-        keychain.deleteValue(for: "user_email")
+        keychain.removeValue(for: "apple_user_id")
+        keychain.removeValue(for: "user_display_name")
+        keychain.removeValue(for: "user_email")
         
         // Clear state
         isAuthenticated = false

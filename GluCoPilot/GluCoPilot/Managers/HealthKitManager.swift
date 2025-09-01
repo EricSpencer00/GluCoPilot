@@ -2,6 +2,42 @@ import Foundation
 import HealthKit
 import SwiftUI
 
+// MARK: - HealthKit Models
+struct HealthKitManagerHealthData: Codable {
+    let steps: Int
+    let activeCalories: Int
+    let averageHeartRate: Int
+    let workouts: [HealthKitManagerWorkoutData]
+    let sleepHours: Double
+    let nutrition: [HealthKitManagerNutritionData]
+    let glucose: Double
+    let timestamp: Date
+}
+
+struct HealthKitManagerWorkoutData: Codable {
+    let name: String
+    let duration: Double
+    let calories: Double
+    let startDate: Date
+    let endDate: Date
+}
+
+struct HealthKitManagerNutritionData: Codable {
+    let name: String
+    let calories: Double
+    let carbs: Double
+    let protein: Double
+    let fat: Double
+    let timestamp: Date
+}
+
+// MARK: - Error Types
+enum HealthKitManagerError: Error {
+    case notAvailable
+    case authorizationFailed
+    case dataFetchFailed
+}
+
 @MainActor
 class HealthKitManager: ObservableObject {
     @Published var isHealthKitAvailable = false
@@ -88,9 +124,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    func fetchLast24HoursData() async throws -> HealthData {
+    func fetchLast24HoursData() async throws -> HealthKitManagerHealthData {
         guard isHealthKitAvailable else {
-            throw HealthKitError.notAvailable
+            throw HealthKitManagerError.notAvailable
         }
         
         let endDate = Date()
@@ -103,15 +139,15 @@ class HealthKitManager: ObservableObject {
         async let sleep = fetchSleepData(from: startDate, to: endDate)
         async let nutrition = fetchNutritionData(from: startDate, to: endDate)
         
-        let healthData = HealthData(
+        let healthData = HealthKitManagerHealthData(
             steps: try await steps,
             activeCalories: try await calories,
             averageHeartRate: try await heartRate,
             workouts: try await workouts,
             sleepHours: try await sleep,
-            nutrition: try await nutrition,
-            startDate: startDate,
-            endDate: endDate
+            nutrition: [try await nutrition],
+            glucose: 120.0, // Default value, will be replaced by Dexcom data
+            timestamp: Date()
         )
         
         return healthData
@@ -201,7 +237,7 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [WorkoutData] {
+    private func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HealthKitManagerWorkoutData] {
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
         return try await withCheckedThrowingContinuation { continuation in
@@ -215,8 +251,8 @@ class HealthKitManager: ObservableObject {
                     continuation.resume(throwing: error)
                 } else {
                     let workouts = (samples as? [HKWorkout])?.map { workout in
-                        WorkoutData(
-                            type: workout.workoutActivityType.name,
+                        HealthKitManagerWorkoutData(
+                            name: workout.workoutActivityType.name,
                             duration: workout.duration,
                             calories: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0,
                             startDate: workout.startDate,
@@ -233,7 +269,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchSleepData(from startDate: Date, to endDate: Date) async throws -> Double {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
-            throw HealthKitError.invalidType
+            throw HealthKitManagerError.dataFetchFailed
         }
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
@@ -261,7 +297,7 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func fetchNutritionData(from startDate: Date, to endDate: Date) async throws -> NutritionData {
+    private func fetchNutritionData(from startDate: Date, to endDate: Date) async throws -> HealthKitManagerNutritionData {
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
         async let calories = fetchNutritionValue(.dietaryEnergyConsumed, predicate: predicate, unit: .kilocalorie())
@@ -269,17 +305,19 @@ class HealthKitManager: ObservableObject {
         async let protein = fetchNutritionValue(.dietaryProtein, predicate: predicate, unit: .gram())
         async let fat = fetchNutritionValue(.dietaryFatTotal, predicate: predicate, unit: .gram())
         
-        return NutritionData(
+        return HealthKitManagerNutritionData(
+            name: "Daily Nutrition",
             calories: try await calories,
-            carbohydrates: try await carbs,
+            carbs: try await carbs,
             protein: try await protein,
-            fat: try await fat
+            fat: try await fat,
+            timestamp: Date()
         )
     }
     
     private func fetchNutritionValue(_ identifier: HKQuantityTypeIdentifier, predicate: NSPredicate, unit: HKUnit) async throws -> Double {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
-            throw HealthKitError.invalidType
+            throw HealthKitManagerError.dataFetchFailed
         }
         
         return try await withCheckedThrowingContinuation { continuation in

@@ -46,7 +46,7 @@ class KeychainStorage {
     }
 }
 
-enum DexcomError: LocalizedError {
+enum DexcomManagerError: LocalizedError {
     case notConnected
     case invalidCredentials
     case networkError
@@ -121,7 +121,7 @@ class DexcomManager: ObservableObject {
               let _ = keychain.getValue(for: "dexcom_username"),
               let _ = keychain.getValue(for: "dexcom_password"),
               let _ = keychain.getValue(for: "dexcom_is_international") else {
-            throw DexcomError.notConnected
+            throw DexcomManagerError.notConnected
         }
         
         // For now, create a mock glucose reading as dictionary

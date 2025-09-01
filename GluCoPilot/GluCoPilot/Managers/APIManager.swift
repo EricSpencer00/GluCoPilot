@@ -174,7 +174,7 @@ class APIManager: ObservableObject {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
+            throw APIManagerError.invalidResponse
         }
         
         if httpResponse.statusCode == 200 {
@@ -182,11 +182,11 @@ class APIManager: ObservableObject {
         } else {
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMessage = errorData?["detail"] as? String ?? "Invalid credentials"
-            throw APIError.serverError(errorMessage)
+            throw APIManagerError.serverError(errorMessage)
         }
     }
     
-    func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> GlucoseReading {
+    func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
         let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -208,11 +208,11 @@ class APIManager: ObservableObject {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
+            throw APIManagerError.invalidResponse
         }
         
         guard httpResponse.statusCode == 200 else {
-            throw APIError.serverError("Failed to fetch glucose reading")
+            throw APIManagerError.serverError("Failed to fetch glucose reading")
         }
         
         let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -222,13 +222,13 @@ class APIManager: ObservableObject {
               let value = firstReading["value"] as? Int,
               let trend = firstReading["trend"] as? String,
               let timestampString = firstReading["timestamp"] as? String else {
-            throw APIError.invalidData
+            throw APIManagerError.invalidData
         }
         
         let formatter = ISO8601DateFormatter()
         let timestamp = formatter.date(from: timestampString) ?? Date()
         
-        return GlucoseReading(
+        return APIManagerGlucoseReading(
             value: value,
             trend: trend,
             timestamp: timestamp,
@@ -237,7 +237,7 @@ class APIManager: ObservableObject {
     }
     
     // MARK: - Health Data Sync
-    func syncHealthData(_ healthData: HealthData) async throws -> SyncResults {
+    func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
         let url = URL(string: "\(baseURL)/api/health/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -255,24 +255,25 @@ class APIManager: ObservableObject {
         let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
+            throw APIManagerError.invalidResponse
         }
         
         guard httpResponse.statusCode == 200 else {
-            throw APIError.serverError("Failed to sync health data")
+            throw APIManagerError.serverError("Failed to sync health data")
         }
         
         // Parse sync results
-        return SyncResults(
-            recordCount: healthData.workouts.count + (healthData.steps > 0 ? 1 : 0) + (healthData.sleepHours > 0 ? 1 : 0),
-            stepCount: healthData.steps,
-            workoutCount: healthData.workouts.count,
-            sleepHours: healthData.sleepHours
+        return APIManagerSyncResults(
+            glucoseReadings: healthData.glucose.count,
+            workouts: healthData.workouts?.count ?? 0,
+            nutritionEntries: healthData.nutrition?.count ?? 0,
+            errors: [],
+            lastSyncDate: Date()
         )
     }
     
     // MARK: - AI Insights
-    func generateInsights() async throws -> [AIInsight] {
+    func generateInsights() async throws -> [APIManagerAIInsight] {
         let url = URL(string: "\(baseURL)/api/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -294,11 +295,11 @@ class APIManager: ObservableObject {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
+            throw APIManagerError.invalidResponse
         }
         
         guard httpResponse.statusCode == 200 else {
-            throw APIError.serverError("Failed to generate insights")
+            throw APIManagerError.serverError("Failed to generate insights")
         }
         
         let decoder = JSONDecoder()
@@ -308,27 +309,28 @@ class APIManager: ObservableObject {
         let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
         
-        // Convert to AIInsight objects
-        var insights: [AIInsight] = []
+        // Convert to APIManagerAIInsight objects
+        var insights: [APIManagerAIInsight] = []
         
         for insightData in insightsArray {
             guard let title = insightData["title"] as? String,
                   let description = insightData["description"] as? String,
-                  let category = insightData["category"] as? String,
-                  let priorityString = insightData["priority"] as? String,
-                  let priority = AIInsight.Priority(rawValue: priorityString.capitalized) else {
+                  let typeString = insightData["type"] as? String,
+                  let priorityString = insightData["priority"] as? String else {
                 continue
             }
             
             let actionItems = insightData["action_items"] as? [String] ?? []
+            let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
             
-            let insight = AIInsight(
+            let insight = APIManagerAIInsight(
                 title: title,
                 description: description,
-                category: category,
-                priority: priority,
+                type: typeString,
+                priority: priorityString,
+                timestamp: Date(),
                 actionItems: actionItems,
-                timestamp: Date()
+                dataPoints: dataPoints
             )
             
             insights.append(insight)
@@ -342,31 +344,33 @@ class APIManager: ObservableObject {
         return insights
     }
     
-    private func getDefaultInsights() -> [AIInsight] {
+    private func getDefaultInsights() -> [APIManagerAIInsight] {
         return [
-            AIInsight(
+            APIManagerAIInsight(
                 title: "Welcome to GluCoPilot",
                 description: "Connect your Dexcom account and sync health data to get personalized AI insights for better diabetes management.",
-                category: "General",
-                priority: .medium,
+                type: "general",
+                priority: "medium",
+                timestamp: Date(),
                 actionItems: [
                     "Connect your Dexcom account in Settings",
                     "Sync your Apple Health data",
                     "Check back for AI-powered recommendations"
                 ],
-                timestamp: Date()
+                dataPoints: [:]
             ),
-            AIInsight(
+            APIManagerAIInsight(
                 title: "Data Sync Recommended",
                 description: "To get the most accurate insights, regularly sync your health data including activity, sleep, and nutrition information.",
-                category: "General",
-                priority: .low,
+                type: "general",
+                priority: "low",
+                timestamp: Date(),
                 actionItems: [
                     "Visit the Data tab to sync recent health data",
                     "Connect MyFitnessPal through Apple Health for nutrition tracking",
                     "Ensure your Apple Watch is syncing activity data"
                 ],
-                timestamp: Date()
+                dataPoints: [:]
             )
         ]
     }

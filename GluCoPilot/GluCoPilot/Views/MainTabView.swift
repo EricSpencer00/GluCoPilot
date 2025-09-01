@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MainTabView: View {
     @StateObject private var dexcomManager = DexcomManager()
@@ -10,6 +11,9 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             // Home/Dashboard Tab
             DashboardView()
+                .environmentObject(dexcomManager)
+                .environmentObject(healthKitManager)
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text("Home")
@@ -18,22 +22,26 @@ struct MainTabView: View {
             
             // Glucose/Dexcom Tab
             DexcomConnectionView()
+                .environmentObject(dexcomManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 1 ? "drop.circle.fill" : "drop.circle")
+                    Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
                     Text("Glucose")
                 }
                 .tag(1)
             
-            // Health Data Tab
+            // Data Tab
             DataSyncView()
+                .environmentObject(healthKitManager)
+                .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "heart.circle.fill" : "heart.circle")
-                    Text("Health")
+                    Image(systemName: selectedTab == 2 ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
+                    Text("Data")
                 }
                 .tag(2)
             
             // AI Insights Tab
             AIInsightsView()
+                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? "brain.head.profile.fill" : "brain.head.profile")
                     Text("Insights")
@@ -42,6 +50,8 @@ struct MainTabView: View {
             
             // Settings Tab
             SettingsView()
+                .environmentObject(dexcomManager)
+                .environmentObject(healthKitManager)
                 .tabItem {
                     Image(systemName: selectedTab == 4 ? "gearshape.fill" : "gearshape")
                     Text("Settings")
@@ -105,10 +115,12 @@ struct DashboardView: View {
         }
     }
     
-    private func refreshDashboard() async {
+    private func refreshDashboard() {
         // Refresh all data
-        await dexcomManager.fetchLatestReading()
-        await healthKitManager.requestPermissions()
+        Task {
+            try? await dexcomManager.fetchLatestGlucoseReading()
+        }
+        healthKitManager.requestHealthKitPermissions()
     }
 }
 
@@ -231,13 +243,15 @@ struct LatestGlucoseView: View {
                     .foregroundColor(.secondary)
             }
             
-            if let reading = dexcomManager.latestReading {
+            if let reading = dexcomManager.latestGlucoseReading,
+               let value = reading["value"] as? Int,
+               let trend = reading["trend"] as? String {
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("\(reading.value)")
+                        Text("\(value)")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                            .foregroundColor(getGlucoseColor(reading.value))
+                            .foregroundColor(getGlucoseColor(value))
                         Text("mg/dL")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -246,10 +260,10 @@ struct LatestGlucoseView: View {
                     Spacer()
                     
                     VStack {
-                        Image(systemName: getTrendIcon(reading.trend))
+                        Image(systemName: getTrendIcon(trend))
                             .font(.title)
-                            .foregroundColor(getTrendColor(reading.trend))
-                        Text(reading.trend)
+                            .foregroundColor(getTrendColor(trend))
+                        Text(trend)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -268,9 +282,10 @@ struct LatestGlucoseView: View {
     }
     
     private func getTimestamp() -> String {
-        guard let reading = dexcomManager.latestReading else { return "" }
+        guard let reading = dexcomManager.latestGlucoseReading,
+              let timestamp = reading["timestamp"] as? Date else { return "" }
         let formatter = RelativeDateTimeFormatter()
-        return formatter.localizedString(for: reading.timestamp, relativeTo: Date())
+        return formatter.localizedString(for: timestamp, relativeTo: Date())
     }
     
     private func getGlucoseColor(_ value: Int) -> Color {
