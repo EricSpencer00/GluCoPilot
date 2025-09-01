@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { api } from './api';
+import api from './api';
 
 // Types for MyFitnessPal data
 export interface MyFitnessPalFood {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar } from 'react-native';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { Provider as PaperProvider, Snackbar } from 'react-native-paper';
@@ -14,7 +14,8 @@ import { NotificationManager } from './src/services/NotificationManager';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './src/services/secureStorage';
 import { setToken, setRefreshToken } from './src/store/slices/authSlice';
 import { setReduxDispatch } from './src/services/reduxDispatch';
-import { setAuthTokens } from './src/services/api'; 
+import { setAuthTokens } from './src/services/api';
+import api from './src/services/api'; 
 
 export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(true);
@@ -28,8 +29,6 @@ export default function App() {
     // Proactive token refresh on app launch
     const refreshTokenOnLaunch = async () => {
       try {
-        const api = (await import('./src/services/api')).default;
-
         // Read tokens from secure storage
         const storedToken = await secureStorage.getItem(AUTH_TOKEN_KEY);
         const storedRefreshToken = await secureStorage.getItem(REFRESH_TOKEN_KEY);
@@ -107,7 +106,7 @@ export default function App() {
             <NavigationContainer theme={theme}>
               <AppNavigator />
             </NavigationContainer>
-            <StatusBar style="auto" />
+            <StatusBar barStyle="default" />
             <Snackbar
               visible={showSnackbar}
               onDismiss={() => setShowSnackbar(false)}

@@ -5,7 +5,11 @@ import { useDispatch } from 'react-redux';
 import api from '../services/api';
 import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_PASSWORD_KEY, DEXCOM_OUS_KEY } from '../services/secureStorage';
 
-const DexcomSetupScreen = ({ navigation }) => {
+interface DexcomSetupScreenProps {
+  navigation: any;
+}
+
+const DexcomSetupScreen: React.FC<DexcomSetupScreenProps> = ({ navigation }) => {
   const dispatch = useDispatch();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

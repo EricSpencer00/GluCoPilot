@@ -1,19 +1,20 @@
 import React, { useEffect } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { Card, Text, Button, ActivityIndicator, Divider, List, Chip, Surface, IconButton } from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { clearDetailedInsight } from '../store/slices/aiSlice';
 import { DexcomStyleChart } from '../components/charts/DexcomStyleChart';
 import { useSelector as useReduxSelector } from 'react-redux';
+
 // Helper to filter glucose readings by timeframe
-function filterReadingsByTimeframe(readings, timeframe) {
+function filterReadingsByTimeframe(readings: any[], timeframe: any) {
   if (!readings || readings.length === 0 || !timeframe) return readings;
   const { start, end } = timeframe;
   const startTime = start ? new Date(start).getTime() : null;
   const endTime = end ? new Date(end).getTime() : null;
-  return readings.filter(r => {
+  return readings.filter((r: any) => {
     const t = new Date(r.timestamp).getTime();
     if (startTime && t < startTime) return false;
     if (endTime && t > endTime) return false;
@@ -186,7 +187,7 @@ const DetailedInsightScreen = ({ navigation }: { navigation: any }) => {
               {detail}
             </Text>
             {/* Show related recommendations if present */}
-            {related_recommendations?.length > 0 && (
+            {related_recommendations && related_recommendations.length > 0 && (
               <>
                 <Divider style={styles.divider} />
                 <Text variant="titleMedium" style={styles.detailTitle}>Related Suggestions</Text>

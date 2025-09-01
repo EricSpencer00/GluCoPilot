@@ -3,9 +3,8 @@ import { View, StyleSheet, Dimensions, Image } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-
-import loadingSmall from '../../../assets/loading-small.gif';
-import loadingMedium from '../../../assets/loading-medium.gif';
+const loadingSmall = require('../../../assets/loading-small.gif');
+const loadingMedium = require('../../../assets/loading-medium.gif');
 
 export const LoadingAnimation: React.FC = () => {
   const [showMedium, setShowMedium] = useState(false);

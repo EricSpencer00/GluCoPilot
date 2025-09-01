@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet, TextInput, RefreshControl } from 'react-native';
 import InsulinLogForm from '../components/InsulinLogForm';
@@ -9,6 +7,18 @@ import OtherLogForm from '../components/OtherLogForm';
 import { cacheLog, getCachedLogs } from '../utils/logCache';
 
 const API_BASE = '/api/v1';
+
+interface LogItem {
+  id: string;
+  type: 'food' | 'insulin' | 'other';
+  timestamp: string;
+  name?: string;
+  carbs?: number;
+  units?: number;
+  insulin_type?: string;
+  category?: string;
+  notes?: string;
+}
 
 const LOG_TYPES = [
   { key: 'all', label: 'All' },
@@ -31,7 +41,7 @@ const COLORS = {
 
 export default function LogsScreen() {
   const [filter, setFilter] = useState('all');
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState<LogItem[]>([]);
   const [showModal, setShowModal] = useState<null | 'food' | 'insulin' | 'other'>(null);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -42,11 +52,6 @@ export default function LogsScreen() {
   }, []);
 
   const fetchLogs = async () => {
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchLogs();
-    setRefreshing(false);
-  }, [fetchLogs]);
     try {
       // Fetch all logs from backend (should be unified endpoint in future)
       const [foodRes, insulinRes] = await Promise.all([
@@ -68,6 +73,12 @@ export default function LogsScreen() {
     }
   };
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLogs();
+    setRefreshing(false);
+  }, []);
+
   // When a log is created, cache it immediately
   const handleLogSuccess = async (log: any) => {
     await cacheLog(log);
@@ -87,11 +98,6 @@ export default function LogsScreen() {
     (!search || (l.name?.toLowerCase().includes(search.toLowerCase()) || l.insulin_type?.toLowerCase().includes(search.toLowerCase()) || l.notes?.toLowerCase().includes(search.toLowerCase()) ))
   );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchLogs();
-    setRefreshing(false);
-  }, []);
   return (
     <View style={styles.container}>
       {/* Quick Add Card */}

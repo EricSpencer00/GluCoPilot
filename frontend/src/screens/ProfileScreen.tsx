@@ -9,8 +9,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList, ProfileStackParamList } from '../navigation/types';
 import { logout } from '../store/slices/authSlice';
 import { useAppDispatch } from '../hooks/useAppDispatch';
-import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
+import Icon from 'react-native-vector-icons/Ionicons';
 import axios from 'axios';
 import { secureStorage, DEXCOM_USERNAME_KEY, DEXCOM_OUS_KEY } from '../services/secureStorage';
 
@@ -172,6 +171,15 @@ const ProfileScreen: React.FC = () => {
   const handleAppleHealthUpload = async () => {
     try {
       setUploading(true);
+      // Note: Document picker functionality needs to be implemented with react-native-document-picker
+      // For now, show a placeholder message
+      setSnackbarMessage('Document picker not implemented in React Native CLI version yet');
+      setSnackbarVisible(true);
+      setUploading(false);
+      return;
+      
+      // TODO: Replace with react-native-document-picker implementation
+      /*
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/xml',
         copyToCacheDirectory: true,
@@ -192,6 +200,7 @@ const ProfileScreen: React.FC = () => {
         });
         showSnackbar(response.data.message || 'Apple Health data imported!');
       }
+      */
     } catch (e) {
       showSnackbar('Failed to upload Apple Health file.');
     } finally {

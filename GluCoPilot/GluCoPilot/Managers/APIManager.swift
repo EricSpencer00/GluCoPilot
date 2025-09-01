@@ -1,0 +1,535 @@
+import Foundation
+
+// MARK: - API Manager Models (Isolated to avoid conflicts)
+struct APIManagerGlucoseReading: Codable, Identifiable {
+    var id = UUID()
+    let value: Int
+    let trend: String
+    let timestamp: Date
+    let unit: String
+}
+
+struct APIManagerHealthData: Codable {
+    var glucose: [APIManagerGlucoseReading]
+    let workouts: [APIManagerWorkoutData]?
+    let nutrition: [APIManagerNutritionData]?
+    let timestamp: Date
+}
+
+struct APIManagerWorkoutData: Codable, Identifiable {
+    var id = UUID()
+    let type: String
+    let duration: TimeInterval
+    let calories: Double?
+    let startDate: Date
+    let endDate: Date
+}
+
+struct APIManagerNutritionData: Codable, Identifiable {
+    var id = UUID()
+    let name: String
+    let calories: Double
+    let carbs: Double
+    let protein: Double
+    let fat: Double
+    let timestamp: Date
+}
+
+struct APIManagerAIInsight: Codable, Identifiable {
+    var id = UUID()
+    let title: String
+    let description: String
+    let type: String
+    let priority: String
+    let timestamp: Date
+    let actionItems: [String]
+    let dataPoints: [String: Double]
+}
+
+struct APIManagerSyncResults: Codable {
+    let glucoseReadings: Int
+    let workouts: Int
+    let nutritionEntries: Int
+    let errors: [String]
+    let lastSyncDate: Date
+    
+    var isSuccessful: Bool {
+        return errors.isEmpty
+    }
+    
+    var totalSyncedItems: Int {
+        return glucoseReadings + workouts + nutritionEntries
+    }
+}
+
+// MARK: - Error Types
+enum APIManagerError: Error, LocalizedError {
+    case invalidURL
+    case noData
+    case decodingError(Error)
+    case networkError(Error)
+    case serverError(String)
+    case unauthorized
+    case rateLimited
+    case maintenanceMode
+    case invalidResponse
+    case invalidData
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL provided"
+        case .noData:
+            return "No data received from server"
+        case .decodingError(let error):
+            return "Failed to decode response: \(error.localizedDescription)"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .serverError(let message):
+            return "Server error: \(message)"
+        case .unauthorized:
+            return "Authentication required"
+        case .rateLimited:
+            return "Too many requests. Please try again later."
+        case .maintenanceMode:
+            return "Service is temporarily unavailable"
+        case .invalidResponse:
+            return "Invalid response from server"
+        case .invalidData:
+            return "Invalid data format"
+        }
+    }
+}
+
+// MARK: - Keychain Helper
+class APIManagerKeychainHelper {
+    func setValue(_ value: String, for key: String) {
+        let data = value.data(using: .utf8)!
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+    
+    func getValue(for key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        
+        return string
+    }
+    
+    func removeValue(for key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+@MainActor
+class APIManager: ObservableObject {
+    private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
+    private let session = URLSession.shared
+    private let keychain = APIManagerKeychainHelper()
+    
+    // MARK: - Authentication
+    func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
+        let url = URL(string: "\(baseURL)/api/v1/dexcom/signin")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Apple ID token for authentication
+        if let appleUserID = keychain.getValue(for: "apple_user_id") {
+            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let body: [String: Any] = [
+            "username": username,
+            "password": password,
+            "ous": isInternational
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            return true
+        } else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMessage = errorData?["detail"] as? String ?? "Invalid credentials"
+            throw APIManagerError.serverError(errorMessage)
+        }
+    }
+    
+    // Register a user with Apple ID
+    func registerWithAppleID(userID: String, fullName: String?, email: String?) async throws -> Bool {
+        let url = URL(string: "\(baseURL)/api/v1/auth/apple/register")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var body: [String: Any] = [
+            "apple_id": userID
+        ]
+        
+        if let fullName = fullName {
+            body["full_name"] = fullName
+        }
+        
+        if let email = email {
+            body["email"] = email
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            // Store the user ID in keychain
+            keychain.setValue(userID, for: "apple_user_id")
+            return true
+        } else {
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let errorMessage = errorData?["detail"] as? String ?? "Registration failed"
+            throw APIManagerError.serverError(errorMessage)
+        }
+    }
+    
+    func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
+        let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Apple ID token for authentication
+        if let appleUserID = keychain.getValue(for: "apple_user_id") {
+            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let body: [String: Any] = [
+            "username": username,
+            "password": password,
+            "ous": isInternational
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIManagerError.unauthorized
+            } else {
+                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
+                throw APIManagerError.serverError(errorMessage)
+            }
+        }
+        
+        do {
+            // Parse the response data
+            let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let readings = responseData?["readings"] as? [[String: Any]] ?? []
+            
+            guard let firstReading = readings.first,
+                  let value = firstReading["value"] as? Int,
+                  let trend = firstReading["trend"] as? String,
+                  let timestampString = firstReading["timestamp"] as? String else {
+                throw APIManagerError.invalidData
+            }
+            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            // Try with fractional seconds first, then without if that fails
+            let timestamp: Date
+            if let date = formatter.date(from: timestampString) {
+                timestamp = date
+            } else {
+                formatter.formatOptions = [.withInternetDateTime]
+                timestamp = formatter.date(from: timestampString) ?? Date()
+            }
+            
+            return APIManagerGlucoseReading(
+                value: value,
+                trend: trend,
+                timestamp: timestamp,
+                unit: firstReading["unit"] as? String ?? "mg/dL"
+            )
+        } catch {
+            print("Error parsing glucose reading: \(error.localizedDescription)")
+            throw APIManagerError.decodingError(error)
+        }
+    }
+    
+    // MARK: - Health Data Sync
+    func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
+        let url = URL(string: "\(baseURL)/api/v1/health/sync")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Apple ID token for authentication
+        if let appleUserID = keychain.getValue(for: "apple_user_id") {
+            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        request.httpBody = try encoder.encode(healthData)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIManagerError.unauthorized
+            } else {
+                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
+                throw APIManagerError.serverError(errorMessage)
+            }
+        }
+        
+        // Parse sync results
+        do {
+            let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            
+            let glucoseReadings = responseData?["glucose_readings"] as? Int ?? 0
+            let workouts = responseData?["workouts"] as? Int ?? 0
+            let nutritionEntries = responseData?["nutrition_entries"] as? Int ?? 0
+            let errors = responseData?["errors"] as? [String] ?? []
+            
+            return APIManagerSyncResults(
+                glucoseReadings: glucoseReadings,
+                workouts: workouts,
+                nutritionEntries: nutritionEntries,
+                errors: errors,
+                lastSyncDate: Date()
+            )
+        } catch {
+            print("Error parsing sync results: \(error.localizedDescription)")
+            
+            // Return basic results if parsing fails
+            return APIManagerSyncResults(
+                glucoseReadings: healthData.glucose.count,
+                workouts: healthData.workouts?.count ?? 0,
+                nutritionEntries: healthData.nutrition?.count ?? 0,
+                errors: ["Failed to parse server response"],
+                lastSyncDate: Date()
+            )
+        }
+    }
+    
+    // MARK: - AI Insights
+    func generateInsights() async throws -> [AIInsight] {
+        let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add Apple ID token for authentication
+        if let appleUserID = keychain.getValue(for: "apple_user_id") {
+            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // Request insights for the last 24 hours
+        let body: [String: Any] = [
+            "timeframe": "24h",
+            "include_recommendations": true
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIManagerError.unauthorized
+            } else {
+                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
+                throw APIManagerError.serverError(errorMessage)
+            }
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        
+        // Parse the response
+        do {
+            let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
+            
+            // Convert to AIInsight objects
+            var insights: [AIInsight] = []
+            
+            for insightData in insightsArray {
+                guard let title = insightData["title"] as? String,
+                      let description = insightData["description"] as? String,
+                      let typeString = insightData["type"] as? String,
+                      let priorityString = insightData["priority"] as? String else {
+                    continue
+                }
+                
+                let actionItems = insightData["action_items"] as? [String] ?? []
+                let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
+                
+                // Map API insight type to our InsightType
+                let type: AIInsight.InsightType
+                switch typeString {
+                case "blood_sugar": type = .bloodSugar
+                case "diet": type = .diet
+                case "exercise": type = .exercise
+                case "medication": type = .medication
+                case "lifestyle": type = .lifestyle
+                case "pattern": type = .pattern
+                default: type = .pattern
+                }
+                
+                // Map API priority to our InsightPriority
+                let priority: AIInsight.InsightPriority
+                switch priorityString {
+                case "low": priority = .low
+                case "medium": priority = .medium
+                case "high": priority = .high
+                case "critical": priority = .critical
+                default: priority = .medium
+                }
+                
+                let insight = AIInsight(
+                    title: title,
+                    description: description,
+                    type: type,
+                    priority: priority,
+                    timestamp: Date(),
+                    actionItems: actionItems,
+                    dataPoints: dataPoints
+                )
+                
+                insights.append(insight)
+            }
+            
+            // If no insights from API, provide some default ones
+            if insights.isEmpty {
+                insights = getDefaultInsights()
+            }
+            
+            return insights
+        } catch {
+            print("Error parsing insights response: \(error.localizedDescription)")
+            throw APIManagerError.decodingError(error)
+        }
+    }
+    
+    // Unified function to aggregate all health data and generate insights
+    func aggregateDataAndGenerateInsights() async throws -> [AIInsight] {
+        // 1. Fetch HealthKit data
+        var healthData = APIManagerHealthData(
+            glucose: [],
+            workouts: [],
+            nutrition: [],
+            timestamp: Date()
+        )
+        
+        // 2. Fetch Dexcom data if available
+        if let username = keychain.getValue(for: "dexcom_username"),
+           let password = keychain.getValue(for: "dexcom_password") {
+            do {
+                let glucoseReading = try await fetchLatestGlucoseReading(
+                    username: username, 
+                    password: password, 
+                    isInternational: keychain.getValue(for: "dexcom_is_international") == "true"
+                )
+                
+                // Add to health data
+                healthData.glucose.append(glucoseReading)
+            } catch {
+                print("Failed to fetch Dexcom data: \(error.localizedDescription)")
+                // Continue with other data sources
+            }
+        }
+        
+        // 3. Sync the aggregated data
+        do {
+            _ = try await syncHealthData(healthData)
+        } catch {
+            print("Warning: Failed to sync health data: \(error.localizedDescription)")
+            // Continue anyway to try getting insights
+        }
+        
+        // 4. Generate insights
+        return try await generateInsights()
+    }
+    
+    private func getDefaultInsights() -> [AIInsight] {
+        return [
+            AIInsight(
+                title: "Welcome to GluCoPilot",
+                description: "Connect your Dexcom account and sync health data to get personalized AI insights for better diabetes management.",
+                type: .lifestyle,
+                priority: .medium,
+                timestamp: Date(),
+                actionItems: [
+                    "Connect your Dexcom account in Settings",
+                    "Sync your Apple Health data",
+                    "Check back for AI-powered recommendations"
+                ],
+                dataPoints: [:]
+            ),
+            AIInsight(
+                title: "Data Sync Recommended",
+                description: "To get the most accurate insights, regularly sync your health data including activity, sleep, and nutrition information.",
+                type: .pattern,
+                priority: .low,
+                timestamp: Date(),
+                actionItems: [
+                    "Visit the Data tab to sync recent health data",
+                    "Connect MyFitnessPal through Apple Health for nutrition tracking",
+                    "Ensure your Apple Watch is syncing activity data"
+                ],
+                dataPoints: [:]
+            )
+        ]
+    }
+}

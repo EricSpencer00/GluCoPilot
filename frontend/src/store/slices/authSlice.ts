@@ -1,4 +1,4 @@
-import jwtDecode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 // Helper to decode JWT and extract minimal user info
 function extractUserFromToken(token: string): Partial<User> | null {
   try {
@@ -71,9 +71,9 @@ export const socialLogin = createAsyncThunk(
       await secureStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
       // @ts-ignore
-      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
-        global.dispatch(setToken(token));
-        global.dispatch(setRefreshToken(refreshToken));
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && (global as any).dispatch) {
+        (global as any).dispatch(setToken(token));
+        (global as any).dispatch(setRefreshToken(refreshToken));
       }
 
       // Fetch user profile (handle stateless mode)
@@ -109,7 +109,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { User } from '../../types/User';
 import api, { setAuthTokens } from '../../services/api';
 import { secureStorage, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../../services/secureStorage';
-import * as Updates from 'expo-updates';
+import { persistor } from '../store';
 
 // Interfaces
 
@@ -167,9 +167,9 @@ export const login = createAsyncThunk(
 
       // Immediately update Redux state with tokens
       // @ts-ignore
-      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
-        global.dispatch(setToken(token));
-        global.dispatch(setRefreshToken(refreshToken));
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && (global as any).dispatch) {
+        (global as any).dispatch(setToken(token));
+        (global as any).dispatch(setRefreshToken(refreshToken));
       }
 
       // Fetch user profile (handle stateless mode)
@@ -232,9 +232,9 @@ export const register = createAsyncThunk(
 
       // Immediately update Redux state with tokens
       // @ts-ignore
-      if (typeof window === 'undefined' && typeof global !== 'undefined' && global.dispatch) {
-        global.dispatch(setToken(token));
-        global.dispatch(setRefreshToken(refreshToken));
+      if (typeof window === 'undefined' && typeof global !== 'undefined' && (global as any).dispatch) {
+        (global as any).dispatch(setToken(token));
+        (global as any).dispatch(setRefreshToken(refreshToken));
       }
 
       // Fetch user profile (handle stateless mode)
@@ -262,20 +262,19 @@ export const logout = createAsyncThunk('auth/logout', async () => {
   await secureStorage.removeItem(REFRESH_TOKEN_KEY);
   // Clear in-memory tokens
   setAuthTokens(null, null);
-  // Purge redux-persist state to fully clear auth (import lazily to avoid cycle)
+  // Purge redux-persist state to fully clear auth
   try {
-    const { persistor } = await import('../store');
     if (persistor && persistor.purge) await persistor.purge();
   } catch (e) {
-    // If dynamic import fails, continue — not critical for logout flow
+    // If purge fails, continue — not critical for logout flow
     // eslint-disable-next-line no-console
     console.warn('Could not purge persistor during logout:', e);
   }
 
   // Force a hard reload of the app to clear all in-memory state and interceptors
-  if (Updates?.reloadAsync) {
-    await Updates.reloadAsync();
-  }
+  // Note: In React Native CLI, we can't force reload like in Expo
+  // The app will need to be manually restarted or use a navigation reset
+  console.log('Logout complete. Please restart the app for a clean state.');
   return null;
 });
 
