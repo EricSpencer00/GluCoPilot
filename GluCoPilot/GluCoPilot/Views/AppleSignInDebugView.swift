@@ -24,7 +24,7 @@ struct AppleSignInDebugView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("ID Token Status:")
                         .font(.headline)
-                    if let token = KeychainHelper().getValue(for: "apple_id_token") {
+                    if let token = authManager.currentIdToken {
                         Text("Present: \(String(token.prefix(15)))...")
                             .font(.subheadline)
                             .foregroundStyle(.green)
@@ -153,7 +153,8 @@ struct AppleSignInDebugView: View {
         }
         .navigationTitle("Apple Sign In Debug")
         .onAppear {
-            currentToken = KeychainHelper().getValue(for: "apple_id_token")
+            // Sync with AuthenticationManager published token
+            currentToken = authManager.currentIdToken ?? KeychainHelper().getValue(for: "apple_id_token")
             if let token = currentToken {
                 let (h, c) = decodeJWTParts(token)
                 tokenHeader = h

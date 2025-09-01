@@ -10,6 +10,7 @@ class AuthenticationManager: NSObject, ObservableObject {
     @Published var userEmail: String?
     @Published var isRegistering = false
     @Published var showDexcomPrompt = false
+    @Published var currentIdToken: String? = nil
     
     // This dependency is initialized in ContentView and passed to AuthManager
     var apiManager: APIManager?
@@ -44,6 +45,8 @@ class AuthenticationManager: NSObject, ObservableObject {
                 print("[AuthManager] Running in simulator - using development fallback token")
                 let fallbackToken = "dev_simulator_token_\(UUID().uuidString)"
                 keychain.setValue(fallbackToken, for: "apple_id_token")
+                self.currentIdToken = fallbackToken
+                UserDefaults.standard.set(Date(), forKey: "apple_id_token_timestamp")
                 print("[AuthManager] Created development fallback token for simulator")
                 #else
                 // On real device, attempt interactive refresh
@@ -52,12 +55,14 @@ class AuthenticationManager: NSObject, ObservableObject {
                     do {
                         if let credential = await self.requestAppleIDCredential() {
                             // Save token if present
-                            if let identityToken = credential.identityToken,
-                               let idTokenString = String(data: identityToken, encoding: .utf8) {
-                                self.keychain.setValue(idTokenString, for: "apple_id_token")
-                                print("[AuthManager] Refreshed apple_id_token and saved to keychain")
-                                // Optionally re-register with backend
-                                await self.registerWithBackend(userID: credential.user, fullName: credential.fullName?.formatted() ?? "User", email: credential.email)
+                                          if let identityToken = credential.identityToken,
+                                              let idTokenString = String(data: identityToken, encoding: .utf8) {
+                                                self.keychain.setValue(idTokenString, for: "apple_id_token")
+                                                self.currentIdToken = idTokenString
+                                                UserDefaults.standard.set(Date(), forKey: "apple_id_token_timestamp")
+                                                print("[AuthManager] Refreshed apple_id_token and saved to keychain")
+                                                // Optionally re-register with backend
+                                                await self.registerWithBackend(userID: credential.user, fullName: credential.fullName?.formatted() ?? "User", email: credential.email)
                             } else {
                                 print("[AuthManager] Interactive refresh returned no identityToken")
                             }
@@ -110,6 +115,8 @@ class AuthenticationManager: NSObject, ObservableObject {
         if let identityToken = credential.identityToken,
            let idTokenString = String(data: identityToken, encoding: .utf8) {
             keychain.setValue(idTokenString, for: "apple_id_token")
+            currentIdToken = idTokenString
+            UserDefaults.standard.set(Date(), forKey: "apple_id_token_timestamp")
         }
         
         // Update state
@@ -193,6 +200,8 @@ class AuthenticationManager: NSObject, ObservableObject {
             // Check if we already have a token
             if let existingToken = keychain.getValue(for: "apple_id_token") {
                 print("[AuthManager] Existing token found")
+                // ensure published copy is up-to-date
+                self.currentIdToken = existingToken
                 return "Existing token: \(existingToken.prefix(15))..."
             }
             
@@ -201,6 +210,8 @@ class AuthenticationManager: NSObject, ObservableObject {
                 if let identityToken = credential.identityToken,
                    let idTokenString = String(data: identityToken, encoding: .utf8) {
                     keychain.setValue(idTokenString, for: "apple_id_token")
+                    self.currentIdToken = idTokenString
+                    UserDefaults.standard.set(Date(), forKey: "apple_id_token_timestamp")
                     print("[AuthManager] New token obtained and saved")
                     return "New token obtained: \(idTokenString.prefix(15))..."
                 } else {
@@ -218,6 +229,7 @@ class AuthenticationManager: NSObject, ObservableObject {
         // Clear keychain
         keychain.removeValue(for: "apple_user_id")
         keychain.removeValue(for: "apple_id_token")
+    currentIdToken = nil
         keychain.removeValue(for: "user_display_name")
         keychain.removeValue(for: "user_email")
         keychain.removeValue(for: "has_seen_dexcom_prompt")
