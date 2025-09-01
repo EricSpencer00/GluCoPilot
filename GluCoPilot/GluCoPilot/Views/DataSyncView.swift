@@ -213,13 +213,6 @@ struct SyncResultsView: View {
     }
 }
 
-struct SyncResults {
-    let recordCount: Int
-    let stepCount: Int
-    let workoutCount: Int
-    let sleepHours: Double
-}
-
 #Preview {
     NavigationStack {
         DataSyncView()

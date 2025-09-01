@@ -1,5 +1,161 @@
 import Foundation
 
+// MARK: - Helper Classes (Inline to avoid import issues)
+class KeychainHelper {
+    func setValue(_ value: String, for key: String) {
+        let data = value.data(using: .utf8)!
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data
+        ]
+        
+        // Delete any existing item
+        SecItemDelete(query as CFDictionary)
+        
+        // Add the new item
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        if status != errSecSuccess {
+            print("Error storing keychain item: \(status)")
+        }
+    }
+    
+    func getValue(for key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess,
+           let data = result as? Data,
+           let value = String(data: data, encoding: .utf8) {
+            return value
+        }
+        
+        return nil
+    }
+    
+    func deleteValue(for key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+// MARK: - Data Models
+struct GlucoseReading: Codable, Identifiable {
+    var id: UUID { UUID() }
+    let value: Int
+    let trend: String
+    let timestamp: Date
+    let unit: String
+    
+    var trendArrow: String {
+        switch trend.lowercased() {
+        case "rising rapidly", "doubleup": return "⇈"
+        case "rising", "singleup": return "↗"
+        case "rising slightly", "fortyfiveup": return "↗"
+        case "steady", "flat": return "→"
+        case "falling slightly", "fortyfivedown": return "↘"
+        case "falling", "singledown": return "↘"
+        case "falling rapidly", "doubledown": return "⇊"
+        default: return "?"
+        }
+    }
+    
+    var isInRange: Bool {
+        return value >= 70 && value <= 180
+    }
+    
+    var isHigh: Bool {
+        return value > 180
+    }
+    
+    var isLow: Bool {
+        return value < 70
+    }
+}
+
+struct HealthData: Codable {
+    let steps: Int
+    let activeCalories: Int
+    let averageHeartRate: Int
+    let workouts: [WorkoutData]
+    let sleepHours: Double
+    let nutrition: NutritionData
+    let startDate: Date
+    let endDate: Date
+}
+
+struct WorkoutData: Codable {
+    let type: String
+    let duration: TimeInterval
+    let calories: Double
+    let startDate: Date
+    let endDate: Date
+}
+
+struct NutritionData: Codable {
+    let calories: Double
+    let carbohydrates: Double
+    let protein: Double
+    let fat: Double
+}
+
+struct AIInsight: Identifiable, Codable {
+    var id: UUID { UUID() }
+    let title: String
+    let description: String
+    let category: String
+    let priority: Priority
+    let actionItems: [String]
+    let timestamp: Date
+    
+    enum Priority: String, Codable, CaseIterable {
+        case low = "Low"
+        case medium = "Medium"
+        case high = "High"
+    }
+}
+
+struct SyncResults: Codable {
+    let recordCount: Int
+    let stepCount: Int
+    let workoutCount: Int
+    let sleepHours: Double
+}
+
+// MARK: - Error Models
+enum APIError: LocalizedError {
+    case invalidResponse
+    case invalidData
+    case serverError(String)
+    case networkError
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            return "Invalid server response"
+        case .invalidData:
+            return "Invalid data received from server"
+        case .serverError(let message):
+            return message
+        case .networkError:
+            return "Network connection error"
+        }
+    }
+}
+
 @MainActor
 class APIManager: ObservableObject {
     private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
@@ -18,7 +174,7 @@ class APIManager: ObservableObject {
             request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
         }
         
-        let body = [
+        let body: [String: Any] = [
             "username": username,
             "password": password,
             "ous": isInternational
@@ -52,7 +208,7 @@ class APIManager: ObservableObject {
             request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
         }
         
-        let body = [
+        let body: [String: Any] = [
             "username": username,
             "password": password,
             "ous": isInternational
@@ -107,7 +263,7 @@ class APIManager: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         request.httpBody = try encoder.encode(healthData)
         
-        let (data, response) = try await session.data(for: request)
+        let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -139,7 +295,7 @@ class APIManager: ObservableObject {
         }
         
         // Request insights for the last 24 hours
-        let body = [
+        let body: [String: Any] = [
             "timeframe": "24h",
             "include_recommendations": true
         ]
@@ -224,34 +380,5 @@ class APIManager: ObservableObject {
                 timestamp: Date()
             )
         ]
-    }
-}
-
-// MARK: - Data Models
-struct SyncResults: Codable {
-    let recordCount: Int
-    let stepCount: Int
-    let workoutCount: Int
-    let sleepHours: Double
-}
-
-// MARK: - Errors
-enum APIError: LocalizedError {
-    case invalidResponse
-    case invalidData
-    case serverError(String)
-    case networkError
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            return "Invalid server response"
-        case .invalidData:
-            return "Invalid data received from server"
-        case .serverError(let message):
-            return message
-        case .networkError:
-            return "Network connection error"
-        }
     }
 }

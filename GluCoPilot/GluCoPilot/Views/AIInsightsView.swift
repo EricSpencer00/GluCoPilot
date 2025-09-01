@@ -212,41 +212,6 @@ struct InsightCard: View {
     }
 }
 
-struct AIInsight: Identifiable, Codable {
-    let id = UUID()
-    let title: String
-    let description: String
-    let category: String
-    let priority: Priority
-    let actionItems: [String]
-    let timestamp: Date
-    
-    enum Priority: String, Codable, CaseIterable {
-        case low = "Low"
-        case medium = "Medium"
-        case high = "High"
-    }
-    
-    var icon: String {
-        switch category.lowercased() {
-        case "glucose": return "drop.fill"
-        case "activity": return "figure.walk"
-        case "nutrition": return "fork.knife"
-        case "sleep": return "bed.double.fill"
-        case "general": return "lightbulb.fill"
-        default: return "info.circle.fill"
-        }
-    }
-    
-    var priorityColor: Color {
-        switch priority {
-        case .low: return .green
-        case .medium: return .orange
-        case .high: return .red
-        }
-    }
-}
-
 #Preview {
     NavigationStack {
         AIInsightsView()

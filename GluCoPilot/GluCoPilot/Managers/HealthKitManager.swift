@@ -1,10 +1,17 @@
 import Foundation
 import HealthKit
+import SwiftUI
 
 @MainActor
 class HealthKitManager: ObservableObject {
     @Published var isHealthKitAvailable = false
     @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
+    
+    // Published health metrics for UI
+    @Published var todaySteps: Int = 0
+    @Published var activeMinutes: Double = 0
+    @Published var sleepHours: Double = 0
+    @Published var averageHeartRate: Double = 0
     
     private let healthStore = HKHealthStore()
     
@@ -36,11 +43,48 @@ class HealthKitManager: ObservableObject {
                 if success {
                     print("HealthKit authorization granted")
                     self?.authorizationStatus = .sharingAuthorized
+                    // Update published properties after getting permissions
+                    Task {
+                        await self?.updatePublishedProperties()
+                    }
                 } else {
                     print("HealthKit authorization denied: \(error?.localizedDescription ?? "Unknown error")")
                     self?.authorizationStatus = .sharingDenied
                 }
             }
+        }
+    }
+    
+    func updatePublishedProperties() async {
+        do {
+            let startOfDay = Calendar.current.startOfDay(for: Date())
+            
+            // Update steps
+            let steps = try await fetchStepCount(from: startOfDay, to: Date())
+            await MainActor.run {
+                self.todaySteps = steps
+            }
+            
+            // Update heart rate
+            let heartRate = try await fetchHeartRate(from: startOfDay, to: Date())
+            await MainActor.run {
+                self.averageHeartRate = Double(heartRate)
+            }
+            
+            // Update sleep (previous night)
+            let sleepStart = Calendar.current.date(byAdding: .day, value: -1, to: startOfDay)!
+            let sleep = try await fetchSleepData(from: sleepStart, to: startOfDay)
+            await MainActor.run {
+                self.sleepHours = sleep
+            }
+            
+            // Update active minutes (approximate from calories)
+            let calories = try await fetchActiveCalories(from: startOfDay, to: Date())
+            await MainActor.run {
+                self.activeMinutes = Double(calories) / 5.0 // Rough approximation
+            }
+        } catch {
+            print("Error updating published properties: \(error)")
         }
     }
     
@@ -257,51 +301,6 @@ class HealthKitManager: ObservableObject {
     }
 }
 
-// MARK: - Data Models
-struct HealthData: Codable {
-    let steps: Int
-    let activeCalories: Int
-    let averageHeartRate: Int
-    let workouts: [WorkoutData]
-    let sleepHours: Double
-    let nutrition: NutritionData
-    let startDate: Date
-    let endDate: Date
-}
-
-struct WorkoutData: Codable {
-    let type: String
-    let duration: TimeInterval
-    let calories: Double
-    let startDate: Date
-    let endDate: Date
-}
-
-struct NutritionData: Codable {
-    let calories: Double
-    let carbohydrates: Double
-    let protein: Double
-    let fat: Double
-}
-
-// MARK: - Errors
-enum HealthKitError: LocalizedError {
-    case notAvailable
-    case invalidType
-    case authorizationDenied
-    
-    var errorDescription: String? {
-        switch self {
-        case .notAvailable:
-            return "HealthKit is not available on this device"
-        case .invalidType:
-            return "Invalid HealthKit data type"
-        case .authorizationDenied:
-            return "HealthKit authorization was denied"
-        }
-    }
-}
-
 // MARK: - Extensions
 extension HKWorkoutActivityType {
     var name: String {
@@ -311,7 +310,7 @@ extension HKWorkoutActivityType {
         case .cycling: return "Cycling"
         case .swimming: return "Swimming"
         case .yoga: return "Yoga"
-        case .strengthTraining: return "Strength Training"
+        case .functionalStrengthTraining: return "Strength Training"
         case .other: return "Other"
         default: return "Workout"
         }

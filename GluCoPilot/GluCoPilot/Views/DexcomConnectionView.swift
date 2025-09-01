@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DexcomConnectionView: View {
     @EnvironmentObject var dexcomManager: DexcomManager
+    @EnvironmentObject var apiManager: APIManager
     @State private var username = ""
     @State private var password = ""
     @State private var isInternational = false
@@ -38,7 +39,7 @@ struct DexcomConnectionView: View {
                         
                         TextField("Dexcom username", text: $username)
                             .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
+                            .autocapitalization(.none)
                             .autocorrectionDisabled()
                     }
                     
@@ -117,7 +118,8 @@ struct DexcomConnectionView: View {
                 try await dexcomManager.connect(
                     username: username,
                     password: password,
-                    isInternational: isInternational
+                    isInternational: isInternational,
+                    apiManager: apiManager
                 )
                 
                 await MainActor.run {
