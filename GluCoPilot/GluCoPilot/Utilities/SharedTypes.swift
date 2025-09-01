@@ -17,7 +17,7 @@ struct HealthData: Codable {
     let timestamp: Date
 }
 
-struct WorkoutData: Codable, Identifiable {
+struct WorkoutData: Codable, Identifiable, Equatable {
     var id = UUID()
     let type: String
     let duration: TimeInterval
@@ -34,6 +34,12 @@ struct NutritionData: Codable, Identifiable {
     let protein: Double
     let fat: Double
     let timestamp: Date
+}
+
+extension NutritionData: Equatable {
+    static func == (lhs: NutritionData, rhs: NutritionData) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
 
 // Backwards-compatible alias: some views expect a `FoodEntry` type

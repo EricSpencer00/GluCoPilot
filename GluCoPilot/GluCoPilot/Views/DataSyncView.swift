@@ -140,7 +140,7 @@ struct DataSyncView: View {
                     },
                     workouts: healthData.workouts.map { workout in
                         APIManagerWorkoutData(
-                            type: workout.name,
+                            type: workout.type,
                             duration: workout.duration,
                             calories: workout.calories,
                             startDate: workout.startDate,

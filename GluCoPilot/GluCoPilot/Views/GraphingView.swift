@@ -177,19 +177,11 @@ struct GraphingView: View {
     }
     
     private func loadDataAsync() async {
-        do {
-            // In a real implementation, we would fetch this data from the backend
-            // For now, we'll generate sample data
-            generateSampleData()
-            
-            await MainActor.run {
-                isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoading = false
-                self.error = error.localizedDescription
-            }
+        // In a real implementation, we would fetch this data from the backend
+        // For now, we'll generate sample data (no throwing operations)
+        generateSampleData()
+        await MainActor.run {
+            isLoading = false
         }
     }
     
@@ -294,9 +286,9 @@ struct GraphingView: View {
             
             let workoutTypes = ["Walking", "Running", "Cycling", "Strength Training", "Swimming"]
             let randomType = workoutTypes.randomElement() ?? "Walking"
-            
+
             newWorkouts.append(WorkoutData(
-                name: randomType,
+                type: randomType,
                 duration: duration,
                 calories: Double.random(in: 150...600),
                 startDate: workoutTime,
@@ -383,7 +375,7 @@ struct CombinedDataChart: View {
                     )
                     .foregroundStyle(.orange.opacity(0.5))
                     .annotation(position: .top) {
-                        Text(workout.name.prefix(1))
+                        Text(workout.type.prefix(1))
                             .font(.system(size: 8))
                             .foregroundStyle(.orange)
                     }
@@ -392,7 +384,7 @@ struct CombinedDataChart: View {
         }
         .chartYScale(domain: 40...300)
         .chartXAxis {
-            AxisMarks(values: .stride(by: timeframe == .day ? .hour : .day)) { value in
+            AxisMarks(values: .automatic) { value in
                 if let date = value.as(Date.self) {
                     let hour = Calendar.current.component(.hour, from: date)
                     let isAxisLabelHour = timeframe == .day ? hour % 4 == 0 : hour == 0
@@ -536,7 +528,8 @@ struct FoodLogCard: View {
                 .font(.headline)
             
             VStack(spacing: 12) {
-                ForEach(entries.prefix(3), id: \.timestamp) { entry in
+                ForEach(Array(entries.prefix(3)).indices, id: \.self) { idx in
+                    let entry = entries[idx]
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(entry.name)
@@ -562,7 +555,7 @@ struct FoodLogCard: View {
                     }
                     .padding(.vertical, 4)
                     
-                    if entry != entries.prefix(3).last {
+                    if idx < min(entries.count, 3) - 1 {
                         Divider()
                     }
                 }
@@ -584,10 +577,11 @@ struct WorkoutLogCard: View {
                 .font(.headline)
             
             VStack(spacing: 12) {
-                ForEach(workouts.prefix(3), id: \.startDate) { workout in
+                ForEach(Array(workouts.prefix(3)).indices, id: \.self) { idx in
+                    let workout = workouts[idx]
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(workout.name)
+                            Text(workout.type)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
@@ -612,7 +606,7 @@ struct WorkoutLogCard: View {
                     }
                     .padding(.vertical, 4)
                     
-                    if workout != workouts.prefix(3).last {
+                    if idx < min(workouts.count, 3) - 1 {
                         Divider()
                     }
                 }

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct MainTabView: View {
     @StateObject private var dexcomManager = DexcomManager()
@@ -124,11 +127,9 @@ struct DashboardView: View {
         }
     }
     
-    private func refreshDashboard() {
+    private func refreshDashboard() async {
         // Refresh all data
-        Task {
-            try? await dexcomManager.fetchLatestGlucoseReading(apiManager: apiManager)
-        }
+        try? await dexcomManager.fetchLatestGlucoseReading(apiManager: apiManager)
         healthKitManager.requestHealthKitPermissions()
     }
 }
