@@ -1,0 +1,94 @@
+import SwiftUI
+
+struct APIRequestDebugView: View {
+    @EnvironmentObject var apiManager: APIManager
+    @State private var logs: [String] = []
+    @State private var isRunning = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                HStack {
+                    Button(action: { Task { await runAllTests() } }) {
+                        Label("Run API Smoke Tests", systemImage: "bolt.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isRunning)
+
+                    Button("Clear") {
+                        logs.removeAll()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal)
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(logs, id: \ .self) { line in
+                            Text(line)
+                                .font(.caption)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(6)
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("API Debug")
+        }
+    }
+
+    private func append(_ text: String) {
+        Task { @MainActor in
+            logs.append(text)
+        }
+    }
+
+    private func runAllTests() async {
+        guard !isRunning else { return }
+        await MainActor.run { isRunning = true }
+        append("Starting API smoke tests...")
+
+        // 1) Test generateInsights (aggregate)
+        append("Calling aggregateDataAndGenerateInsights()...")
+        do {
+            let insights = try await apiManager.aggregateDataAndGenerateInsights()
+            append("aggregateDataAndGenerateInsights -> returned \(insights.count) insights")
+        } catch {
+            append("aggregateDataAndGenerateInsights -> error: \(error.localizedDescription)")
+        }
+
+        // 2) Test syncHealthData with minimal payload
+        append("Calling syncHealthData with minimal payload...")
+        do {
+            let dummyGlucose = APIManagerGlucoseReading(value: 120, trend: "flat", timestamp: Date(), unit: "mg/dL")
+            let dummyWorkout = APIManagerWorkoutData(type: "DebugWalking", duration: 600, calories: 30, startDate: Date().addingTimeInterval(-3600), endDate: Date().addingTimeInterval(-3000))
+            let dummyNutrition = APIManagerNutritionData(name: "DebugMeal", calories: 250, carbs: 30, protein: 10, fat: 8, timestamp: Date())
+
+            let payload = APIManagerHealthData(glucose: [dummyGlucose], workouts: [dummyWorkout], nutrition: [dummyNutrition], timestamp: Date())
+            let res = try await apiManager.syncHealthData(payload)
+            append("syncHealthData -> glucose:\(res.glucoseReadings) workouts:\(res.workouts) nutrition:\(res.nutritionEntries)")
+        } catch {
+            append("syncHealthData -> error: \(error.localizedDescription)")
+        }
+
+        // 3) Test Dexcom validate (if you want, this will fail without valid creds)
+        append("Calling validateDexcomCredentials with placeholder creds (expected to fail unless valid)...")
+        do {
+            let ok = try await apiManager.validateDexcomCredentials(username: "test@example.com", password: "password", isInternational: false)
+            append("validateDexcomCredentials -> ok:\(ok)")
+        } catch {
+            append("validateDexcomCredentials -> error: \(error.localizedDescription)")
+        }
+
+        append("API smoke tests finished")
+        await MainActor.run { isRunning = false }
+    }
+}
+
+#Preview {
+    APIRequestDebugView()
+        .environmentObject(APIManager())
+}
