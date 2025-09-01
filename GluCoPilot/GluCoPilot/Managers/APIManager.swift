@@ -353,9 +353,12 @@ class APIManager: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Send the Apple id_token in the Authorization header (backend expects Bearer <id_token>)
-        let authHeader = try await getAuthHeader()
-        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+    // Send the Apple id_token in the Authorization header (backend expects Bearer <id_token>)
+    // Important: do NOT call `getAuthHeader()` here — that can recurse back into
+    // `registerWithAppleID` and cause an infinite refresh loop. Use the freshly
+    // obtained Apple id_token directly.
+    let authHeader = "Bearer \(appleIdToken)"
+    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
 
         var body: [String: Any] = [
             "provider": "apple",
