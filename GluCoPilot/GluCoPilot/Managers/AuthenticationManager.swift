@@ -31,6 +31,10 @@ class AuthenticationManager: NSObject, ObservableObject {
             if keychain.getValue(for: "has_seen_dexcom_prompt") != "true" {
                 showDexcomPrompt = true
             }
+            // Warn if apple_user_id exists but apple_id_token is missing
+            if keychain.getValue(for: "apple_id_token") == nil {
+                print("[AuthManager] Warning: apple_user_id present but apple_id_token missing — backend calls will be unauthenticated")
+            }
         }
     }
     
