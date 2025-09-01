@@ -92,16 +92,6 @@ struct OnboardingView: View {
             .ignoresSafeArea()
             
             VStack {
-                // Skip button
-                HStack {
-                    Spacer()
-                    Button("Skip") {
-                        completeOnboarding()
-                    }
-                    .foregroundColor(.secondary)
-                    .padding()
-                }
-                
                 // Onboarding content
                 TabView(selection: $currentPage) {
                     ForEach(Array(onboardingPages.enumerated()), id: \.offset) { index, page in
