@@ -155,3 +155,5 @@ frontend/assets/Loading GluCoPilot.mp4
 
 frontend/ios
 backend/*.p8
+
+new-frontend/.build
