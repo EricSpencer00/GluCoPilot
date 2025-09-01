@@ -6,6 +6,8 @@ struct AppleSignInDebugView: View {
     @State private var testResult: String = ""
     @State private var isLoading = false
     @State private var currentToken: String?
+    @State private var tokenHeader: String = ""
+    @State private var tokenClaims: String = ""
     
     var body: some View {
         List {
@@ -58,6 +60,8 @@ struct AppleSignInDebugView: View {
                     keychain.removeValue(for: "apple_id_token")
                     currentToken = nil
                     testResult = "Token removed from keychain"
+                    tokenHeader = ""
+                    tokenClaims = ""
                 } label: {
                     Text("Clear ID Token")
                 }
@@ -68,6 +72,31 @@ struct AppleSignInDebugView: View {
                     Text(testResult)
                         .font(.callout)
                         .foregroundStyle(testResult.contains("Error") ? .red : .primary)
+                }
+            }
+
+            if let token = currentToken {
+                Section("Token (decoded)") {
+                    if !tokenHeader.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Header:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(tokenHeader)
+                                .font(.caption2)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    if !tokenClaims.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Claims:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(tokenClaims)
+                                .font(.caption2)
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
             }
             
@@ -91,8 +120,39 @@ struct AppleSignInDebugView: View {
         .navigationTitle("Apple Sign In Debug")
         .onAppear {
             currentToken = KeychainHelper().getValue(for: "apple_id_token")
+            if let token = currentToken {
+                let (h, c) = decodeJWTParts(token)
+                tokenHeader = h
+                tokenClaims = c
+            }
         }
     }
+}
+
+// MARK: - JWT helpers (debug only)
+fileprivate func decodeJWTParts(_ token: String) -> (String, String) {
+    let parts = token.split(separator: ".")
+    guard parts.count >= 2 else { return ("", "") }
+
+    func decodeBase64URL(_ s: Substring) -> String {
+        var str = String(s)
+        // Add padding
+        let rem = str.count % 4
+        if rem > 0 {
+            str += String(repeating: "=", count: 4 - rem)
+        }
+        str = str
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        if let data = Data(base64Encoded: str), let decoded = String(data: data, encoding: .utf8) {
+            return decoded
+        }
+        return ""
+    }
+
+    let header = decodeBase64URL(parts[0])
+    let claims = decodeBase64URL(parts[1])
+    return (header, claims)
 }
 
 #Preview {
