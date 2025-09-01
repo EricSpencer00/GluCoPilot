@@ -122,6 +122,26 @@ struct GraphingView: View {
                         Text("Combined Data View")
                             .font(.headline)
                             .padding(.horizontal)
+
+                        // Small source / cache badge
+                        HStack(spacing: 8) {
+                            if dexcomManager.lastUpdateSource == "cached" {
+                                Text("Cached")
+                                    .font(.caption2)
+                                    .padding(6)
+                                    .background(Color.yellow.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+
+                            if let last = dexcomManager.lastUpdate {
+                                Text("Updated: \(last, style: .relative)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.horizontal)
                         
                         if isLoading {
                             ProgressView()

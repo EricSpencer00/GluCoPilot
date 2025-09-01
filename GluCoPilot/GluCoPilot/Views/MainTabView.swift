@@ -205,7 +205,7 @@ struct QuickStatsView: View {
             StatCard(
                 title: "Heart Rate",
                 value: "\(Int(healthKitManager.averageHeartRate))",
-                icon: "heart.pulse",
+                icon: "heart.fill",
                 color: .pink
             )
         }

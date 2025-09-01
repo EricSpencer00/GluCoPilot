@@ -9,6 +9,12 @@ struct APIManagerGlucoseReading: Codable, Identifiable {
     let unit: String
 }
 
+// Local cache wrapper so we store a timestamp alongside readings
+private struct CachedGlucose: Codable {
+    let timestamp: Date
+    let readings: [APIManagerGlucoseReading]
+}
+
 struct APIManagerHealthData: Codable {
     var glucose: [APIManagerGlucoseReading]
     let workouts: [APIManagerWorkoutData]?
@@ -298,6 +304,8 @@ class APIManager: ObservableObject {
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw APIManagerError.unauthorized
+            } else if httpResponse.statusCode == 429 {
+                throw APIManagerError.rateLimited
             } else {
                 let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
@@ -383,6 +391,8 @@ class APIManager: ObservableObject {
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw APIManagerError.unauthorized
+            } else if httpResponse.statusCode == 429 {
+                throw APIManagerError.rateLimited
             } else {
                 let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
@@ -434,6 +444,22 @@ class APIManager: ObservableObject {
             print("Error parsing glucose readings: \(error.localizedDescription)")
             throw APIManagerError.decodingError(error)
         }
+    }
+
+    // MARK: - Glucose cache helpers
+    private func cacheGlucoseReadings(_ readings: [APIManagerGlucoseReading], timeframe: String) {
+        let cached = CachedGlucose(timestamp: Date(), readings: readings)
+        if let encoded = try? JSONEncoder().encode(cached) {
+            UserDefaults.standard.set(encoded, forKey: "cached_glucose_\(timeframe)_v1")
+        }
+    }
+
+    func getCachedGlucoseReadings(timeframe: String) -> (readings: [APIManagerGlucoseReading], timestamp: Date)? {
+        guard let data = UserDefaults.standard.data(forKey: "cached_glucose_\(timeframe)_v1") else { return nil }
+        if let cached = try? JSONDecoder().decode(CachedGlucose.self, from: data) {
+            return (cached.readings, cached.timestamp)
+        }
+        return nil
     }
     
     // MARK: - Health Data Sync
