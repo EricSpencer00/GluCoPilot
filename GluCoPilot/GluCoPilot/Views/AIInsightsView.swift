@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - AI Insight Model
 struct AIInsight: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let title: String
     let description: String
     let type: InsightType
@@ -18,6 +18,17 @@ struct AIInsight: Codable, Identifiable {
         case medication = "medication"
         case lifestyle = "lifestyle"
         case pattern = "pattern"
+        
+        var icon: String {
+            switch self {
+            case .bloodSugar: return "drop.fill"
+            case .diet: return "fork.knife"
+            case .exercise: return "figure.run"
+            case .medication: return "pills.fill"
+            case .lifestyle: return "heart.fill"
+            case .pattern: return "chart.line.uptrend.xyaxis"
+            }
+        }
     }
     
     enum InsightPriority: String, Codable, CaseIterable {
@@ -25,12 +36,30 @@ struct AIInsight: Codable, Identifiable {
         case medium = "medium"
         case high = "high"
         case critical = "critical"
+        
+        var color: Color {
+            switch self {
+            case .low: return .green
+            case .medium: return .orange
+            case .high: return .red
+            case .critical: return .purple
+            }
+        }
+    }
+    
+    var icon: String {
+        return type.icon
+    }
+    
+    var priorityColor: Color {
+        return priority.color
     }
 }
 
 struct AIInsightsView: View {
-    @EnvironmentObject var apiManager: APIManager
-    @EnvironmentObject var dexcomManager: DexcomManager
+    // Note: These should be proper manager types when module resolution is complete
+    @State private var apiManager: Any? = nil
+    @State private var dexcomManager: Any? = nil
     @State private var insights: [AIInsight] = []
     @State private var isLoading = false
     @State private var lastUpdateDate: Date?
@@ -117,7 +146,9 @@ struct AIInsightsView: View {
             .padding(.vertical)
         }
         .navigationTitle("AI Insights")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .refreshable {
             await refreshInsightsAsync()
         }
@@ -243,7 +274,5 @@ struct InsightCard: View {
 #Preview {
     NavigationStack {
         AIInsightsView()
-            .environmentObject(APIManager())
-            .environmentObject(DexcomManager())
     }
 }

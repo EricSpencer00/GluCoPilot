@@ -11,7 +11,7 @@ struct HealthData: Codable {
 }
 
 struct WorkoutData: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let type: String
     let duration: TimeInterval
     let calories: Double?
@@ -20,7 +20,7 @@ struct WorkoutData: Codable, Identifiable {
 }
 
 struct NutritionData: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let name: String
     let calories: Double
     let carbs: Double
@@ -30,11 +30,32 @@ struct NutritionData: Codable, Identifiable {
 }
 
 struct GlucoseReading: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let value: Int
     let trend: String
     let timestamp: Date
     let unit: String
+}
+
+// MARK: - HealthKit Error Types
+enum HealthKitError: Error, LocalizedError {
+    case notAvailable
+    case notAuthorized
+    case invalidType
+    case noData
+    
+    var errorDescription: String? {
+        switch self {
+        case .notAvailable:
+            return "HealthKit is not available on this device"
+        case .notAuthorized:
+            return "HealthKit access not authorized"
+        case .invalidType:
+            return "Invalid HealthKit data type"
+        case .noData:
+            return "No data available"
+        }
+    }
 }
 
 @MainActor

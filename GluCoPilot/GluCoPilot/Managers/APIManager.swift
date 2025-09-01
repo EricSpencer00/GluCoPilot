@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Data Models
 struct GlucoseReading: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let value: Int
     let trend: String
     let timestamp: Date
@@ -17,7 +17,7 @@ struct HealthData: Codable {
 }
 
 struct WorkoutData: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let type: String
     let duration: TimeInterval
     let calories: Double?
@@ -26,7 +26,7 @@ struct WorkoutData: Codable, Identifiable {
 }
 
 struct NutritionData: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let name: String
     let calories: Double
     let carbs: Double
@@ -36,7 +36,7 @@ struct NutritionData: Codable, Identifiable {
 }
 
 struct AIInsight: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let title: String
     let description: String
     let type: InsightType
