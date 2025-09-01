@@ -91,6 +91,18 @@ class HealthKitManager: ObservableObject {
             }
         }
     }
+
+    // Async wrapper to support `await healthKitManager.requestAuthorization()` call sites
+    func requestAuthorization() async {
+        await withCheckedContinuation { continuation in
+            requestHealthKitPermissions()
+            // Small delay to allow the HealthKit callback to complete in most flows.
+            // The real update to `authorizationStatus` happens in the callback.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                continuation.resume()
+            }
+        }
+    }
     
     func updatePublishedProperties() async {
         do {
@@ -427,6 +439,28 @@ class HealthKitManager: ObservableObject {
     }
 }
 
+    extension HealthKitManager {
+    // MARK: - Sync HealthKit data with backend
+    func syncWithBackend(apiManager: APIManager) async {
+        do {
+            // Set time range for 24 hours
+            let endDate = Date()
+            let startDate = Calendar.current.date(byAdding: .day, value: -1, to: endDate)!
+            
+            // Collect health data
+            let healthData = await collectHealthDataForSync(from: startDate, to: endDate)
+            
+            // Convert and sync with backend
+            let apiHealthData = healthData.toAPIManagerFormat()
+            _ = try await apiManager.syncHealthData(apiHealthData)
+            
+            print("[HealthKitManager] Successfully synced health data with backend")
+        } catch {
+            print("[HealthKitManager] Failed to sync health data: \(error.localizedDescription)")
+        }
+    }
+    }
+    
 // MARK: - Extensions
 extension HKWorkoutActivityType {
     var name: String {
@@ -440,5 +474,97 @@ extension HKWorkoutActivityType {
         case .other: return "Other"
         default: return "Workout"
         }
+    }
+}
+
+// MARK: - API Integration
+extension HealthKitManager {
+    func collectHealthDataForSync(from startDate: Date, to endDate: Date) async -> HealthKitManagerHealthData {
+        // Collect step count
+        let steps = (try? await fetchStepCount(from: startDate, to: endDate)) ?? 0
+
+        // Collect active calories
+        let activeCalories = (try? await fetchActiveCalories(from: startDate, to: endDate)) ?? 0
+
+        // Collect heart rate
+        let heartRate = (try? await fetchHeartRate(from: startDate, to: endDate)) ?? 0
+
+        // Collect workouts
+        let workouts = (try? await fetchWorkouts(from: startDate, to: endDate)) ?? []
+
+        // Collect sleep (hours)
+        let sleep = (try? await fetchSleepData(from: startDate, to: endDate)) ?? 0.0
+
+        // Collect nutrition (single aggregate -> wrap into array)
+        let nutritionSingle = try? await fetchNutritionData(from: startDate, to: endDate)
+        let nutrition: [HealthKitManagerNutritionData] = nutritionSingle.map { [$0] } ?? []
+
+        // Collect glucose (average)
+        let glucoseReadings = try? await fetchGlucoseReadings(from: startDate, to: endDate)
+        let averageGlucoseSum = glucoseReadings?.reduce(0.0) { partial, reading in
+            partial + Double(reading.value)
+        } ?? 0.0
+        let glucose = (glucoseReadings?.isEmpty ?? true) ? 0.0 : averageGlucoseSum / Double(glucoseReadings!.count)
+
+        // Return collected data
+        return HealthKitManagerHealthData(
+            steps: steps,
+            activeCalories: activeCalories,
+            averageHeartRate: heartRate,
+            workouts: workouts,
+            sleepHours: sleep,
+            nutrition: nutrition,
+            glucose: glucose,
+            timestamp: Date()
+        )
+    }
+}
+
+// MARK: - API Manager Conversion
+extension HealthKitManagerHealthData {
+    func toAPIManagerFormat() -> APIManagerHealthData {
+        // Convert workouts
+        let apiWorkouts = self.workouts.map { workout in
+            APIManagerWorkoutData(
+                type: workout.name,
+                startTime: workout.startDate,
+                endTime: workout.endDate,
+                duration: workout.duration,
+                caloriesBurned: workout.calories,
+                distance: 0, // Not available in this model
+                steps: 0 // Not available in this model
+            )
+        }
+        
+        // Convert nutrition data
+        let apiNutrition = self.nutrition.map { nutrition in
+            APIManagerNutritionData(
+                name: nutrition.name,
+                timestamp: nutrition.timestamp,
+                calories: nutrition.calories,
+                carbs: nutrition.carbs,
+                protein: nutrition.protein,
+                fat: nutrition.fat
+            )
+        }
+        
+        // Create and return API manager format
+        return APIManagerHealthData(
+            platform: "apple_health",
+            timestamp: self.timestamp,
+            metrics: APIManagerHealthMetrics(
+                steps: self.steps,
+                activeCalories: self.activeCalories,
+                heartRate: self.averageHeartRate,
+                glucose: self.glucose
+            ),
+            workouts: apiWorkouts,
+            sleepData: APIManagerSleepData(
+                totalHours: self.sleepHours,
+                deepSleepHours: 0, // Not available in this model
+                remSleepHours: 0 // Not available in this model
+            ),
+            nutrition: apiNutrition
+        )
     }
 }

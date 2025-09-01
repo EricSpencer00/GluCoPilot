@@ -64,12 +64,38 @@ struct APIRequestDebugView: View {
         append("Calling syncHealthData with minimal payload...")
         do {
             let dummyGlucose = APIManagerGlucoseReading(value: 120, trend: "flat", timestamp: Date(), unit: "mg/dL")
-            let dummyWorkout = APIManagerWorkoutData(type: "DebugWalking", duration: 600, calories: 30, startDate: Date().addingTimeInterval(-3600), endDate: Date().addingTimeInterval(-3000))
-            let dummyNutrition = APIManagerNutritionData(name: "DebugMeal", calories: 250, carbs: 30, protein: 10, fat: 8, timestamp: Date())
+            let dummyWorkout = APIManagerWorkoutData(
+                type: "DebugWalking",
+                startTime: Date().addingTimeInterval(-3600),
+                endTime: Date().addingTimeInterval(-3000),
+                duration: 600,
+                caloriesBurned: 30,
+                distance: 0,
+                steps: 0
+            )
+            let dummyNutrition = APIManagerNutritionData(
+                name: "DebugMeal",
+                timestamp: Date(),
+                calories: 250,
+                carbs: 30,
+                protein: 10,
+                fat: 8
+            )
 
-            let payload = APIManagerHealthData(glucose: [dummyGlucose], workouts: [dummyWorkout], nutrition: [dummyNutrition], timestamp: Date())
+            let metrics = APIManagerHealthMetrics(steps: 0, activeCalories: 0, heartRate: 0, glucose: Double(dummyGlucose.value))
+            let sleep = APIManagerSleepData(totalHours: 0, deepSleepHours: 0, remSleepHours: 0)
+
+            let payload = APIManagerHealthData(
+                platform: "apple_health",
+                timestamp: Date(),
+                metrics: metrics,
+                workouts: [dummyWorkout],
+                sleepData: sleep,
+                nutrition: [dummyNutrition]
+            )
+
             let res = try await apiManager.syncHealthData(payload)
-            append("syncHealthData -> glucose:\(res.glucoseReadings) workouts:\(res.workouts) nutrition:\(res.nutritionEntries)")
+            append("syncHealthData -> workouts:\(res.workouts) nutrition:\(res.nutritionEntries) steps:\(res.steps) sleep:\(res.sleep)")
         } catch {
             append("syncHealthData -> error: \(error.localizedDescription)")
         }

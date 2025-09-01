@@ -4,18 +4,16 @@ import UIKit
 #endif
 
 struct MainTabView: View {
-    @StateObject private var dexcomManager = DexcomManager()
-    @StateObject private var healthKitManager = HealthKitManager()
-    @StateObject private var apiManager = APIManager()
+    @EnvironmentObject private var apiManager: APIManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var dexcomManager: DexcomManager
     @State private var selectedTab = 0
+    @State private var lastSync: Date? = nil
     
     var body: some View {
         TabView(selection: $selectedTab) {
             // Home/Dashboard Tab
             DashboardView()
-                .environmentObject(dexcomManager)
-                .environmentObject(healthKitManager)
-                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text("Home")
@@ -24,9 +22,6 @@ struct MainTabView: View {
             
             // Data Tab
             DataSyncView()
-                .environmentObject(healthKitManager)
-                .environmentObject(dexcomManager)
-                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
                     Text("Data")
@@ -35,9 +30,6 @@ struct MainTabView: View {
             
             // Graph Tab
             GraphingView()
-                .environmentObject(apiManager)
-                .environmentObject(dexcomManager)
-                .environmentObject(healthKitManager)
                 .tabItem {
                     Image(systemName: selectedTab == 2 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
                     Text("Graphs")
@@ -46,7 +38,6 @@ struct MainTabView: View {
             
             // AI Insights Tab
             AIInsightsView()
-                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 4 ? "brain.head.profile.fill" : "brain.head.profile")
                     Text("Insights")
@@ -67,28 +58,54 @@ struct MainTabView: View {
 #if DEBUG
             // Debug Tab (only in debug builds)
             APIRequestDebugView()
-                .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 99 ? "ant.fill" : "ant")
                     Text("Debug")
                 }
                 .tag(99)
 #endif
-    }
-    .environmentObject(apiManager)
-    .accentColor(.accentColor)
-    .onAppear {
+        }
+        .accentColor(.accentColor)
+        .onAppear {
             setupTabBarAppearance()
+            
+            // Request HealthKit authorization on first launch
+            Task {
+                await healthKitManager.requestAuthorization()
+                
+                // Check if we need to sync data
+                let syncInterval: TimeInterval = 60 * 60 // 1 hour
+                let shouldSync = lastSync == nil || 
+                                 Date().timeIntervalSince(lastSync!) > syncInterval
+                
+                if shouldSync && healthKitManager.authorizationStatus == .sharingAuthorized {
+                    // Sync health data with backend
+                    await healthKitManager.syncWithBackend(apiManager: apiManager)
+                    lastSync = Date()
+                }
+            }
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // Sync when returning to the home tab
+            if newTab == 0 && 
+               healthKitManager.authorizationStatus == .sharingAuthorized {
+                Task {
+                    await healthKitManager.syncWithBackend(apiManager: apiManager)
+                    lastSync = Date()
+                }
+            }
         }
     }
     
     private func setupTabBarAppearance() {
+#if os(iOS)
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor.systemBackground
         
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+#endif
     }
 }
 

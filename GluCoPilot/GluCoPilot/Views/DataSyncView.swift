@@ -167,37 +167,8 @@ struct DataSyncView: View {
                 // Fetch health data from HealthKit
                 let healthData = try await healthManager.fetchLast24HoursData()
                 
-                // Convert HealthKitManagerHealthData to APIManagerHealthData
-                let nutritionSource = healthData.nutrition.first
-
-                let apiHealthData = APIManagerHealthData(
-                    glucose: healthData.workouts.map { workout in
-                        APIManagerGlucoseReading(
-                            value: Int.random(in: 80...200), // Placeholder for now, will be replaced by actual Dexcom data
-                            trend: "flat",
-                            timestamp: workout.startDate,
-                            unit: "mg/dL"
-                        )
-                    },
-                    workouts: healthData.workouts.map { workout in
-                        APIManagerWorkoutData(
-                            type: workout.name,
-                            duration: workout.duration,
-                            calories: workout.calories,
-                            startDate: workout.startDate,
-                            endDate: workout.endDate
-                        )
-                    },
-                    nutrition: [APIManagerNutritionData(
-                        name: nutritionSource?.name ?? "Daily Nutrition",
-                        calories: nutritionSource?.calories ?? 0,
-                        carbs: nutritionSource?.carbs ?? 0,
-                        protein: nutritionSource?.protein ?? 0,
-                        fat: nutritionSource?.fat ?? 0,
-                        timestamp: nutritionSource?.timestamp ?? Date()
-                    )],
-                    timestamp: Date()
-                )
+                // Convert HealthKitManagerHealthData to APIManagerHealthData using the provided helper
+                let apiHealthData = healthData.toAPIManagerFormat()
                 
                 // Sync data with backend
                 let results = try await apiManager.syncHealthData(apiHealthData)

@@ -16,57 +16,60 @@ private struct CachedGlucose: Codable {
 }
 
 struct APIManagerHealthData: Codable {
-    var glucose: [APIManagerGlucoseReading]
-    let workouts: [APIManagerWorkoutData]?
-    let nutrition: [APIManagerNutritionData]?
+    let platform: String // "apple_health" or "google_fit"
     let timestamp: Date
+    let metrics: APIManagerHealthMetrics
+    let workouts: [APIManagerWorkoutData]
+    let sleepData: APIManagerSleepData
+    let nutrition: [APIManagerNutritionData]
+}
+
+struct APIManagerHealthMetrics: Codable {
+    let steps: Int
+    let activeCalories: Int
+    let heartRate: Int
+    let glucose: Double
+}
+
+struct APIManagerSleepData: Codable {
+    let totalHours: Double
+    let deepSleepHours: Double
+    let remSleepHours: Double
 }
 
 struct APIManagerWorkoutData: Codable, Identifiable {
     var id = UUID()
     let type: String
+    let startTime: Date
+    let endTime: Date
     let duration: TimeInterval
-    let calories: Double?
-    let startDate: Date
-    let endDate: Date
+    let caloriesBurned: Double
+    let distance: Double
+    let steps: Int
 }
 
 struct APIManagerNutritionData: Codable, Identifiable {
     var id = UUID()
     let name: String
+    let timestamp: Date
     let calories: Double
     let carbs: Double
     let protein: Double
     let fat: Double
-    let timestamp: Date
 }
-
-struct APIManagerAIInsight: Codable, Identifiable {
-    var id = UUID()
-    let title: String
-    let description: String
-    let type: String
-    let priority: String
-    let timestamp: Date
-    let actionItems: [String]
-    let dataPoints: [String: Double]
-}
+// (end of APIManager models)
 
 struct APIManagerSyncResults: Codable {
     let glucoseReadings: Int
     let workouts: Int
     let nutritionEntries: Int
+    let steps: Int
+    let sleep: Int
+    let healthMetrics: Int
     let errors: [String]
-    let lastSyncDate: Date
-    
-    var isSuccessful: Bool {
-        return errors.isEmpty
-    }
-    
-    var totalSyncedItems: Int {
-        return glucoseReadings + workouts + nutritionEntries
-    }
+    let lastSyncDate: Date = Date()
 }
+// (end of sync results)
 
 // MARK: - Error Types
 enum APIManagerError: Error, LocalizedError {
@@ -610,18 +613,76 @@ class APIManager: ObservableObject {
         // Ensure a valid Apple token exists for possible refresh side-effects (value not directly used here)
         _ = try await getValidAppleIdToken()
 
-    let url = URL(string: "\(baseURL)/api/v1/integrations/health/sync")!
+        let url = URL(string: "\(baseURL)/api/v1/integrations/health/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-    // Add Authorization header (prefer app token, else Apple id_token)
-    let authHeader = try await getAuthHeader()
-    request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        // Add Authorization header (prefer app token, else Apple id_token)
+        let authHeader = try await getAuthHeader()
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        request.httpBody = try encoder.encode(healthData)
+        // Add platform to the request body
+        var syncBody: [String: Any] = [
+            "platform": healthData.platform,
+            "data": [
+                "metrics": [
+                    "steps": healthData.metrics.steps,
+                    "active_calories": healthData.metrics.activeCalories,
+                    "heart_rate": healthData.metrics.heartRate,
+                    "glucose": healthData.metrics.glucose
+                ],
+                "sleep": [
+                    "total_hours": healthData.sleepData.totalHours,
+                    "deep_sleep_hours": healthData.sleepData.deepSleepHours,
+                    "rem_sleep_hours": healthData.sleepData.remSleepHours
+                ],
+                "timestamp": ISO8601DateFormatter().string(from: healthData.timestamp)
+            ]
+        ]
+        
+        // Add workouts if present
+        if !healthData.workouts.isEmpty {
+            var workoutsArray: [[String: Any]] = []
+            for workout in healthData.workouts {
+                workoutsArray.append([
+                    "type": workout.type,
+                    "start_time": ISO8601DateFormatter().string(from: workout.startTime),
+                    "end_time": ISO8601DateFormatter().string(from: workout.endTime),
+                    "duration": workout.duration,
+                    "calories_burned": workout.caloriesBurned,
+                    "distance": workout.distance,
+                    "steps": workout.steps
+                ])
+            }
+            if var dataObj = syncBody["data"] as? [String: Any] {
+                dataObj["workouts"] = workoutsArray
+                syncBody["data"] = dataObj
+            }
+        }
+        
+        // Add nutrition if present
+        if !healthData.nutrition.isEmpty {
+            var nutritionArray: [[String: Any]] = []
+            for item in healthData.nutrition {
+                nutritionArray.append([
+                    "name": item.name,
+                    "timestamp": ISO8601DateFormatter().string(from: item.timestamp),
+                    "calories": item.calories,
+                    "carbs": item.carbs,
+                    "protein": item.protein,
+                    "fat": item.fat
+                ])
+            }
+            if var dataObj = syncBody["data"] as? [String: Any] {
+                dataObj["nutrition"] = nutritionArray
+                syncBody["data"] = dataObj
+            }
+        }
+        
+        // Convert to JSON
+        let jsonData = try JSONSerialization.data(withJSONObject: syncBody)
+        request.httpBody = jsonData
         
         var (data, response) = try await session.data(for: request)
 
@@ -647,33 +708,29 @@ class APIManager: ObservableObject {
             }
         }
         
-    // Parse sync results
+        // Parse sync results
         do {
             let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            
-            let glucoseReadings = responseData?["glucose_readings"] as? Int ?? 0
-            let workouts = responseData?["workouts"] as? Int ?? 0
-            let nutritionEntries = responseData?["nutrition_entries"] as? Int ?? 0
-            let errors = responseData?["errors"] as? [String] ?? []
-            
+            let processed = responseData?["data"] as? [String: Any] ?? [:]
+
+            let activities = processed["activities"] as? Int ?? 0
+            let sleepCount = processed["sleep"] as? Int ?? 0
+            let stepsCount = processed["steps"] as? Int ?? 0
+            let healthMetricsCount = processed["health_metrics"] as? Int ?? 0
+            let errors = processed["errors"] as? [String] ?? []
+
             return APIManagerSyncResults(
-                glucoseReadings: glucoseReadings,
-                workouts: workouts,
-                nutritionEntries: nutritionEntries,
-                errors: errors,
-                lastSyncDate: Date()
+                glucoseReadings: 0,
+                workouts: activities,
+                nutritionEntries: 0,
+                steps: stepsCount,
+                sleep: sleepCount,
+                healthMetrics: healthMetricsCount,
+                errors: errors
             )
         } catch {
-            print("Error parsing sync results: \(error.localizedDescription)")
-            
-            // Return basic results if parsing fails
-            return APIManagerSyncResults(
-                glucoseReadings: healthData.glucose.count,
-                workouts: healthData.workouts?.count ?? 0,
-                nutritionEntries: healthData.nutrition?.count ?? 0,
-                errors: ["Failed to parse server response"],
-                lastSyncDate: Date()
-            )
+            print("[APIManager] Error parsing health sync response: \(error.localizedDescription)")
+            throw APIManagerError.decodingError(error)
         }
     }
     
@@ -816,42 +873,35 @@ class APIManager: ObservableObject {
     
     // Unified function to aggregate all health data and generate insights
     func aggregateDataAndGenerateInsights() async throws -> [AIInsight] {
-        // 1. Fetch HealthKit data
-        var healthData = APIManagerHealthData(
-            glucose: [],
+        // 1. Start with basic HealthKit data
+        let healthData = APIManagerHealthData(
+            platform: "apple_health",
+            timestamp: Date(),
+            metrics: APIManagerHealthMetrics(
+                steps: 0,
+                activeCalories: 0,
+                heartRate: 0,
+                glucose: 0
+            ),
             workouts: [],
-            nutrition: [],
-            timestamp: Date()
+            sleepData: APIManagerSleepData(
+                totalHours: 0,
+                deepSleepHours: 0,
+                remSleepHours: 0
+            ),
+            nutrition: []
         )
         
-        // 2. Fetch Dexcom data if available
-        if let username = keychain.getValue(for: "dexcom_username"),
-           let password = keychain.getValue(for: "dexcom_password") {
-            do {
-                let glucoseReading = try await fetchLatestGlucoseReading(
-                    username: username, 
-                    password: password, 
-                    isInternational: keychain.getValue(for: "dexcom_is_international") == "true"
-                )
-                
-                // Add to health data
-                healthData.glucose.append(glucoseReading)
-            } catch {
-                print("Failed to fetch Dexcom data: \(error.localizedDescription)")
-                // Continue with other data sources
-            }
-        }
-        
-        // 3. Sync the aggregated data
+        // 2. Sync health data with backend
         do {
             _ = try await syncHealthData(healthData)
         } catch {
-            print("Warning: Failed to sync health data: \(error.localizedDescription)")
-            // Continue anyway to try getting insights
+            print("[APIManager] Failed to sync health data: \(error.localizedDescription)")
+            // Continue anyway - we'll try to get insights with whatever data is available
         }
         
-        // 4. Generate insights
-        return try await generateInsights()
+    // 3. Request AI insights based on the synced data
+    return try await generateInsights()
     }
     
     private func getDefaultInsights() -> [AIInsight] {
