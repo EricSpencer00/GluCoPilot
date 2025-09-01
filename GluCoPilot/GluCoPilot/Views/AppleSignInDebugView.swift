@@ -55,6 +55,40 @@ struct AppleSignInDebugView: View {
                 }
                 .disabled(isLoading)
                 
+                // Add API token refresh option
+                Button {
+                    isLoading = true
+                    if let apiManager = authManager.apiManager {
+                        Task {
+                            let success = await apiManager.refreshAppleIDToken()
+                            if success {
+                                testResult = "Successfully refreshed API token"
+                                currentToken = KeychainHelper().getValue(for: "apple_id_token")
+                                if let token = currentToken {
+                                    let (h, c) = decodeJWTParts(token)
+                                    tokenHeader = h
+                                    tokenClaims = c
+                                }
+                            } else {
+                                testResult = "Failed to refresh API token"
+                            }
+                            isLoading = false
+                        }
+                    } else {
+                        testResult = "APIManager not available"
+                        isLoading = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Refresh API Token")
+                        Spacer()
+                        if isLoading {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isLoading)
+                
                 Button(role: .destructive) {
                     let keychain = KeychainHelper()
                     keychain.removeValue(for: "apple_id_token")

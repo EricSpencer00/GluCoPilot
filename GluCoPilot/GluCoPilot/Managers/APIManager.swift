@@ -159,6 +159,9 @@ class APIManager: ObservableObject {
     @Published var cachedInsights: [AIInsight] = []
     private let cachedInsightsKey = "cached_ai_insights_v1"
     
+    // Reference to AuthManager for token refresh
+    weak var authManager: AuthenticationManager?
+    
     init() {
         if let data = UserDefaults.standard.data(forKey: cachedInsightsKey) {
             if let decoded = try? JSONDecoder().decode([AIInsight].self, from: data) {
@@ -170,12 +173,72 @@ class APIManager: ObservableObject {
     private let session = URLSession.shared
     private let keychain = APIManagerKeychainHelper()
     
-    // MARK: - Authentication
-    func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
-        // Ensure we have an Apple id_token (JWT) to send; server expects a real Apple id_token
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+    // MARK: - Authentication Helpers
+    
+    /// Ensures a valid Apple ID token is available for API requests
+    /// Returns the token if available, otherwise throws an unauthorized error
+    private func getValidAppleIdToken() async throws -> String {
+        // First check if we have a token
+        if let token = keychain.getValue(for: "apple_id_token") {
+            // Check if it's a simulator fallback token
+            if token.starts(with: "dev_simulator_token_") {
+                #if targetEnvironment(simulator)
+                print("[APIManager] Using simulator fallback token for API request")
+                return token
+                #else
+                // We're on a real device but have a simulator token, need to refresh
+                print("[APIManager] Found simulator token on real device - needs refresh")
+                return try await refreshAppleIdToken()
+                #endif
+            }
+            
+            // Check if token might be expired (Apple tokens last for 10 minutes)
+            // A simple way is to check if the token was created more than 8 minutes ago
+            if let tokenTimestamp = UserDefaults.standard.object(forKey: "apple_id_token_timestamp") as? Date {
+                let tokenAge = Date().timeIntervalSince(tokenTimestamp)
+                if tokenAge > 8 * 60 { // 8 minutes in seconds
+                    print("[APIManager] Apple ID token may be expired (age: \(Int(tokenAge/60)) min), attempting refresh")
+                    return try await refreshAppleIdToken()
+                }
+            }
+            
+            // Token looks valid
+            return token
+        } else {
+            // No token, try to refresh
+            print("[APIManager] No Apple ID token found, attempting refresh")
+            return try await refreshAppleIdToken()
+        }
+    }
+    
+    /// Attempts to refresh the Apple ID token
+    /// If successful, returns the new token, otherwise throws an error
+    private func refreshAppleIdToken() async throws -> String {
+        guard let authManager = self.authManager else {
             throw APIManagerError.unauthorized
         }
+        
+        print("[APIManager] Requesting token refresh from AuthenticationManager")
+        
+        // Use the AuthManager to get a fresh token
+        let result = await authManager.testAppleSignIn()
+        
+        // Check if we now have a valid token
+        if let refreshedToken = keychain.getValue(for: "apple_id_token") {
+            // Store timestamp for expiration tracking
+            UserDefaults.standard.set(Date(), forKey: "apple_id_token_timestamp")
+            print("[APIManager] Successfully refreshed Apple ID token")
+            return refreshedToken
+        } else {
+            print("[APIManager] Failed to refresh token: \(result)")
+            throw APIManagerError.unauthorized
+        }
+    }
+    
+    // MARK: - Authentication
+    func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
+        // Get a valid token using our helper
+        let appleIdToken = try await getValidAppleIdToken()
         
         // Detect simulator fallback token
         let isSimulatorToken = appleIdToken.starts(with: "dev_simulator_token_")
@@ -231,10 +294,8 @@ class APIManager: ObservableObject {
     
     // Register a user with Apple ID
     func registerWithAppleID(userID: String, fullName: String?, email: String?) async throws -> Bool {
-        // Require Apple id_token (JWT) to register with backend
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
-            throw APIManagerError.unauthorized
-        }
+        // Get a valid token using our helper
+        let appleIdToken = try await getValidAppleIdToken()
 
         let url = URL(string: "\(baseURL)/api/v1/auth/apple/register")!
         var request = URLRequest(url: url)
@@ -275,9 +336,8 @@ class APIManager: ObservableObject {
     }
     
     func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
-            throw APIManagerError.unauthorized
-        }
+        // Get a valid token using our helper
+        let appleIdToken = try await getValidAppleIdToken()
 
         let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
         var request = URLRequest(url: url)
@@ -357,9 +417,8 @@ class APIManager: ObservableObject {
     
     // Fetch historical glucose readings for a given timeframe
     func fetchGlucoseReadings(timeframe: String, count: Int = 100) async throws -> [APIManagerGlucoseReading] {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
-            throw APIManagerError.unauthorized
-        }
+        // Get a valid token using our helper
+        let appleIdToken = try await getValidAppleIdToken()
         
         // Ensure we have Dexcom credentials
         guard let username = keychain.getValue(for: "dexcom_username"),
@@ -473,9 +532,8 @@ class APIManager: ObservableObject {
     
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
-            throw APIManagerError.unauthorized
-        }
+        // Get a valid token using our helper
+        let appleIdToken = try await getValidAppleIdToken()
 
         let url = URL(string: "\(baseURL)/api/v1/health/sync")!
         var request = URLRequest(url: url)
@@ -537,9 +595,8 @@ class APIManager: ObservableObject {
     
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
-            throw APIManagerError.unauthorized
-        }
+        // Get a valid token or throw error
+        let appleIdToken = try await getValidAppleIdToken()
 
         // Prefer stateless recommendations endpoint if Dexcom creds are present
         var useStateless = false
@@ -566,6 +623,9 @@ class APIManager: ObservableObject {
             request = req
         }
 
+        // Add debug log
+        print("[APIManager] Making insights request with Authorization: Bearer \(appleIdToken.prefix(15))...")
+
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -574,6 +634,16 @@ class APIManager: ObservableObject {
 
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                // Log the actual response to help debug authentication issues
+                let responseBody = String(data: data, encoding: .utf8) ?? "<no body>"
+                print("[APIManager] Authentication failed for insights request. Status: \(httpResponse.statusCode), response: \(responseBody)")
+                
+                // If token was invalid, clear it so next request will get fresh token
+                if responseBody.contains("Invalid token") || responseBody.contains("expired") {
+                    print("[APIManager] Clearing invalid/expired token")
+                    keychain.removeValue(for: "apple_id_token")
+                }
+                
                 throw APIManagerError.unauthorized
             } else if httpResponse.statusCode == 429 {
                 throw APIManagerError.rateLimited
@@ -726,5 +796,16 @@ class APIManager: ObservableObject {
                 dataPoints: [:]
             )
         ]
+    }
+    
+    // Public token refresh for use when token is known to be invalid
+    func refreshAppleIDToken() async -> Bool {
+        do {
+            _ = try await getValidAppleIdToken()
+            return true
+        } catch {
+            print("[APIManager] Failed to refresh Apple ID token: \(error.localizedDescription)")
+            return false
+        }
     }
 }

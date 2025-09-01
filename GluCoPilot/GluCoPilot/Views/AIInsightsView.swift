@@ -1,6 +1,13 @@
 import SwiftUI
 import Charts
 
+// Forward declare to resolve circular dependency
+struct AppleSignInDebugView: View {
+    var body: some View {
+        Text("Apple Sign In Debug View")
+    }
+}
+
 struct AIInsightsView: View {
     @EnvironmentObject private var apiManager: APIManager
     @State private var insights: [AIInsight] = []
@@ -88,6 +95,13 @@ struct AIInsightsView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
+                        
+                        Button("Refresh Auth Token") {
+                            refreshAuthToken()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 10)
                     }
                     .padding(.vertical, 40)
                 }
@@ -98,6 +112,15 @@ struct AIInsightsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: AppleSignInDebugView()) {
+                    Image(systemName: "key.fill")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
         .refreshable {
             await refreshInsightsAsync()
         }
@@ -172,6 +195,20 @@ struct AIInsightsView: View {
                         )
                     ]
                 }
+            }
+        }
+    }
+    
+    private func refreshAuthToken() {
+        Task {
+            let success = await apiManager.refreshAppleIDToken()
+            await MainActor.run {
+                if success {
+                    errorMessage = "Authentication token refreshed successfully. Try refreshing insights again."
+                } else {
+                    errorMessage = "Could not refresh authentication token. Please sign out and sign in again."
+                }
+                showError = true
             }
         }
     }

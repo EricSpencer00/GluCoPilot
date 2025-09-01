@@ -43,8 +43,9 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.5), value: showOnboarding)
         .environmentObject(authManager)
         .onAppear {
-            // Inject the apiManager dependency
+            // Set up the circular reference between APIManager and AuthManager
             authManager.apiManager = apiManager
+            apiManager.authManager = authManager
             
             // Simulate launch time and check authentication
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
