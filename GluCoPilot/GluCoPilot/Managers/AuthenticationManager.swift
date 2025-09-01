@@ -24,6 +24,11 @@ class AuthenticationManager: NSObject, ObservableObject {
         }
     }
     
+    // Alias for compatibility
+    func checkAuthenticationStatus() {
+        checkAuthenticationState()
+    }
+    
     func handleSignInRequest(_ request: ASAuthorizationAppleIDRequest) {
         request.requestedScopes = [.fullName, .email]
     }
