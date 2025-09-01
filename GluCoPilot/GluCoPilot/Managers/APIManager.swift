@@ -158,9 +158,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple ID token for authentication
-        if let appleUserID = keychain.getValue(for: "apple_user_id") {
-            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        // Add Apple id_token (JWT) for authentication
+        if let appleIdToken = keychain.getValue(for: "apple_id_token") {
+            request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
         }
         
         let body: [String: Any] = [
@@ -170,7 +170,12 @@ class APIManager: ObservableObject {
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
+
+        // Include Apple id_token (JWT) if present so backend can verify registration requests
+        if let appleIdToken = keychain.getValue(for: "apple_id_token") {
+            request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+        }
+
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -230,9 +235,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple ID token for authentication
-        if let appleUserID = keychain.getValue(for: "apple_user_id") {
-            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        // Add Apple id_token (JWT) for authentication
+        if let appleIdToken = keychain.getValue(for: "apple_id_token") {
+            request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
         }
         
         let body: [String: Any] = [
@@ -302,9 +307,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple ID token for authentication
-        if let appleUserID = keychain.getValue(for: "apple_user_id") {
-            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        // Add Apple id_token (JWT) for authentication
+        if let appleIdToken = keychain.getValue(for: "apple_id_token") {
+            request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
         }
         
         let encoder = JSONEncoder()
@@ -364,9 +369,9 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple ID token for authentication
-        if let appleUserID = keychain.getValue(for: "apple_user_id") {
-            request.setValue("Bearer \(appleUserID)", forHTTPHeaderField: "Authorization")
+        // Add Apple id_token (JWT) for authentication
+        if let appleIdToken = keychain.getValue(for: "apple_id_token") {
+            request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
         }
         
         // Request insights for the last 24 hours

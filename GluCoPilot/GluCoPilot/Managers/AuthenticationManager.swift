@@ -66,6 +66,12 @@ class AuthenticationManager: NSObject, ObservableObject {
         if let email = email {
             keychain.setValue(email, for: "user_email")
         }
+
+        // Save the raw Apple id_token (JWT) so backend can verify the token signature.
+        if let identityToken = credential.identityToken,
+           let idTokenString = String(data: identityToken, encoding: .utf8) {
+            keychain.setValue(idTokenString, for: "apple_id_token")
+        }
         
         // Update state
         isAuthenticated = true
@@ -116,6 +122,7 @@ class AuthenticationManager: NSObject, ObservableObject {
     func signOut() {
         // Clear keychain
         keychain.removeValue(for: "apple_user_id")
+    keychain.removeValue(for: "apple_id_token")
         keychain.removeValue(for: "user_display_name")
         keychain.removeValue(for: "user_email")
         keychain.removeValue(for: "has_seen_dexcom_prompt")
