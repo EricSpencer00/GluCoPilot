@@ -162,16 +162,26 @@ class APIManager: ObservableObject {
     private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
     private let session = URLSession.shared
     private let keychain = APIManagerKeychainHelper()
+
+    // Helper to prefer backend-issued access token over raw Apple id_token
+    private func getAuthToken() -> String? {
+        // Prefer stored backend access token
+        if let appToken = keychain.getValue(for: "auth_access_token") {
+            return appToken
+        }
+        // Fallback to Apple id_token if no app token available
+        return keychain.getValue(for: "apple_id_token")
+    }
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
-        // Ensure we have an Apple id_token (JWT) to send; server expects a real Apple id_token
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        // Ensure we have an auth token to send (prefer backend access token, fallback to Apple id_token)
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
         
-        // Detect simulator fallback token
-        let isSimulatorToken = appleIdToken.starts(with: "dev_simulator_token_")
+    // Detect simulator fallback token
+    let isSimulatorToken = authToken.starts(with: "dev_simulator_token_")
         #if targetEnvironment(simulator)
         if isSimulatorToken {
             print("[APIManager] Using simulator fallback token - some features may be limited")
@@ -183,8 +193,8 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header with preferred token
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "username": username,
@@ -225,7 +235,7 @@ class APIManager: ObservableObject {
     // Register a user with Apple ID
     func registerWithAppleID(userID: String, fullName: String?, email: String?) async throws -> Bool {
         // Require Apple id_token (JWT) to register with backend
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
 
@@ -248,7 +258,7 @@ class APIManager: ObservableObject {
         
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-    request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
 
     let (data, response) = try await session.data(for: request)
         
@@ -259,6 +269,15 @@ class APIManager: ObservableObject {
         if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
             // Store the user ID in keychain
             keychain.setValue(userID, for: "apple_user_id")
+            // If backend returned app tokens in the response body, persist them for future calls
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let access = json["access_token"] as? String {
+                    keychain.setValue(access, for: "auth_access_token")
+                }
+                if let refresh = json["refresh_token"] as? String {
+                    keychain.setValue(refresh, for: "auth_refresh_token")
+                }
+            }
             return true
         } else if httpResponse.statusCode == 404 {
             // Backend returned Not Found - this can happen if server doesn't support auto-registration.
@@ -274,7 +293,7 @@ class APIManager: ObservableObject {
     }
     
     func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
 
@@ -283,8 +302,8 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header with preferred token
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "username": username,
@@ -348,7 +367,7 @@ class APIManager: ObservableObject {
     
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
 
@@ -357,8 +376,8 @@ class APIManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    // Add Authorization header with preferred token
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -412,7 +431,8 @@ class APIManager: ObservableObject {
 
     // MARK: - Dev helper: fetch test recommendations using stateless backend bypass
     func fetchTestRecommendations() async throws -> [SimpleRecommendation] {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        // Prefer existing auth token (could be backend access token or apple id token)
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
 
@@ -420,7 +440,7 @@ class APIManager: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
 
         let body: [String: Any] = ["username": "__test__", "password": "x", "ous": false]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -461,7 +481,7 @@ class APIManager: ObservableObject {
     
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
-        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+        guard let authToken = getAuthToken() else {
             throw APIManagerError.unauthorized
         }
 
@@ -471,7 +491,7 @@ class APIManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         // Add Apple id_token (JWT) for authentication
-        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         // Request insights for the last 24 hours
         let body: [String: Any] = [

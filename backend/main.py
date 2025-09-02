@@ -93,8 +93,17 @@ if feedback:
 async def log_requests(request: Request, call_next):
     # Redact Authorization header and avoid logging bodies/sensitive data
     headers = dict(request.headers)
+    # Provide a masked preview of the Authorization header for debugging (do NOT log full token)
+    auth_header = None
     if 'authorization' in headers:
-        headers['authorization'] = 'Bearer [REDACTED]'
+        auth_header = headers.get('authorization')
+        try:
+            parts = auth_header.split(' ', 1)
+            token_type = parts[0] if len(parts) > 0 else 'unknown'
+            token_preview = parts[1][:8] + '...' if len(parts) > 1 else '[no-token]'
+            headers['authorization'] = f"{token_type} [REDACTED:{token_preview}]"
+        except Exception:
+            headers['authorization'] = 'Bearer [REDACTED]'
     logger.info(f"Incoming request: {request.method} {request.url}")
     logger.info(f"Headers: {headers}")
     logger.info(f"Client: {request.client}")
