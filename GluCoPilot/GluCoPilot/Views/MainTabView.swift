@@ -4,9 +4,9 @@ import UIKit
 #endif
 
 struct MainTabView: View {
-    @StateObject private var dexcomManager = DexcomManager()
-    @StateObject private var healthKitManager = HealthKitManager()
-    @StateObject private var apiManager = APIManager()
+    @EnvironmentObject private var dexcomManager: DexcomManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
     @State private var selectedTab = 0
     
     var body: some View {

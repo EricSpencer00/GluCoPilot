@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var authManager = AuthenticationManager()
-    @StateObject private var apiManager = APIManager()
+    @EnvironmentObject var authManager: AuthenticationManager
+    @EnvironmentObject var apiManager: APIManager
+    @EnvironmentObject var dexcomManager: DexcomManager
+    @EnvironmentObject var healthKitManager: HealthKitManager
     @State private var isLaunching = true
     @State private var showOnboarding = false
     @State private var showDexcomSetup = false
@@ -27,13 +29,20 @@ struct ContentView: View {
                 } else {
                     MainTabView()
                         .environmentObject(apiManager)
+                        .environmentObject(dexcomManager)
+                        .environmentObject(healthKitManager)
                         .transition(.move(edge: .bottom))
                 }
             } else {
                 if showOnboarding {
-                    OnboardingView(onComplete: {
-                        showOnboarding = false
-                    })
+                    OnboardingView(
+                        apiManager: apiManager,
+                        dexcomManager: dexcomManager,
+                        healthKitManager: healthKitManager,
+                        onComplete: {
+                            showOnboarding = false
+                        }
+                    )
                     .transition(.move(edge: .trailing))
                 } else {
                     AppleSignInView()
@@ -46,7 +55,6 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.5), value: showOnboarding)
         .animation(.easeInOut(duration: 0.5), value: authManager.showDexcomPrompt)
-        .environmentObject(authManager)
         .onAppear {
             // Inject the apiManager dependency
             authManager.apiManager = apiManager
