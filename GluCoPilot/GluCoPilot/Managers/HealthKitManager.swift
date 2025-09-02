@@ -84,8 +84,16 @@ class HealthKitManager: ObservableObject {
                     Task {
                         await self?.updatePublishedProperties()
                     }
+                } else if let error = error {
+                    let nsError = error as NSError
+                    print("HealthKit authorization denied: \(error.localizedDescription)")
+                    if nsError.domain == "com.apple.healthkit" && nsError.code == 5 {
+                        // Handle bundle identifier errors specifically
+                        print("Bundle identifier issue detected. Ensure app is properly configured.")
+                    }
+                    self?.authorizationStatus = .sharingDenied
                 } else {
-                    print("HealthKit authorization denied: \(error?.localizedDescription ?? "Unknown error")")
+                    print("HealthKit authorization denied: Unknown error")
                     self?.authorizationStatus = .sharingDenied
                 }
             }

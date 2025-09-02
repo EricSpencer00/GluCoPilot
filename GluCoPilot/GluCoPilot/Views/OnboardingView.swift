@@ -1,14 +1,18 @@
 import SwiftUI
 import HealthKit
+import AuthenticationServices
 
-struct OnboardingLegacyView: View {
+struct OnboardingView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
     let apiManager: APIManager
     let dexcomManager: DexcomManager
     let healthKitManager: HealthKitManager
     let onComplete: () -> Void
     
     @State private var currentStep = 0
-    let totalSteps = 2
+    @State private var isSignInWithAppleComplete = false
+    @State private var isHealthKitComplete = false
+    let totalSteps = 3
     
     var body: some View {
         VStack {
@@ -29,6 +33,8 @@ struct OnboardingLegacyView: View {
                     case 0:
                         welcomeStep
                     case 1:
+                        signInStep
+                    case 2:
                         healthKitStep
                     default:
                         EmptyView()
@@ -56,6 +62,10 @@ struct OnboardingLegacyView: View {
                 if currentStep < totalSteps - 1 {
                     Button(action: {
                         withAnimation {
+                            if currentStep == 1 && !isSignInWithAppleComplete {
+                                // Don't proceed if sign in is not complete
+                                return
+                            }
                             currentStep += 1
                         }
                     }) {
@@ -63,6 +73,7 @@ struct OnboardingLegacyView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(currentStep == 1 && !isSignInWithAppleComplete)
                 } else {
                     Button(action: {
                         // Complete onboarding
@@ -72,6 +83,7 @@ struct OnboardingLegacyView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(!isHealthKitComplete)
                 }
             }
             .padding()
@@ -99,6 +111,58 @@ struct OnboardingLegacyView: View {
                 .padding(.horizontal)
             
             Spacer().frame(height: 30)
+        }
+    }
+    
+    // Sign In step
+    var signInStep: some View {
+        VStack(spacing: 30) {
+            Image(systemName: "person.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.blue)
+            
+            Text("Sign in with Apple")
+                .font(.title)
+                .fontWeight(.bold)
+            
+            Text("Sign in securely with your Apple ID to personalize your experience and save your data.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            SignInWithAppleButton(.signIn) { request in
+                authManager.handleSignInRequest(request)
+            } onCompletion: { result in
+                authManager.handleSignInResult(result)
+                // Mark as complete if authentication is successful
+                if case .success = result {
+                    isSignInWithAppleComplete = true
+                    // Automatically proceed to next step after successful sign in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        withAnimation {
+                            currentStep += 1
+                        }
+                    }
+                }
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(height: 50)
+            .cornerRadius(8)
+            .padding(.horizontal)
+            
+            if isSignInWithAppleComplete || authManager.isAuthenticated {
+                Text("Sign In Complete ✓")
+                    .foregroundColor(.green)
+                    .fontWeight(.semibold)
+            }
+            
+            Spacer().frame(height: 30)
+        }
+        .onAppear {
+            // Check if already authenticated
+            if authManager.isAuthenticated {
+                isSignInWithAppleComplete = true
+            }
         }
     }
     
@@ -132,6 +196,8 @@ struct OnboardingLegacyView: View {
             Button(action: {
                 Task {
                     await healthKitManager.requestAuthorization()
+                    // Mark as complete after attempting to request authorization
+                    isHealthKitComplete = true
                 }
             }) {
                 Label("Connect HealthKit", systemImage: "link")
@@ -143,13 +209,19 @@ struct OnboardingLegacyView: View {
             }
             .disabled(healthKitManager.authorizationStatus == .sharingAuthorized)
             
-            if healthKitManager.authorizationStatus == .sharingAuthorized {
+            if healthKitManager.authorizationStatus == .sharingAuthorized || isHealthKitComplete {
                 Text("HealthKit Connected ✓")
                     .foregroundColor(.green)
                     .fontWeight(.semibold)
             }
             
             Spacer().frame(height: 20)
+        }
+        .onAppear {
+            // Check current authorization status when this view appears
+            if healthKitManager.authorizationStatus == .sharingAuthorized {
+                isHealthKitComplete = true
+            }
         }
     }
 }

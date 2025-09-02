@@ -9,6 +9,10 @@ struct GluCoPilotApp: App {
     @StateObject private var dexcomManager = DexcomManager()
     @StateObject private var apiManager = APIManager()
     
+    init() {
+        // Configure and register fonts, appearance, etc. here if needed
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -17,7 +21,12 @@ struct GluCoPilotApp: App {
                 .environmentObject(dexcomManager)
                 .environmentObject(apiManager)
                 .onAppear {
-                    healthManager.requestHealthKitPermissions()
+                    // Set up circular dependencies
+                    authManager.apiManager = apiManager
+                    apiManager.authManager = authManager
+                    
+                    // Check the authentication state
+                    authManager.checkAuthenticationState()
                 }
         }
     }
