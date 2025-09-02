@@ -210,6 +210,13 @@ async def social_login(
         "expires_in": 1800
     }
 
+
+@router.post("/social-login-unprotected")
+async def social_login_unprotected(data: SocialLoginRequest):
+    """Unprotected test endpoint to verify routing without Authorization header."""
+    logger.info("Entered social_login_unprotected handler")
+    return {"ok": True, "provider": data.provider, "email": data.email}
+
 # Keep Dexcom connect endpoint after auth
 @router.post("/connect-dexcom", response_model=DexcomResponse)
 async def connect_dexcom(
