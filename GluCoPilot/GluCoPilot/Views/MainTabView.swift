@@ -228,7 +228,7 @@ struct StatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon)
+                Image(compatibleSystemName: icon, fallback: "questionmark.circle")
                     .font(.title3)
                     .foregroundColor(color)
                 Spacer()
