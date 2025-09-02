@@ -116,10 +116,7 @@ struct APIRequestDebugView: View {
     #if DEBUG
     private func runIdTokenExchange() async {
         append("Starting id_token exchange...")
-        guard let api = apiManager else {
-            append("APIManager not available")
-            return
-        }
+    let api = apiManager
 
         let tokenToSend = manualIdToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? KeychainHelper().getValue(for: "apple_id_token") : manualIdToken
 
