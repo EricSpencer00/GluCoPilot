@@ -74,7 +74,7 @@ class ExternalDataService {
   // Sync MyFitnessPal data
   async syncMyFitnessPalData() {
     try {
-      const response = await api.post('/data/myfitnesspal/sync');
+  const response = await api.post('/data/myfitnesspal/sync');
       return response.data;
     } catch (error) {
       console.error('Error syncing MyFitnessPal data:', error);
@@ -133,7 +133,9 @@ class ExternalDataService {
   // Sync health data with the server
   async syncHealthData(data: HealthKitData) {
     try {
-      const response = await api.post('/data/health/sync', data);
+  // Backend integrations router exposes health sync at /api/v1/integrations/health/sync
+  // Our axios interceptor prefixes with /api/v1 automatically, so request the integrations path here
+  const response = await api.post('/integrations/health/sync', data);
       return response.data;
     } catch (error) {
       console.error('Error syncing health data:', error);
@@ -144,8 +146,10 @@ class ExternalDataService {
   // Fetch data insights that incorporate external data
   async getDataInsights() {
     try {
-      const response = await api.get('/data/insights');
-      return response.data;
+  // Use the AI insights generation endpoint. Backend exposes POST /api/v1/insights/generate
+  // Use POST here to match backend and allow sending optional payload if needed later
+  const response = await api.post('/insights/generate', {});
+  return response.data;
     } catch (error) {
       console.error('Error fetching data insights:', error);
       throw error;

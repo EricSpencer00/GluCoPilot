@@ -46,7 +46,8 @@ struct MainTabView: View {
             GraphingView()
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
+                    // Use a widely available chart symbol to avoid missing symbol on older OSes
+                    Image(systemName: selectedTab == 3 ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
                     Text("Graphs")
                 }
                 .tag(3)
