@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Request
 from sqlalchemy.orm import Session
-from services.auth import get_current_active_user
+from services.auth import get_current_active_user, get_optional_current_user, SimpleUser
 from core.database import get_db
 from models.user import User
 from models.glucose import GlucoseReading
@@ -18,42 +18,98 @@ router = APIRouter()
 @router.post("/generate", tags=["AI Insights"])
 async def generate_insights(
     request_data: Optional[Dict[str, Any]] = Body(default={}),
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Generate AI insights and recommendations for the user."""
     ai_engine = AIInsightsEngine()
     
     try:
-        # If database is disabled, try to use stateless mode
+        # If database usage is disabled, accept stateless mode where caller provides health_data + api_key
         if not settings.USE_DATABASE:
-            # Return error for now, could implement stateless mode later
-            raise HTTPException(
-                status_code=503,
-                detail="Database disabled in stateless mode. Insights generation requires database."
-            )
-        
-        # Gather user data (last 24h glucose, last 50 insulin, last 50 food)
-        glucose_data = db.query(GlucoseReading).filter(
-            GlucoseReading.user_id == current_user.id
-        ).order_by(GlucoseReading.timestamp.desc()).limit(288).all()
-        
-        insulin_data = db.query(Insulin).filter(
-            Insulin.user_id == current_user.id
-        ).order_by(Insulin.timestamp.desc()).limit(50).all()
-        
-        food_data = db.query(Food).filter(
-            Food.user_id == current_user.id
-        ).order_by(Food.timestamp.desc()).limit(50).all()
+            # Authenticate using API key either in body as `api_key` or header `x-api-key`
+            api_key = None
+            if isinstance(request_data, dict):
+                api_key = request_data.get('api_key')
+            if not api_key and request is not None:
+                api_key = request.headers.get('x-api-key') or request.headers.get('x_api_key')
+            if not api_key or api_key != settings.SECRET_KEY:
+                raise HTTPException(status_code=401, detail="Invalid or missing API key for stateless insights")
 
-        # Generate recommendations/insights
-        recommendations = await ai_engine.generate_recommendations(
-            user=current_user,
-            glucose_data=glucose_data,
-            insulin_data=insulin_data,
-            food_data=food_data,
-            db=db
-        )
+            # Expect health_data in the request body
+            health_data = (request_data or {}).get('health_data') if isinstance(request_data, dict) else None
+            if not health_data or not isinstance(health_data, dict):
+                raise HTTPException(status_code=400, detail="Missing or invalid 'health_data' in request body")
+
+            # Parse glucose readings from health_data
+            glucose_readings = health_data.get('glucose', [])
+            # Minimal reading object expected by the AI engine
+            from datetime import datetime, timezone
+            class _Reading:
+                def __init__(self, value, timestamp):
+                    self.value = value
+                    try:
+                        if isinstance(timestamp, str):
+                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        elif isinstance(timestamp, datetime):
+                            dt = timestamp
+                        else:
+                            dt = datetime.utcnow()
+                        if getattr(dt, 'tzinfo', None) is not None:
+                            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        self.timestamp = dt
+                    except Exception:
+                        self.timestamp = datetime.utcnow()
+
+            glucose_objs = []
+            for r in glucose_readings:
+                try:
+                    glucose_objs.append(_Reading(r.get('value'), r.get('timestamp')))
+                except Exception:
+                    continue
+
+            # Parse optional food and activity datasets
+            food_items = health_data.get('food', [])
+            activity_items = health_data.get('activity', [])
+
+            # Create minimal objects for food/insulin if desired (engine tolerates empty lists)
+            food_objs = []
+            insulin_objs = []
+
+            # Create a lightweight stateless user object
+            stateless_user = SimpleUser(username=request_data.get('username', 'stateless') if isinstance(request_data, dict) else 'stateless')
+
+            # Call AI engine without DB
+            recommendations = await ai_engine.generate_recommendations(
+                user=stateless_user,
+                glucose_data=glucose_objs,
+                insulin_data=insulin_objs,
+                food_data=food_objs,
+                db=None,
+            )
+        else:
+            # Gather user data (last 24h glucose, last 50 insulin, last 50 food)
+            glucose_data = db.query(GlucoseReading).filter(
+                GlucoseReading.user_id == current_user.id
+            ).order_by(GlucoseReading.timestamp.desc()).limit(288).all()
+
+            insulin_data = db.query(Insulin).filter(
+                Insulin.user_id == current_user.id
+            ).order_by(Insulin.timestamp.desc()).limit(50).all()
+
+            food_data = db.query(Food).filter(
+                Food.user_id == current_user.id
+            ).order_by(Food.timestamp.desc()).limit(50).all()
+
+            # Generate recommendations/insights using DB-backed data
+            recommendations = await ai_engine.generate_recommendations(
+                user=current_user,
+                glucose_data=glucose_data,
+                insulin_data=insulin_data,
+                food_data=food_data,
+                db=db
+            )
         
         # Format insights for frontend
         insights = []
