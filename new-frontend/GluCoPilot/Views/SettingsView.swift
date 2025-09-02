@@ -118,6 +118,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                    NavigationLink(destination: PrivacyPolicyView()) {
+                        HStack {
+                            Image(systemName: "shield.checkered")
+                                .foregroundStyle(.green)
+                                .frame(width: 25)
+                            Text("Privacy Policy")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 
                 HStack {
                     Image(systemName: "doc.text")
@@ -133,6 +146,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                    NavigationLink(destination: TermsOfServiceView()) {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundStyle(.blue)
+                                .frame(width: 25)
+                            Text("Terms of Service")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
             }
             
             // Support Section
@@ -151,6 +177,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                    NavigationLink(destination: HelpSupportView()) {
+                        HStack {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(.blue)
+                                .frame(width: 25)
+                            Text("Help & Support")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 
                 HStack {
                     Image(systemName: "envelope")
@@ -166,6 +205,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                    NavigationLink(destination: ContactUsView()) {
+                        HStack {
+                            Image(systemName: "envelope")
+                                .foregroundStyle(.blue)
+                                .frame(width: 25)
+                            Text("Contact Us")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
             }
             
             // Sign Out Section
