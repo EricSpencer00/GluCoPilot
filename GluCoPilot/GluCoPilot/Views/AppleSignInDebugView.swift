@@ -65,6 +65,37 @@ struct AppleSignInDebugView: View {
                 } label: {
                     Text("Clear ID Token")
                 }
+                
+                Button {
+                    isLoading = true
+                    Task {
+                        // Fetch test recommendations via APIManager
+                        if let api = authManager.apiManager {
+                            do {
+                                let recs = try await api.fetchTestRecommendations()
+                                testResult = "Fetched \(recs.count) recommendations."
+                                // Optionally update currentToken to trigger display
+                                await MainActor.run {
+                                    currentToken = KeychainHelper().getValue(for: "apple_id_token")
+                                }
+                                print("[Debug] Test recommendations: \(recs.map { $0.title })")
+                            } catch {
+                                testResult = "Failed to fetch test recs: \(error.localizedDescription)"
+                            }
+                        } else {
+                            testResult = "APIManager not available"
+                        }
+                        isLoading = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Fetch Test Recommendations")
+                        Spacer()
+                        if isLoading {
+                            ProgressView()
+                        }
+                    }
+                }
             }
             
             if !testResult.isEmpty {

@@ -62,6 +62,18 @@ struct APIManagerSyncResults: Codable {
     }
 }
 
+// MARK: - Recommendation model (minimal)
+struct SimpleRecommendation: Identifiable {
+    var id = UUID()
+    let title: String
+    let description: String
+    let category: String
+    let priority: String
+    let confidence: Double
+    let action: String
+    let timing: String?
+}
+
 // MARK: - Error Types
 enum APIManagerError: Error, LocalizedError {
     case invalidURL
@@ -396,6 +408,55 @@ class APIManager: ObservableObject {
                 lastSyncDate: Date()
             )
         }
+    }
+
+    // MARK: - Dev helper: fetch test recommendations using stateless backend bypass
+    func fetchTestRecommendations() async throws -> [SimpleRecommendation] {
+        guard let appleIdToken = keychain.getValue(for: "apple_id_token") else {
+            throw APIManagerError.unauthorized
+        }
+
+        let url = URL(string: "\(baseURL)/api/v1/recommendations/stateless")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(appleIdToken)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = ["username": "__test__", "password": "x", "ous": false]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIManagerError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIManagerError.unauthorized
+            } else {
+                let err = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"] as? String ?? String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw APIManagerError.serverError(err)
+            }
+        }
+
+        // Parse recommendations list
+        let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let recs = decoded?["recommendations"] as? [[String: Any]] ?? []
+        var results: [SimpleRecommendation] = []
+        for r in recs {
+            let rec = SimpleRecommendation(
+                title: r["title"] as? String ?? "",
+                description: r["description"] as? String ?? "",
+                category: r["category"] as? String ?? "general",
+                priority: r["priority"] as? String ?? "medium",
+                confidence: r["confidence"] as? Double ?? (r["confidence"] as? NSNumber)?.doubleValue ?? 0.7,
+                action: r["action"] as? String ?? "",
+                timing: r["timing"] as? String
+            )
+            results.append(rec)
+        }
+
+        return results
     }
     
     // MARK: - AI Insights
