@@ -168,6 +168,25 @@ struct SettingsView: View {
                 }
             }
             
+            // DEBUG Section - Remove for production
+            #if DEBUG
+            Section("Debug Options") {
+                NavigationLink {
+                    AppleSignInDebugView()
+                        .environmentObject(authManager)
+                } label: {
+                    HStack {
+                        Image(systemName: "hammer.fill")
+                            .foregroundStyle(.orange)
+                            .frame(width: 25)
+                        
+                        Text("Test Apple Sign In")
+                            .font(.subheadline)
+                    }
+                }
+            }
+            #endif
+            
             // Sign Out Section
             Section {
                 Button(action: { showLogoutAlert = true }) {

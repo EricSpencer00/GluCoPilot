@@ -70,6 +70,17 @@ struct MainTabView: View {
                     Text("Settings")
                 }
                 .tag(5)
+
+#if DEBUG
+            // Debug Tab (only in debug builds)
+            APIRequestDebugView()
+                .environmentObject(apiManager)
+                .tabItem {
+                    Image(systemName: selectedTab == 99 ? "ant.fill" : "ant")
+                    Text("Debug")
+                }
+                .tag(99)
+#endif
     }
     .environmentObject(apiManager)
     .accentColor(.accentColor)
