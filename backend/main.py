@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from contextlib import asynccontextmanager
+import base64
+import json
 import os
 from dotenv import load_dotenv
 
@@ -102,6 +104,23 @@ async def log_requests(request: Request, call_next):
             token_type = parts[0] if len(parts) > 0 else 'unknown'
             token_preview = parts[1][:8] + '...' if len(parts) > 1 else '[no-token]'
             headers['authorization'] = f"{token_type} [REDACTED:{token_preview}]"
+            # Try to safely decode the JWT header (first part) to log alg/kid preview.
+            # We decode only the JWT header (no payload or signature) and log minimal metadata.
+            try:
+                if len(parts) > 1 and '.' in parts[1]:
+                    token = parts[1]
+                    header_b64 = token.split('.', 1)[0]
+                    # Add padding if necessary for base64 decoding
+                    padding = '=' * (-len(header_b64) % 4)
+                    header_json = base64.urlsafe_b64decode(header_b64 + padding).decode('utf-8')
+                    header_obj = json.loads(header_json)
+                    alg = header_obj.get('alg')
+                    kid = header_obj.get('kid')
+                    kid_preview = (kid[:8] + '...') if isinstance(kid, str) and len(kid) > 8 else kid
+                    headers['authorization_meta'] = f"alg={alg}, kid={kid_preview}"
+            except Exception:
+                # Fail silently if token header can't be decoded — do not raise or log raw token
+                pass
         except Exception:
             headers['authorization'] = 'Bearer [REDACTED]'
     logger.info(f"Incoming request: {request.method} {request.url}")
