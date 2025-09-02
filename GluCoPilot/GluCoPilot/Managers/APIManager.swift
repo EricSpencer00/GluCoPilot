@@ -172,6 +172,74 @@ class APIManager: ObservableObject {
         // Fallback to Apple id_token if no app token available
         return keychain.getValue(for: "apple_id_token")
     }
+
+    // Try to detect Apple id_token by decoding JWT header and checking alg==RS256
+    private func isAppleIdToken(_ token: String) -> Bool {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return false }
+        let headerB64 = String(parts[0])
+        var base64 = headerB64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+        guard let data = Data(base64Encoded: base64) else { return false }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        let alg = obj["alg"] as? String
+        return alg == "RS256"
+    }
+
+    // Ensure we have a backend-issued access token (HS256). If only an Apple id_token is present,
+    // call /api/v1/auth/social-login to exchange it for a backend token and persist it.
+    private func ensureBackendToken() async throws -> String {
+        // If we already have backend token, return it
+        if let appToken = keychain.getValue(for: "auth_access_token") {
+            return appToken
+        }
+
+        // If we have an Apple id_token, attempt exchange
+        if let appleToken = keychain.getValue(for: "apple_id_token"), isAppleIdToken(appleToken) {
+            // Build request to social-login endpoint to exchange id_token for app token
+            let url = URL(string: "\(baseURL)/api/v1/auth/social-login")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            // Include Apple id_token in Authorization header as backend expects
+            request.setValue("Bearer \(appleToken)", forHTTPHeaderField: "Authorization")
+
+            let body: [String: Any] = [
+                "provider": "apple",
+                "id_token": appleToken
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIManagerError.invalidResponse
+            }
+            guard httpResponse.statusCode == 200 else {
+                // If exchange failed, propagate unauthorized
+                if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                    throw APIManagerError.unauthorized
+                }
+                let err = String(data: data, encoding: .utf8) ?? ""
+                throw APIManagerError.serverError(err)
+            }
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String {
+                keychain.setValue(access, for: "auth_access_token")
+                if let refresh = json["refresh_token"] as? String {
+                    keychain.setValue(refresh, for: "auth_refresh_token")
+                }
+                return access
+            }
+
+            throw APIManagerError.invalidData
+        }
+
+        // No token available
+        throw APIManagerError.unauthorized
+    }
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
@@ -367,11 +435,10 @@ class APIManager: ObservableObject {
     
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
-        guard let authToken = getAuthToken() else {
-            throw APIManagerError.unauthorized
-        }
+    // Ensure we have a backend-issued access token for protected health endpoints
+    let authToken = try await ensureBackendToken()
 
-        let url = URL(string: "\(baseURL)/api/v1/health/sync")!
+    let url = URL(string: "\(baseURL)/api/v1/health/sync")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -481,16 +548,15 @@ class APIManager: ObservableObject {
     
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
-        guard let authToken = getAuthToken() else {
-            throw APIManagerError.unauthorized
-        }
+        // Ensure backend-issued token is available for insights endpoint
+        let authToken = try await ensureBackendToken()
 
         let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Add Apple id_token (JWT) for authentication
+        // Use backend access token for insights endpoint
     request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         // Request insights for the last 24 hours
