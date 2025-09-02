@@ -80,6 +80,9 @@ async def generate_insights(
             "generated_at": datetime.utcnow().isoformat() + "Z"
         }
         
+    except HTTPException:
+        # let explicit HTTPExceptions (like 503) pass through
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
