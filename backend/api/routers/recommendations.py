@@ -11,7 +11,7 @@ from schemas.recommendations import RecommendationOut
 from core.config import settings
 from schemas.dexcom import DexcomCredentials
 from services.dexcom import DexcomService
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -100,9 +100,18 @@ async def get_recommendations_stateless(
         class _Reading:
             def __init__(self, value, timestamp):
                 self.value = value
-                # Parse ISO timestamp to datetime when possible
+                # Parse ISO timestamp to datetime when possible and normalize to naive UTC
                 try:
-                    self.timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00')) if isinstance(timestamp, str) else timestamp
+                    if isinstance(timestamp, str):
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    elif isinstance(timestamp, datetime):
+                        dt = timestamp
+                    else:
+                        dt = datetime.utcnow()
+                    # If datetime is timezone-aware, convert to UTC and drop tzinfo to make it naive
+                    if getattr(dt, 'tzinfo', None) is not None:
+                        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    self.timestamp = dt
                 except Exception:
                     self.timestamp = datetime.utcnow()
 
