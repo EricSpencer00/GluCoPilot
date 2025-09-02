@@ -4,6 +4,7 @@ struct APIRequestDebugView: View {
     @EnvironmentObject var apiManager: APIManager
     @State private var logs: [String] = []
     @State private var isRunning = false
+    @State private var manualIdToken: String = ""
 
     var body: some View {
         NavigationStack {
@@ -21,6 +22,31 @@ struct APIRequestDebugView: View {
                     .buttonStyle(.bordered)
                 }
                 .padding(.horizontal)
+
+                // Debug: quick id_token exchange
+                #if DEBUG
+                VStack(spacing: 8) {
+                    Text("Exchange Apple id_token with backend (debug)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Paste id_token here (optional)", text: $manualIdToken)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+
+                    HStack {
+                        Button(action: { Task { await runIdTokenExchange() } }) {
+                            Label("Exchange id_token", systemImage: "arrowshape.turn.up.right")
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("Clear Token") {
+                            manualIdToken = ""
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                #endif
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
@@ -86,6 +112,30 @@ struct APIRequestDebugView: View {
         append("API smoke tests finished")
         await MainActor.run { isRunning = false }
     }
+
+    #if DEBUG
+    private func runIdTokenExchange() async {
+        append("Starting id_token exchange...")
+        guard let api = apiManager else {
+            append("APIManager not available")
+            return
+        }
+
+        let tokenToSend = manualIdToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? KeychainHelper().getValue(for: "apple_id_token") : manualIdToken
+
+        guard let token = tokenToSend else {
+            append("No id_token available to send")
+            return
+        }
+
+        do {
+            let (access, refresh) = try await api.debugSendAppleIdToken(token, email: KeychainHelper().getValue(for: "user_email"), firstName: nil, lastName: nil)
+            append("Exchange succeeded. access: \(access.prefix(20))... refresh: \(refresh?.prefix(20) ?? "nil")")
+        } catch {
+            append("Exchange failed: \(error.localizedDescription)")
+        }
+    }
+    #endif
 }
 
 #Preview {

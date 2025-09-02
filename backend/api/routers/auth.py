@@ -211,6 +211,28 @@ async def social_login(
     }
 
 
+@router.post('/debug/social-login')
+async def debug_social_login(data: SocialLoginRequest):
+    """Debug-only endpoint to accept id_token without DB and return tokens.
+    Only available when settings.DEBUG is True.
+    """
+    if not settings.DEBUG:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Re-use the apple verification logic but do not persist to DB
+    if data.provider != 'apple':
+        raise HTTPException(status_code=400, detail="Only 'apple' provider supported in debug endpoint")
+    try:
+        claims = verify_apple_token(data.id_token, audience=settings.APPLE_CLIENT_ID or None)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    subject = data.email or claims.get('sub') or 'debug-anonymous'
+    access_token = create_access_token(data={"sub": subject})
+    refresh_token = create_access_token(data={"sub": subject, "type": "refresh"}, expires_delta=timedelta(days=7))
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "expires_in": 1800}
+
+
 @router.post("/social-login-unprotected")
 async def social_login_unprotected(data: SocialLoginRequest):
     """Unprotected test endpoint to verify routing without Authorization header."""

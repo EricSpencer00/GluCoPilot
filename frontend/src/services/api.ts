@@ -274,3 +274,21 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// Debug helper: post a raw Apple id_token to the backend social-login endpoint.
+// Use only in development/testing. Example:
+// await debugSocialLoginWithApple('<id_token>', 'test@example.com', 'Test', 'User')
+export const debugSocialLoginWithApple = async (
+  idToken: string,
+  email?: string,
+  firstName?: string,
+  lastName?: string
+) => {
+  return api.post('/auth/social-login', {
+    provider: 'apple',
+    id_token: idToken,
+    email: email,
+    first_name: firstName,
+    last_name: lastName,
+  });
+};

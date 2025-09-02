@@ -546,6 +546,49 @@ class APIManager: ObservableObject {
         return results
     }
     
+    // MARK: - Debug helper: send raw Apple id_token to backend debug endpoint
+    /// Sends a raw Apple id_token to the backend debug endpoint and returns the issued access token.
+    /// This method is compiled only in DEBUG builds to avoid shipping debug helpers to production.
+    #if DEBUG
+    func debugSendAppleIdToken(_ idToken: String, email: String? = nil, firstName: String? = nil, lastName: String? = nil) async throws -> (accessToken: String, refreshToken: String?) {
+        let url = URL(string: "\(baseURL)/api/v1/auth/debug/social-login")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = [
+            "provider": "apple",
+            "id_token": idToken
+        ]
+        if let email = email { body["email"] = email }
+        if let firstName = firstName { body["first_name"] = firstName }
+        if let lastName = lastName { body["last_name"] = lastName }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
+
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw APIManagerError.unauthorized }
+            let bodyStr = String(data: data, encoding: .utf8) ?? "<no body>"
+            throw APIManagerError.serverError(bodyStr)
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String else {
+            throw APIManagerError.invalidData
+        }
+
+        // Persist tokens in keychain for convenience during dev testing
+        keychain.setValue(access, for: "auth_access_token")
+        if let refresh = json["refresh_token"] as? String {
+            keychain.setValue(refresh, for: "auth_refresh_token")
+        }
+
+        return (accessToken: access, refreshToken: json["refresh_token"] as? String)
+    }
+    #endif
+    
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
         // Ensure backend-issued token is available for insights endpoint
