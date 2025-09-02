@@ -28,14 +28,30 @@ async def generate_insights(
     try:
         # If database usage is disabled, accept stateless mode where caller provides health_data + api_key
         if not settings.USE_DATABASE:
-            # Authenticate using API key either in body as `api_key` or header `x-api-key`
-            api_key = None
-            if isinstance(request_data, dict):
-                api_key = request_data.get('api_key')
-            if not api_key and request is not None:
-                api_key = request.headers.get('x-api-key') or request.headers.get('x_api_key')
-            if not api_key or api_key != settings.SECRET_KEY:
-                raise HTTPException(status_code=401, detail="Invalid or missing API key for stateless insights")
+            # Allow either: (A) a valid bearer token (current_user present), or (B) an API key supplied
+            # If a bearer token is present, trust it and proceed without API key.
+            if current_user is None:
+                # No bearer token - require API key in body or header
+                api_key = None
+                if isinstance(request_data, dict):
+                    api_key = request_data.get('api_key')
+                if not api_key and request is not None:
+                    api_key = request.headers.get('x-api-key') or request.headers.get('x_api_key')
+                # Allow alternate stateless API key via env var
+                import os
+                stateless_key = os.getenv('STATELESS_API_KEY')
+
+                # In non-production environments, allow missing or any API key (useful for testing)
+                if settings.ENVIRONMENT.lower() != 'production':
+                    if not api_key:
+                        # Log warning but continue
+                        from utils.logging import get_logger
+                        get_logger(__name__).warning("Stateless insights called without api_key in non-production environment; accepting for testing")
+                    # else: accept any provided key
+                else:
+                    # Production: require a matching key
+                    if not api_key or (api_key != settings.SECRET_KEY and (not stateless_key or api_key != stateless_key)):
+                        raise HTTPException(status_code=401, detail="Invalid or missing API key for stateless insights")
 
             # Expect health_data in the request body
             health_data = (request_data or {}).get('health_data') if isinstance(request_data, dict) else None
@@ -77,8 +93,12 @@ async def generate_insights(
             food_objs = []
             insulin_objs = []
 
-            # Create a lightweight stateless user object
-            stateless_user = SimpleUser(username=request_data.get('username', 'stateless') if isinstance(request_data, dict) else 'stateless')
+            # Create or reuse a lightweight stateless user object
+            if current_user is None:
+                stateless_user = SimpleUser(username=(request_data.get('username', 'stateless') if isinstance(request_data, dict) else 'stateless'))
+            else:
+                # Use the authenticated user (SimpleUser or full User)
+                stateless_user = current_user
 
             # Call AI engine without DB
             recommendations = await ai_engine.generate_recommendations(
