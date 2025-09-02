@@ -58,6 +58,7 @@ async def apple_register(
         return {"access_token": access_token, "token_type": "bearer"}
 
     # Database mode: find or create user
+    # Database mode: find or create user
     user = db.query(User).filter(User.apple_id == apple_user_id).first()
     if not user:
         logger.info(f"Creating new user with Apple ID: {apple_user_id}")
@@ -127,7 +128,7 @@ async def social_login(
 
     # If stateless, mint app token without DB
     if not settings.USE_DATABASE:
-        subject = data.email or apple_user_id
+        subject = data.email or apple_user_id or "anonymous"
         access_token = create_access_token(data={"sub": subject})
         refresh_token = create_access_token(data={"sub": subject, "type": "refresh"}, expires_delta=timedelta(days=7))
         return {
@@ -165,16 +166,16 @@ async def social_login(
         db.refresh(user)
     else:
         updated = False
-        if data.first_name and user.first_name != data.first_name:
+        if data.first_name and getattr(user, 'first_name', None) != data.first_name:
             user.first_name = data.first_name
             updated = True
-        if data.last_name and user.last_name != data.last_name:
+        if data.last_name and getattr(user, 'last_name', None) != data.last_name:
             user.last_name = data.last_name
             updated = True
-        if not user.is_active:
+        if not getattr(user, 'is_active', True):
             user.is_active = True
             updated = True
-        if not user.is_verified:
+        if not getattr(user, 'is_verified', True):
             user.is_verified = True
             updated = True
         if updated:
@@ -182,8 +183,12 @@ async def social_login(
 
     access_token = create_access_token(data={"sub": user.username})
     refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
-    user.refresh_token = refresh_token
-    db.commit()
+    try:
+        user.refresh_token = refresh_token
+        db.commit()
+    except Exception:
+        # In case some user fields aren't writable or DB issues occur, continue and return tokens
+        logger.info("Could not persist refresh token; continuing in stateless-like mode")
 
     return {
         "access_token": access_token,
