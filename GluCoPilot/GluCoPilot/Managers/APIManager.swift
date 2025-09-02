@@ -448,7 +448,15 @@ class APIManager: ObservableObject {
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        request.httpBody = try encoder.encode(healthData)
+
+        // Backend expects a body like: { "data": { ...health data... }, "platform": "apple_health" }
+        let healthDataEncoded = try encoder.encode(healthData)
+        let healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
+        let wrapper: [String: Any] = [
+            "platform": "apple_health",
+            "data": healthJson
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: wrapper)
         
         let (data, response) = try await session.data(for: request)
         
