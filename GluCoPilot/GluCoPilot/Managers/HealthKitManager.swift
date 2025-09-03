@@ -201,6 +201,51 @@ class HealthKitManager: ObservableObject {
         
         return healthData
     }
+
+    /// Debug helper: fetch recent blood glucose samples with per-sample details for inspection
+    func fetchRecentGlucoseSamples(limit: Int = 100, from startDate: Date? = nil, to endDate: Date = Date()) async throws -> [String] {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else {
+            return []
+        }
+        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
+            if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
+            return []
+        }
+
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: glucoseType,
+                                      predicate: predicate,
+                                      limit: limit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    #if DEBUG
+                    print("Error fetching glucose samples: \(error.localizedDescription)")
+                    #endif
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let formatted: [String] = (samples as? [HKQuantitySample])?.map { sample in
+                    // Convert to mg/dL (common) and mmol/L
+                    let mgdl = sample.quantity.doubleValue(for: HKUnit.milligramsPerDeciliter())
+                    let mmol = mgdl / 18.0182
+                    let source = sample.sourceRevision.source.name
+                    let bundle = sample.sourceRevision.source.bundleIdentifier
+                    let device = sample.device?.name ?? "-"
+                    let meta = sample.metadata ?? [:]
+
+                    return "ts:\(sample.startDate) mg/dL:\(Int(round(mgdl))) mmol/L:\(String(format: \"%.1f\", mmol)) source:\(source) bundle:\(bundle) device:\(device) metadata:\(meta)"
+                } ?? []
+
+                continuation.resume(returning: formatted)
+            }
+
+            healthStore.execute(query)
+        }
+    }
     
     private func fetchStepCount(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }

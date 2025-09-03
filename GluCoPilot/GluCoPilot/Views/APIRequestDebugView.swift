@@ -22,6 +22,11 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    Button(action: { Task { await fetchGlucoseSamplesDebug() } }) {
+                        Label("Dump Glucose Samples", systemImage: "drop.fill")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Clear") {
                         logs.removeAll()
                     }
@@ -86,6 +91,22 @@ struct APIRequestDebugView: View {
             }
         } catch {
             append("HealthKit fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchGlucoseSamplesDebug() async {
+        append("Dumping recent glucose samples (detailed)...")
+        do {
+            let lines = try await healthKitManager.fetchRecentGlucoseSamples(limit: 200)
+            if lines.isEmpty {
+                append("No glucose samples returned from HealthKit (empty array)")
+            } else {
+                for l in lines {
+                    append(l)
+                }
+            }
+        } catch {
+            append("Glucose dump failed: \(error.localizedDescription)")
         }
     }
 
