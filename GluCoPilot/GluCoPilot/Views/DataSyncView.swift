@@ -4,9 +4,10 @@ import HealthKit
 struct DataSyncView: View {
     @EnvironmentObject private var healthManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
-    @State private var isSyncing = false
-    @State private var lastSyncDate: Date?
-    @State private var syncResults: SyncResults?
+    @StateObject private var cache = CacheManager.shared
+    @State private var isUploading = false
+    @State private var insights: [APIManagerAIInsight] = []
+    @State private var lastRun: Date?
     @State private var showError = false
     @State private var errorMessage = ""
     
@@ -15,91 +16,83 @@ struct DataSyncView: View {
             VStack(spacing: 30) {
                 // Header
                 VStack(spacing: 16) {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    Image(systemName: "brain.head.profile.fill")
                         .font(.system(size: 60))
-                        .foregroundStyle(.green.gradient)
-                    
-                    Text("Data Sync")
+                        .foregroundStyle(.purple.gradient)
+
+                    Text("AI Insights")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                    
-                    Text("Import health data from the last 24 hours to enhance your AI insights")
+
+                    Text("Upload local logs and the last 24 hours of Health data to generate personalized AI recommendations")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
                 
-                // Data Sources
-                VStack(spacing: 16) {
-                    DataSourceCard(
-                        icon: "heart.fill",
-                        title: "Apple Health",
-                        description: "Activity, steps, sleep, heart rate",
-                        isAvailable: healthManager.isHealthKitAvailable
-                    )
-                    
-                    DataSourceCard(
-                        icon: "fork.knife",
-                        title: "MyFitnessPal",
-                        description: "Nutrition and food logs (via Apple Health)",
-                        isAvailable: healthManager.isHealthKitAvailable
-                    )
-                }
-                .padding(.horizontal)
-                
-                // Sync Button
-                Button(action: syncData) {
+                // Upload Button
+                Button(action: uploadCache) {
                     HStack {
-                        if isSyncing {
+                        if isUploading {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
                         }
-                        
-                        Text(isSyncing ? "Syncing..." : "Sync Data")
+
+                        Text(isUploading ? "Generating Insights..." : "Upload & Generate Insights")
                             .font(.headline)
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(.green.gradient)
+                    .background(.purple.gradient)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(isSyncing)
+                .disabled(isUploading)
                 .padding(.horizontal)
                 
-                // Last Sync Info
-                if let lastSync = lastSyncDate {
+                // Last run info
+                if let run = lastRun {
                     VStack(spacing: 8) {
-                        Text("Last synced: \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                        Text("Last run: \(run.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
-                        if let results = syncResults {
-                            SyncResultsView(results: results)
+                        if !insights.isEmpty {
+                            Text("Generated \(insights.count) insights")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
                 
-                // Instructions
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("To sync MyFitnessPal data:")
+                // Recent cached items (small preview)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent Cached Logs (24h)")
                         .font(.headline)
-                        .padding(.bottom, 4)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        InstructionStep(number: 1, text: "Open MyFitnessPal app")
-                        InstructionStep(number: 2, text: "Go to More → Apps & Devices")
-                        InstructionStep(number: 3, text: "Connect with Apple Health")
-                        InstructionStep(number: 4, text: "Enable sharing for Nutrition data")
+                        .padding(.horizontal)
+
+                    ForEach(cache.getItems(since: Calendar.current.date(byAdding: .hour, value: -24, to: Date())!)) { item in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(item.type.capitalized)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text(item.payload.map { "\($0.key): \($0.value)" }.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text(item.timestamp, style: .relative)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
                     }
                 }
-                .padding()
-                .background(Color(.systemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal)
+                .padding(.vertical)
             }
             .padding(.vertical)
         }
@@ -119,70 +112,72 @@ struct DataSyncView: View {
     }
     
     private func syncData() {
-        isSyncing = true
-        
-        Task {
-            do {
-                // Fetch health data from HealthKit
-                let healthData = try await healthManager.fetchLast24HoursData()
-                
-                // Convert HealthKitManagerHealthData to APIManagerHealthData
-                let nutritionSource = healthData.nutrition.first
+            // Legacy sync function; not used in AI upload flow
+        }
 
-                let apiHealthData = APIManagerHealthData(
-                    glucose: healthData.workouts.map { workout in
-                        APIManagerGlucoseReading(
-                            value: Int.random(in: 80...200), // Placeholder for now, will be replaced by actual Dexcom data
-                            trend: "flat",
-                            timestamp: workout.startDate,
-                            unit: "mg/dL"
-                        )
-                    },
-                    workouts: healthData.workouts.map { workout in
-                        APIManagerWorkoutData(
-                            type: workout.name,
-                            duration: workout.duration,
-                            calories: workout.calories,
-                            startDate: workout.startDate,
-                            endDate: workout.endDate
-                        )
-                    },
-                    nutrition: [APIManagerNutritionData(
-                        name: nutritionSource?.name ?? "Daily Nutrition",
-                        calories: nutritionSource?.calories ?? 0,
-                        carbs: nutritionSource?.carbs ?? 0,
-                        protein: nutritionSource?.protein ?? 0,
-                        fat: nutritionSource?.fat ?? 0,
-                        timestamp: nutritionSource?.timestamp ?? Date()
-                    )],
-                    timestamp: Date()
-                )
-                
-                // Sync data with backend
-                let results = try await apiManager.syncHealthData(apiHealthData)
-                
-                // Convert APIManagerSyncResults to SyncResults
-                let syncResults = SyncResults(
-                    glucoseReadings: results.glucoseReadings,
-                    workouts: results.workouts,
-                    nutritionEntries: results.nutritionEntries,
-                    errors: results.errors,
-                    lastSyncDate: results.lastSyncDate
-                )
-                
-                await MainActor.run {
-                    isSyncing = false
-                    lastSyncDate = Date()
-                    self.syncResults = syncResults
-                }
-            } catch {
-                await MainActor.run {
-                    isSyncing = false
-                    errorMessage = "Failed to sync data: \(error.localizedDescription)"
-                    showError = true
+        private func uploadCache() {
+            isUploading = true
+            Task {
+                do {
+                    let healthData = try await healthManager.fetchLast24HoursData()
+                    let nutritionSource = healthData.nutrition.first
+
+                    let apiHealthData = APIManagerHealthData(
+                        glucose: healthData.workouts.map { workout in
+                            APIManagerGlucoseReading(
+                                value: Int.random(in: 80...200), // placeholder for HealthKit glucose
+                                trend: "flat",
+                                timestamp: workout.startDate,
+                                unit: "mg/dL"
+                            )
+                        },
+                        workouts: healthData.workouts.map { workout in
+                            APIManagerWorkoutData(
+                                type: workout.name,
+                                duration: workout.duration,
+                                calories: workout.calories,
+                                startDate: workout.startDate,
+                                endDate: workout.endDate
+                            )
+                        },
+                        nutrition: [APIManagerNutritionData(
+                            name: nutritionSource?.name ?? "Daily Nutrition",
+                            calories: nutritionSource?.calories ?? 0,
+                            carbs: nutritionSource?.carbs ?? 0,
+                            protein: nutritionSource?.protein ?? 0,
+                            fat: nutritionSource?.fat ?? 0,
+                            timestamp: nutritionSource?.timestamp ?? Date()
+                        )],
+                        timestamp: Date()
+                    )
+
+                    let cached = cache.getItems(since: Calendar.current.date(byAdding: .hour, value: -24, to: Date())!)
+                    let aiInsights = try await apiManager.uploadCacheAndGenerateInsights(healthData: apiHealthData, cachedItems: cached)
+
+                    await MainActor.run {
+                        isUploading = false
+                        lastRun = Date()
+                        // Convert to APIManagerAIInsight for simple display
+                        insights = aiInsights.map { ai in
+                            APIManagerAIInsight(
+                                title: ai.title,
+                                description: ai.description,
+                                type: "",
+                                priority: "",
+                                timestamp: ai.timestamp,
+                                actionItems: ai.actionItems,
+                                dataPoints: ai.dataPoints
+                            )
+                        }
+                    }
+                } catch {
+                    await MainActor.run {
+                        isUploading = false
+                        errorMessage = "Failed to upload and generate insights: \(error.localizedDescription)"
+                        showError = true
+                    }
                 }
             }
-        }
     }
 }
 

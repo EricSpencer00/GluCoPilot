@@ -606,6 +606,96 @@ class APIManager: ObservableObject {
         // 4. Generate insights
         return try await generateInsights()
     }
+
+    // Upload local cache (logs) plus HealthKit context (24h) and ask backend to generate insights
+    func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
+        let authToken = try await ensureBackendToken()
+
+        let url = URL(string: "\(baseURL)/api/v1/insights/aggregate")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        // Build payload
+        var payload: [String: Any] = [:]
+        let healthDataEncoded = try encoder.encode(healthData)
+        let healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
+        payload["health_data"] = healthJson
+
+        // Convert cached items
+        let cached: [[String: Any]] = cachedItems.map { item in
+            return [
+                "id": item.id.uuidString,
+                "type": item.type,
+                "payload": item.payload,
+                "timestamp": ISO8601DateFormatter().string(from: item.timestamp)
+            ]
+        }
+        payload["cached_items"] = cached
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw APIManagerError.unauthorized }
+            let err = String(data: data, encoding: .utf8) ?? "<no body>"
+            throw APIManagerError.serverError(err)
+        }
+
+        // Reuse generateInsights parsing logic by decoding the API response
+        let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
+
+        var insights: [AIInsight] = []
+        for insightData in insightsArray {
+            guard let title = insightData["title"] as? String,
+                  let description = insightData["description"] as? String,
+                  let typeString = insightData["type"] as? String,
+                  let priorityString = insightData["priority"] as? String else { continue }
+
+            let actionItems = insightData["action_items"] as? [String] ?? []
+            let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
+
+            let type: AIInsight.InsightType
+            switch typeString {
+            case "blood_sugar": type = .bloodSugar
+            case "diet": type = .diet
+            case "exercise": type = .exercise
+            case "medication": type = .medication
+            case "lifestyle": type = .lifestyle
+            case "pattern": type = .pattern
+            default: type = .pattern
+            }
+
+            let priority: AIInsight.InsightPriority
+            switch priorityString {
+            case "low": priority = .low
+            case "medium": priority = .medium
+            case "high": priority = .high
+            case "critical": priority = .critical
+            default: priority = .medium
+            }
+
+            let insight = AIInsight(
+                title: title,
+                description: description,
+                type: type,
+                priority: priority,
+                timestamp: Date(),
+                actionItems: actionItems,
+                dataPoints: dataPoints
+            )
+            insights.append(insight)
+        }
+
+        if insights.isEmpty { insights = getDefaultInsights() }
+        return insights
+    }
     
     private func getDefaultInsights() -> [AIInsight] {
         return [

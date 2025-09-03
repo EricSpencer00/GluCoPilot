@@ -11,7 +11,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             // Home/Dashboard Tab
-            DashboardView()
+            DashboardView(selectedTab: $selectedTab)
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -20,8 +20,8 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            // Glucose tab — relies on HealthKit and synced data
-            DataSyncView()
+            // Log tab — log food, insulin, and other events
+            LogView()
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -30,13 +30,12 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            // Data Tab
-            DataSyncView()
-                .environmentObject(healthKitManager)
+            // Insights Tab (previously Data)
+            AIInsightsView()
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
-                    Text("Data")
+                    Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
+                    Text("AI")
                 }
                 .tag(2)
             
@@ -100,6 +99,7 @@ struct MainTabView: View {
 struct DashboardView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
+    @Binding var selectedTab: Int
     @State private var currentTime = Date()
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -121,7 +121,7 @@ struct DashboardView: View {
                     RecentActivityView()
                     
                     // Quick Actions
-                    QuickActionsView()
+                    QuickActionsView(selectedTab: $selectedTab)
                 }
                 .padding()
             }
@@ -427,6 +427,10 @@ struct ActivityRow: View {
 }
 
 struct QuickActionsView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
+    @Binding var selectedTab: Int
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
@@ -441,7 +445,45 @@ struct QuickActionsView: View {
                     icon: "arrow.clockwise.circle.fill",
                     color: .blue
                 ) {
-                    // Handle sync action
+                    Task {
+                        do {
+                            let healthData = try await healthKitManager.fetchLast24HoursData()
+                            let nutritionSource = healthData.nutrition.first
+
+                            let apiHealthData = APIManagerHealthData(
+                                glucose: healthData.workouts.map { workout in
+                                    APIManagerGlucoseReading(
+                                        value: Int.random(in: 80...200),
+                                        trend: "flat",
+                                        timestamp: workout.startDate,
+                                        unit: "mg/dL"
+                                    )
+                                },
+                                workouts: healthData.workouts.map { workout in
+                                    APIManagerWorkoutData(
+                                        type: workout.name,
+                                        duration: workout.duration,
+                                        calories: workout.calories,
+                                        startDate: workout.startDate,
+                                        endDate: workout.endDate
+                                    )
+                                },
+                                nutrition: [APIManagerNutritionData(
+                                    name: nutritionSource?.name ?? "Daily Nutrition",
+                                    calories: nutritionSource?.calories ?? 0,
+                                    carbs: nutritionSource?.carbs ?? 0,
+                                    protein: nutritionSource?.protein ?? 0,
+                                    fat: nutritionSource?.fat ?? 0,
+                                    timestamp: nutritionSource?.timestamp ?? Date()
+                                )],
+                                timestamp: Date()
+                            )
+
+                            _ = try await apiManager.syncHealthData(apiHealthData)
+                        } catch {
+                            print("Sync failed: \(error)")
+                        }
+                    }
                 }
                 
                 QuickActionButton(
@@ -449,15 +491,15 @@ struct QuickActionsView: View {
                     icon: "fork.knife.circle.fill",
                     color: .orange
                 ) {
-                    // Handle log meal action
+                    selectedTab = 1
                 }
                 
                 QuickActionButton(
-                    title: "View Trends",
-                    icon: "chart.line.uptrend.xyaxis.circle.fill",
+                    title: "View Log",
+                    icon: "list.bullet.rectangle",
                     color: .green
                 ) {
-                    // Handle view trends action
+                    selectedTab = 1
                 }
                 
                 QuickActionButton(
@@ -465,7 +507,7 @@ struct QuickActionsView: View {
                     icon: "brain.head.profile.fill",
                     color: .purple
                 ) {
-                    // Handle get insights action
+                    selectedTab = 2
                 }
             }
         }
