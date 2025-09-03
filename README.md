@@ -27,21 +27,6 @@ open Package.swift  # Or open in Xcode
 # Build and run on device/simulator (iOS 18+ required)
 ```
 
-### 3. React Native App (Optional, legacy)
-
-```bash
-cd frontend
-npm install
-npx react-native run-ios  # or run-android
-```
-
-### 4. AI/Insights Engine (Optional)
-
-```bash
-cd ai
-# Run or develop local AI/insights modules as needed
-```
-
 ---
 
 ---
