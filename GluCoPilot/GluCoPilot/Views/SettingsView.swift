@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var healthManager: HealthKitManager
     @State private var showLogoutAlert = false
     @State private var showDexcomDisconnectAlert = false
+    @AppStorage("showHealthKitPermissionLogs") private var showHealthKitPermissionLogs: Bool = false
     
     var body: some View {
         List {
@@ -130,6 +131,15 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+            }
+
+            // HealthKit logs toggle
+            Section("HealthKit") {
+                Toggle("Show HealthKit permission logs", isOn: $showHealthKitPermissionLogs)
+                    .font(.subheadline)
+                Text("Enable this to see detailed HealthKit permission messages in the console. Useful for debugging permissions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             
             // Support Section

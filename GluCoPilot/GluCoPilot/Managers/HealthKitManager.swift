@@ -53,6 +53,8 @@ class HealthKitManager: ObservableObject {
     @Published var activeMinutes: Double = 0
     @Published var sleepHours: Double = 0
     @Published var averageHeartRate: Double = 0
+    // Toggle to control whether HealthKit permission/debug logs are printed
+    @AppStorage("showHealthKitPermissionLogs") var showPermissionLogs: Bool = false
     
     private let healthStore = HKHealthStore()
     
@@ -190,9 +192,7 @@ class HealthKitManager: ObservableObject {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }
     // Check authorization first
     if !isAuthorized(for: .stepCount) {
-#if DEBUG
-        print("No permission to read step count. Returning 0.")
-#endif
+        if showPermissionLogs { print("No permission to read step count. Returning 0.") }
         return 0
     }
         
@@ -228,9 +228,7 @@ class HealthKitManager: ObservableObject {
     private func fetchActiveCalories(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let calorieType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { throw HealthKitError.invalidType }
     if !isAuthorized(for: .activeEnergyBurned) {
-#if DEBUG
-        print("No permission to read active calories. Returning 0.")
-#endif
+        if showPermissionLogs { print("No permission to read active calories. Returning 0.") }
         return 0
     }
         
@@ -266,9 +264,7 @@ class HealthKitManager: ObservableObject {
     private func fetchHeartRate(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { throw HealthKitError.invalidType }
     if !isAuthorized(for: .heartRate) {
-#if DEBUG
-        print("No permission to read heart rate. Returning 0")
-#endif
+        if showPermissionLogs { print("No permission to read heart rate. Returning 0") }
         return 0
     }
         
@@ -304,9 +300,7 @@ class HealthKitManager: ObservableObject {
     private func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HealthKitManagerWorkoutData] {
     let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
     if !isAuthorized(for: HKObjectType.workoutType()) {
-#if DEBUG
-        print("No permission to read workouts. Returning empty array.")
-#endif
+        if showPermissionLogs { print("No permission to read workouts. Returning empty array.") }
         return []
     }
         
@@ -349,9 +343,7 @@ class HealthKitManager: ObservableObject {
     private func fetchSleepData(from startDate: Date, to endDate: Date) async throws -> Double {
     guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { throw HealthKitManagerError.dataFetchFailed }
     if !isAuthorized(for: sleepType) {
-#if DEBUG
-        print("No permission to read sleep data. Returning 0")
-#endif
+        if showPermissionLogs { print("No permission to read sleep data. Returning 0") }
         return 0.0
     }
         
@@ -410,9 +402,7 @@ class HealthKitManager: ObservableObject {
     private func fetchNutritionValue(_ identifier: HKQuantityTypeIdentifier, predicate: NSPredicate, unit: HKUnit) async throws -> Double {
     guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { throw HealthKitManagerError.dataFetchFailed }
     if healthStore.authorizationStatus(for: type) != .sharingAuthorized {
-#if DEBUG
-        print("No permission to read nutrition for \(identifier). Returning 0.")
-#endif
+        if showPermissionLogs { print("No permission to read nutrition for \(identifier). Returning 0.") }
         return 0.0
     }
         
@@ -450,9 +440,7 @@ class HealthKitManager: ObservableObject {
             return []
         }
     if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
-#if DEBUG
-        print("No permission to read blood glucose samples. Returning empty array.")
-#endif
+        if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
         return []
     }
         
