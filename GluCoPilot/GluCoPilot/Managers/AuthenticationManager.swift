@@ -114,7 +114,6 @@ class AuthenticationManager: NSObject, ObservableObject {
         isAuthenticated = true
         userDisplayName = displayName
         userEmail = email
-        showDexcomPrompt = true
 
         // Register with backend and surface errors if any
         isLoadingAuth = true
