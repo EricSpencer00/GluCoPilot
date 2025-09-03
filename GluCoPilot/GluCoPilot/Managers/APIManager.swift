@@ -541,6 +541,90 @@ class APIManager: ObservableObject {
     #endif
     
     // MARK: - AI Insights
+    /// Generate insights, allowing callers to pass local health data (stateless) and an optional user prompt.
+    /// If auth is available, it will be attached; otherwise the backend should accept stateless payloads in non-prod.
+    func generateInsights(healthData: APIManagerHealthData?, prompt: String? = nil) async throws -> [AIInsight] {
+        // Prefer a backend-issued token but allow stateless calls
+        let authToken = try? await ensureBackendToken()
+
+        let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var payload: [String: Any] = ["timeframe": "24h", "include_recommendations": true]
+        if let prompt = prompt { payload["prompt"] = prompt }
+        if let healthData = healthData {
+            // Build backend-expected structure
+            let glucose = healthData.glucose.map { g in
+                return [
+                    "value": g.value,
+                    "trend": g.trend,
+                    "timestamp": ISO8601DateFormatter().string(from: g.timestamp),
+                    "unit": g.unit
+                ] as [String: Any]
+            }
+            let activity = (healthData.workouts ?? []).map { w in
+                return [
+                    "type": w.type,
+                    "duration": w.duration,
+                    "calories": w.calories as Any,
+                    "start": ISO8601DateFormatter().string(from: w.startDate),
+                    "end": ISO8601DateFormatter().string(from: w.endDate)
+                ] as [String: Any]
+            }
+            let food = (healthData.nutrition ?? []).map { n in
+                return [
+                    "name": n.name,
+                    "calories": n.calories,
+                    "carbs": n.carbs,
+                    "protein": n.protein,
+                    "fat": n.fat,
+                    "timestamp": ISO8601DateFormatter().string(from: n.timestamp)
+                ] as [String: Any]
+            }
+            payload["health_data"] = [
+                "glucose": glucose,
+                "activity": activity,
+                "food": food
+            ]
+        } else {
+            payload["health_data"] = [
+                "glucose": [],
+                "activity": [],
+                "food": []
+            ]
+        }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                // Try exchange once and retry
+                if let newToken = await exchangeAppleIdTokenForBackendToken() {
+                    var retry = URLRequest(url: url)
+                    retry.httpMethod = "POST"
+                    retry.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    retry.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                    retry.httpBody = request.httpBody
+                    let (rd, rr) = try await session.data(for: retry)
+                    if let http = rr as? HTTPURLResponse, http.statusCode == 200 {
+                        return try parseInsightsResponse(data: rd)
+                    }
+                }
+                throw APIManagerError.unauthorized
+            }
+            let err = String(data: data, encoding: .utf8) ?? "<no body>"
+            throw APIManagerError.serverError(err)
+        }
+
+        return try parseInsightsResponse(data: data)
+    }
     func generateInsights() async throws -> [AIInsight] {
         // Prefer a backend-issued token but allow stateless calls (backend supports this in non-prod)
         let authToken = try? await ensureBackendToken()

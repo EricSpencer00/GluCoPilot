@@ -66,6 +66,8 @@ class HealthKitManager: ObservableObject {
         HKObjectType.quantityType(forIdentifier: .stepCount)!,
         HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
         HKObjectType.quantityType(forIdentifier: .heartRate)!,
+    // Include blood glucose to allow CGM/SMBG readings in-app
+    HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
         HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
         HKObjectType.workoutType(),
         HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,

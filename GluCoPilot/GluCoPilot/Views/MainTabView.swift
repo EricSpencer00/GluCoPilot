@@ -32,6 +32,7 @@ struct MainTabView: View {
             
             // Insights Tab (previously Data)
             AIInsightsView()
+                .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
@@ -131,9 +132,7 @@ struct DashboardView: View {
     
     private func refreshDashboard() async {
         // Refresh all data
-        healthKitManager.requestHealthKitPermissions()
-        // Refresh HealthKit and backend-synced glucose data
-        healthKitManager.requestHealthKitPermissions()
+    healthKitManager.requestHealthKitPermissions()
         // Trigger a backend sync or fetch latest aggregated glucose via APIManager
 //        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
     }

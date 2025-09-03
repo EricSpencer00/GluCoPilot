@@ -193,20 +193,36 @@ struct GraphingView: View {
             let healthData = try await healthKitManager.fetchLast24HoursData()
 
             await MainActor.run {
-                // HealthKit manager doesn't provide CGM in this app; keep glucose empty unless a backend provides it
-                self.glucoseReadings = []
-                // Convert HealthKitManagerNutritionData to NutritionData (FoodEntry)
-                self.foodEntries = healthData.nutrition.map { hkNutrition in
-                    NutritionData(
-                        name: hkNutrition.name,
-                        calories: hkNutrition.calories,
-                        carbs: hkNutrition.carbs,
-                        protein: hkNutrition.protein,
-                        fat: hkNutrition.fat,
-                        timestamp: hkNutrition.timestamp
+                // Glucose (from HealthKit if available)
+                self.glucoseReadings = healthData.glucose.map { sample in
+                    GlucoseReading(
+                        value: Int(sample.value),
+                        trend: "",
+                        timestamp: sample.timestamp,
+                        unit: sample.unit
                     )
                 }
-                self.workouts = healthData.workouts as! [WorkoutData]
+                // Nutrition: HealthKit returns an aggregated daily entry; map to FoodEntry for chart
+                self.foodEntries = healthData.nutrition.map { hk in
+                    NutritionData(
+                        name: hk.name,
+                        calories: hk.calories,
+                        carbs: hk.carbs,
+                        protein: hk.protein,
+                        fat: hk.fat,
+                        timestamp: hk.timestamp
+                    )
+                }
+                // Workouts mapping
+                self.workouts = healthData.workouts.map { w in
+                    WorkoutData(
+                        type: w.name,
+                        duration: w.duration,
+                        calories: w.calories,
+                        startDate: w.startDate,
+                        endDate: w.endDate
+                    )
+                }
                 self.isLoading = false
             }
         } catch {

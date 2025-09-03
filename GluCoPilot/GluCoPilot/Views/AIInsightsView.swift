@@ -3,6 +3,7 @@ import Charts
 
 struct AIInsightsView: View {
     @EnvironmentObject private var apiManager: APIManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var insights: [AIInsight] = []
     @State private var isLoading = false
     @State private var lastUpdateDate: Date?
@@ -10,6 +11,7 @@ struct AIInsightsView: View {
     @State private var errorMessage = ""
     @State private var selectedInsight: AIInsight?
     @State private var showDetailView = false
+    @State private var userPrompt: String = ""
     
     var body: some View {
         ScrollView {
@@ -31,6 +33,16 @@ struct AIInsightsView: View {
                         .padding(.horizontal)
                 }
                 
+                // Prompt input (optional)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Ask a question or set a focus (optional)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("e.g., Help me improve my post-dinner glucose", text: $userPrompt)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(.horizontal)
+
                 // Refresh Button
                 Button(action: refreshInsights) {
                     HStack {
@@ -128,7 +140,22 @@ struct AIInsightsView: View {
     
     private func refreshInsightsAsync() async {
         do {
-            let aiInsights = try await apiManager.aggregateDataAndGenerateInsights()
+            // Package last 24h HealthKit data for stateless insights
+            let hk = try await healthKitManager.fetchLast24HoursData()
+            let apiHealth = APIManagerHealthData(
+                glucose: hk.glucose.map { g in
+                    APIManagerGlucoseReading(value: Int(g.value), trend: "", timestamp: g.timestamp, unit: g.unit)
+                },
+                workouts: hk.workouts.map { w in
+                    APIManagerWorkoutData(type: w.name, duration: w.duration, calories: w.calories, startDate: w.startDate, endDate: w.endDate)
+                },
+                nutrition: hk.nutrition.map { n in
+                    APIManagerNutritionData(name: n.name, calories: n.calories, carbs: n.carbs, protein: n.protein, fat: n.fat, timestamp: n.timestamp)
+                },
+                timestamp: Date()
+            )
+
+            let aiInsights = try await apiManager.generateInsights(healthData: apiHealth, prompt: userPrompt.isEmpty ? nil : userPrompt)
             
             await MainActor.run {
                 isLoading = false
