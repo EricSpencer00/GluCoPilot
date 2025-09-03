@@ -609,13 +609,18 @@ class APIManager: ObservableObject {
 
     // Upload local cache (logs) plus HealthKit context (24h) and ask backend to generate insights
     func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
-        let authToken = try await ensureBackendToken()
+        // Try to obtain a backend-issued token, but allow unauthenticated/stateless calls
+        // (backend in non-production accepts missing api_key / bearer token for /generate)
+        let authToken = try? await ensureBackendToken()
 
-        let url = URL(string: "\(baseURL)/api/v1/insights/aggregate")!
+        // Use the backend "generate" endpoint which supports stateless mode (health_data in body)
+        let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
