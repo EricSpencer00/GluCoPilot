@@ -195,7 +195,17 @@ struct GraphingView: View {
             await MainActor.run {
                 // HealthKit manager doesn't provide CGM in this app; keep glucose empty unless a backend provides it
                 self.glucoseReadings = []
-                self.foodEntries = healthData.nutrition.map { $0 }
+                // Convert HealthKitManagerNutritionData to NutritionData (FoodEntry)
+                self.foodEntries = healthData.nutrition.map { hkNutrition in
+                    NutritionData(
+                        name: hkNutrition.name,
+                        calories: hkNutrition.calories,
+                        carbs: hkNutrition.carbs,
+                        protein: hkNutrition.protein,
+                        fat: hkNutrition.fat,
+                        timestamp: hkNutrition.timestamp
+                    )
+                }
                 self.workouts = healthData.workouts
                 self.isLoading = false
             }
