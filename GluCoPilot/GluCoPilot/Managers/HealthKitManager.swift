@@ -186,7 +186,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+#if DEBUG
                         print("No step count data available for the specified time range. Returning 0.")
+#endif
                         continuation.resume(returning: 0)
                     } else {
                         print("Error fetching step count: \(error.localizedDescription)")
@@ -218,7 +220,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+#if DEBUG
                         print("No active calories data available for the specified time range. Returning 0.")
+#endif
                         continuation.resume(returning: 0)
                     } else {
                         print("Error fetching active calories: \(error.localizedDescription)")
@@ -250,7 +254,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
-                        print("No heart rate data available for the specified time range. Returning 0.")
+#if DEBUG
+                        print("No heart rate data available for the specified time range. Returning 0")
+#endif
                         continuation.resume(returning: 0)
                     } else {
                         print("Error fetching heart rate: \(error.localizedDescription)")
@@ -279,7 +285,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+#if DEBUG
                         print("No workout data available for the specified time range. Returning empty array.")
+#endif
                         continuation.resume(returning: [])
                     } else {
                         print("Error fetching workouts: \(error.localizedDescription)")
@@ -320,7 +328,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
-                        print("No sleep data available for the specified time range. Returning 0.")
+#if DEBUG
+                        print("No sleep data available for the specified time range. Returning 0")
+#endif
                         continuation.resume(returning: 0.0)
                     } else {
                         print("Error fetching sleep data: \(error.localizedDescription)")
@@ -372,7 +382,9 @@ class HealthKitManager: ObservableObject {
                 if let error = error {
                     // Handle the specific "No data available" error gracefully
                     if (error as NSError).domain == "com.apple.healthkit" && (error as NSError).code == 11 {
+#if DEBUG
                         print("No nutrition data available for \(identifier) in the specified time range. Returning 0.")
+#endif
                         continuation.resume(returning: 0.0)
                     } else {
                         print("Error fetching nutrition data for \(identifier): \(error.localizedDescription)")
