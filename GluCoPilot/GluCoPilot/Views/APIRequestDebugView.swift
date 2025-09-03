@@ -77,13 +77,27 @@ struct APIRequestDebugView: View {
         await MainActor.run { isRunning = true }
         append("Starting API smoke tests...")
 
-        // 1) Test generateInsights (aggregate)
-        append("Calling aggregateDataAndGenerateInsights()...")
+        // 1) Test generateInsights with sample health payload
+        append("Calling generateInsights(healthData:prompt:) with sample payload...")
         do {
-            let insights = try await apiManager.aggregateDataAndGenerateInsights()
-            append("aggregateDataAndGenerateInsights -> returned \(insights.count) insights")
+            let dummyGlucose = APIManagerGlucoseReading(value: 120, trend: "flat", timestamp: Date(), unit: "mg/dL")
+            let dummyWorkout = APIManagerWorkoutData(type: "DebugWalking", duration: 600, calories: 30, startDate: Date().addingTimeInterval(-3600), endDate: Date().addingTimeInterval(-3000))
+            let dummyNutrition = APIManagerNutritionData(name: "DebugMeal", calories: 250, carbs: 30, protein: 10, fat: 8, timestamp: Date())
+
+            let sampleHealth = APIManagerHealthData(glucose: [dummyGlucose], workouts: [dummyWorkout], nutrition: [dummyNutrition], timestamp: Date())
+
+            let insights = try await apiManager.generateInsights(healthData: sampleHealth, prompt: "Debug: smoke test")
+            append("generateInsights -> returned \(insights.count) insights")
         } catch {
-            append("aggregateDataAndGenerateInsights -> error: \(error.localizedDescription)")
+            // Provide extra clues for common server responses
+            let msg = error.localizedDescription
+            append("generateInsights -> error: \(msg)")
+            if msg.lowercased().contains("unauthorized") {
+                append("Hint: server returned 401/403. Are your tokens set in keychain or does the server accept stateless requests?")
+            }
+            if msg.lowercased().contains("not found") || msg.contains("404") {
+                append("Hint: endpoint not available (404). The backend may have DEBUG=false; debug-only endpoints will be 404.")
+            }
         }
 
         // 2) Test syncHealthData with minimal payload
