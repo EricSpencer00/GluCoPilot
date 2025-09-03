@@ -252,9 +252,18 @@ class HealthKitManager: ObservableObject {
     func getAuthorizationStatusReport() -> [String] {
         var report: [String] = []
 
+        func readableStatus(_ status: HKAuthorizationStatus) -> String {
+            switch status {
+            case .notDetermined: return "0 (notDetermined)"
+            case .sharingDenied: return "1 (sharingDenied)"
+            case .sharingAuthorized: return "2 (sharingAuthorized)"
+            @unknown default: return "? (unknown)"
+            }
+        }
+
         func statusString(for object: HKObjectType) -> String {
             let status = healthStore.authorizationStatus(for: object)
-            return String(describing: status)
+            return readableStatus(status)
         }
 
         if let t = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
@@ -275,6 +284,50 @@ class HealthKitManager: ObservableObject {
         report.append("workout: \(statusString(for: HKObjectType.workoutType()))")
 
         return report
+    }
+
+    /// Debug helper: list HealthKit sources that have written blood glucose samples
+    func fetchGlucoseSourcesReport() async -> [String] {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return ["bloodGlucose type unavailable"] }
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSourceQuery(sampleType: glucoseType, samplePredicate: nil) { _, sourcesOrNil, error in
+                if let error = error {
+                    continuation.resume(returning: ["error: \(error.localizedDescription)"])
+                    return
+                }
+
+                let sources = (sourcesOrNil ?? []).map { source in
+                    return "name:\(source.name) bundle:\(source.bundleIdentifier ?? "-")"
+                }
+
+                continuation.resume(returning: sources)
+            }
+
+            healthStore.execute(query)
+        }
+    }
+
+    /// Debug helper: return total count of blood glucose samples (permissive, across all time)
+    func fetchGlucoseSampleCount() async throws -> Int {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return 0 }
+        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
+            if showPermissionLogs { print("No permission to read blood glucose samples. Returning 0.") }
+            return 0
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: glucoseType, predicate: nil, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                continuation.resume(returning: samples?.count ?? 0)
+            }
+
+            healthStore.execute(query)
+        }
     }
 
     /// Debug helper: fetch any available glucose samples (no predicate) to detect presence across all time

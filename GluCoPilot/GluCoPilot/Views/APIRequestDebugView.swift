@@ -32,6 +32,11 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    Button(action: { Task { await requestHealthPermissions() } }) {
+                        Label("Request Health Permissions", systemImage: "hand.raised.fill")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Clear") {
                         logs.removeAll()
                     }
@@ -132,6 +137,35 @@ struct APIRequestDebugView: View {
         } catch {
             append("Permissive glucose query error: \(error.localizedDescription)")
         }
+
+        // Also include sources and total sample count for more diagnosis
+        append("Fetching glucose writer sources...")
+        let sources = await healthKitManager.fetchGlucoseSourcesReport()
+        if sources.isEmpty {
+            append("No glucose sources found (none have written samples)")
+        } else {
+            for s in sources.prefix(20) { append("source: \(s)") }
+        }
+
+        append("Fetching total glucose sample count (permissive)...")
+        do {
+            let count = try await healthKitManager.fetchGlucoseSampleCount()
+            append("Total glucose samples (permissive): \(count)")
+        } catch {
+            append("Error fetching glucose sample count: \(error.localizedDescription)")
+        }
+    }
+
+    private func requestHealthPermissions() async {
+        append("Requesting HealthKit permissions (system sheet may appear)...")
+        await MainActor.run {
+            healthKitManager.requestHealthKitPermissions()
+        }
+        // Small delay to allow user to respond to the permissions sheet
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        append("Requested permissions; reporting new status...")
+        let report = healthKitManager.getAuthorizationStatusReport()
+        for r in report { append(r) }
     }
 
     private func append(_ text: String) {
