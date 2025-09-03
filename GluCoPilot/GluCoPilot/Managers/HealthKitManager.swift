@@ -230,14 +230,15 @@ class HealthKitManager: ObservableObject {
 
                 let formatted: [String] = (samples as? [HKQuantitySample])?.map { sample in
                     // Convert to mg/dL (common) and mmol/L
-                    let mgdl = sample.quantity.doubleValue(for: HKUnit.milligramsPerDeciliter())
+                    let mgdl = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                     let mmol = mgdl / 18.0182
+                    let mmolStr = String(format: "%.1f", mmol)
                     let source = sample.sourceRevision.source.name
                     let bundle = sample.sourceRevision.source.bundleIdentifier
                     let device = sample.device?.name ?? "-"
                     let meta = sample.metadata ?? [:]
 
-                    return "ts:\(sample.startDate) mg/dL:\(Int(round(mgdl))) mmol/L:\(String(format: \"%.1f\", mmol)) source:\(source) bundle:\(bundle) device:\(device) metadata:\(meta)"
+                    return "ts:\(sample.startDate) mg/dL:\(Int(round(mgdl))) mmol/L:\(mmolStr) source:\(source) bundle:\(bundle) device:\(device) metadata:\(meta)"
                 } ?? []
 
                 continuation.resume(returning: formatted)
