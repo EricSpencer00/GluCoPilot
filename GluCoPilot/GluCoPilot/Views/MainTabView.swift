@@ -50,13 +50,7 @@ struct MainTabView: View {
                 .tag(3)
             
             // AI Insights Tab
-            AIInsightsView()
-                .environmentObject(apiManager)
-                .tabItem {
-                    Image(systemName: selectedTab == 4 ? "brain.head.profile.fill" : "brain.head.profile")
-                    Text("Insights")
-                }
-                .tag(4)
+            // Removed duplicate Insights tab (consolidated under tag 2)
             
             // Settings Tab
             SettingsView()

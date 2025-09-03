@@ -9,6 +9,8 @@ class AuthenticationManager: NSObject, ObservableObject {
     @Published var userDisplayName: String?
     @Published var userEmail: String?
     @Published var isRegistering = false
+    @Published var isLoadingAuth = false
+    @Published var authError: String? = nil
     @Published var showDexcomPrompt = false
     
     // This dependency is initialized in ContentView and passed to AuthManager
@@ -117,12 +119,21 @@ class AuthenticationManager: NSObject, ObservableObject {
         userDisplayName = displayName
         userEmail = email
         showDexcomPrompt = true
-        
-        // Register with backend
-        Task {
-            await registerWithBackend(userID: userID, fullName: displayName, email: email)
+
+        // Register with backend and surface errors if any
+        isLoadingAuth = true
+        authError = nil
+        Task { [weak self] in
+            guard let self = self else { return }
+            let success = await self.registerWithBackend(userID: userID, fullName: displayName, email: email)
+            await MainActor.run {
+                self.isLoadingAuth = false
+                if !success {
+                    self.authError = "Registration with backend failed. You can continue in offline mode or retry from Settings."
+                }
+            }
         }
-        
+
         print("Apple Sign In successful for user: \(displayName)")
     }
 
@@ -153,31 +164,33 @@ class AuthenticationManager: NSObject, ObservableObject {
         }
     }
     
-    private func registerWithBackend(userID: String, fullName: String, email: String?) async {
+    // Returns true when registration with backend succeeded, false otherwise
+    private func registerWithBackend(userID: String, fullName: String, email: String?) async -> Bool {
         guard let apiManager = apiManager else {
             print("APIManager not available for registration")
-            return
+            return false
         }
-        
+
         isRegistering = true
-        
+
         do {
             let success = try await apiManager.registerWithAppleID(
                 userID: userID,
                 fullName: fullName,
                 email: email
             )
-            
+
             if success {
                 print("Successfully registered with backend")
             }
+            isRegistering = false
+            return success
         } catch {
             print("Error registering with backend: \(error.localizedDescription)")
-            // We don't fail the sign-in if backend registration fails
-            // The app should still work locally
+            // We don't fail the sign-in if backend registration fails; surface to UI instead
+            isRegistering = false
+            return false
         }
-        
-        isRegistering = false
     }
     
     func acknowledgeeDexcomPrompt() {
@@ -221,12 +234,22 @@ class AuthenticationManager: NSObject, ObservableObject {
         keychain.removeValue(for: "user_display_name")
         keychain.removeValue(for: "user_email")
         keychain.removeValue(for: "has_seen_dexcom_prompt")
+        // Clear any backend tokens stored by APIManager
+        if let api = apiManager {
+            api.clearTokens()
+        } else {
+            // Attempt to remove common auth keys as a fallback
+            keychain.removeValue(for: "auth_access_token")
+            keychain.removeValue(for: "auth_refresh_token")
+        }
         
         // Clear state
         isAuthenticated = false
         userDisplayName = nil
         userEmail = nil
         showDexcomPrompt = false
+    isLoadingAuth = false
+    authError = nil
         
         print("User signed out")
     }

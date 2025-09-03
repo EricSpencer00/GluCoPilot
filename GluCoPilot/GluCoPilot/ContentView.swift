@@ -13,12 +13,14 @@ struct ContentView: View {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
-                if authManager.showDexcomPrompt {
-                    // Previously prompted to connect Dexcom. Dexcom integration has been removed;
-                    // prompt will be acknowledged automatically and users should connect HealthKit.
-                    OnboardingView(onComplete: {
-                        authManager.acknowledgeeDexcomPrompt()
+                // After sign-in: guide user to connect HealthKit if necessary
+                if !UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup") {
+                    HealthKitSetupView(onComplete: {
+                        UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
                     })
+                    .environmentObject(apiManager)
+                    .environmentObject(HealthKitManager())
+                    .environmentObject(authManager)
                     .transition(.move(edge: .trailing))
                 } else {
                     MainTabView()
@@ -38,10 +40,9 @@ struct ContentView: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.8), value: isLaunching)
-        .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
-        .animation(.easeInOut(duration: 0.5), value: showOnboarding)
-        .animation(.easeInOut(duration: 0.5), value: authManager.showDexcomPrompt)
+    .animation(.easeInOut(duration: 0.8), value: isLaunching)
+    .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
+    .animation(.easeInOut(duration: 0.5), value: showOnboarding)
         .environmentObject(authManager)
         .onAppear {
             // Inject the apiManager dependency

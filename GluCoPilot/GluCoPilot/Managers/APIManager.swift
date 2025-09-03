@@ -163,6 +163,14 @@ class APIManager: ObservableObject {
     private let session = URLSession.shared
     private let keychain = APIManagerKeychainHelper()
 
+    // Clear any stored auth tokens
+    func clearTokens() {
+        keychain.removeValue(for: "auth_access_token")
+        keychain.removeValue(for: "auth_refresh_token")
+        keychain.removeValue(for: "apple_id_token")
+        keychain.removeValue(for: "apple_user_id")
+    }
+
     // Helper to prefer backend-issued access token over raw Apple id_token
     private func getAuthToken() -> String? {
         // Prefer stored backend access token
