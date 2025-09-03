@@ -4,7 +4,6 @@ import UIKit
 #endif
 
 struct MainTabView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
     @State private var selectedTab = 0
@@ -12,8 +11,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             // Home/Dashboard Tab
-            DashboardView()
-                .environmentObject(dexcomManager)
+            DashboardView(selectedTab: $selectedTab)
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -22,9 +20,9 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            // Glucose/Dexcom Tab
-            DexcomConnectionView()
-                .environmentObject(dexcomManager)
+            // Log tab — log food, insulin, and other events
+            LogView()
+                .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
@@ -32,13 +30,13 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            // Data Tab
-            DataSyncView()
+            // Insights Tab (previously Data)
+            AIInsightsView()
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
-                    Text("Data")
+                    Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
+                    Text("AI")
                 }
                 .tag(2)
             
@@ -46,23 +44,17 @@ struct MainTabView: View {
             GraphingView()
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "chart.xyaxis.line.fill" : "chart.xyaxis.line")
+                    // Use a widely available chart symbol to avoid missing symbol on older OSes
+                    Image(systemName: selectedTab == 3 ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
                     Text("Graphs")
                 }
                 .tag(3)
             
             // AI Insights Tab
-            AIInsightsView()
-                .environmentObject(apiManager)
-                .tabItem {
-                    Image(systemName: selectedTab == 4 ? "brain.head.profile.fill" : "brain.head.profile")
-                    Text("Insights")
-                }
-                .tag(4)
+            // Removed duplicate Insights tab (consolidated under tag 2)
             
             // Settings Tab
             SettingsView()
-                .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -100,9 +92,9 @@ struct MainTabView: View {
 }
 
 struct DashboardView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
+    @Binding var selectedTab: Int
     @State private var currentTime = Date()
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -124,7 +116,7 @@ struct DashboardView: View {
                     RecentActivityView()
                     
                     // Quick Actions
-                    QuickActionsView()
+                    QuickActionsView(selectedTab: $selectedTab)
                 }
                 .padding()
             }
@@ -140,8 +132,9 @@ struct DashboardView: View {
     
     private func refreshDashboard() async {
         // Refresh all data
-        try? await dexcomManager.fetchLatestGlucoseReading(apiManager: apiManager)
-        healthKitManager.requestHealthKitPermissions()
+    healthKitManager.requestHealthKitPermissions()
+        // Trigger a backend sync or fetch latest aggregated glucose via APIManager
+//        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
     }
 }
 
@@ -251,8 +244,10 @@ struct StatCard: View {
 }
 
 struct LatestGlucoseView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
-    
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var latestGlucoseValue: Int? = nil
+    @State private var latestGlucoseTimestamp: Date? = nil
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -263,11 +258,8 @@ struct LatestGlucoseView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            if let reading = dexcomManager.latestGlucoseReading {
-                let value = reading.value
-                let trend = reading.trend
 
+            if let value = latestGlucoseValue {
                 HStack {
                     VStack(alignment: .leading) {
                         Text("\(value)")
@@ -282,18 +274,43 @@ struct LatestGlucoseView: View {
                     Spacer()
 
                     VStack {
-                        Image(systemName: getTrendIcon(trend))
+                        Image(systemName: "waveform.path.ecg")
                             .font(.title)
-                            .foregroundColor(getTrendColor(trend))
-                        Text(trend)
+                            .foregroundColor(.gray)
+                        Text("From HealthKit")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
             } else {
-                Text("No recent glucose data")
-                    .foregroundColor(.secondary)
-                    .italic()
+                VStack(spacing: 8) {
+                    Text("No recent glucose data")
+                        .foregroundColor(.secondary)
+                        .italic()
+                    Button(action: {
+                        Task {
+                            healthKitManager.requestHealthKitPermissions()
+                            do {
+                                let data = try await healthKitManager.fetchLast24HoursData()
+                                if let last = data.glucose.last {
+                                    await MainActor.run {
+                                        self.latestGlucoseValue = Int(last.value)
+                                        self.latestGlucoseTimestamp = last.timestamp
+                                    }
+                                }
+                            } catch {
+                                // keep nil and let the UI show the message
+                            }
+                        }
+                    }) {
+                        Text("Sync Health Data")
+                            .font(.subheadline)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor))
+                            .foregroundColor(.white)
+                    }
+                }
             }
         }
         .padding()
@@ -301,11 +318,27 @@ struct LatestGlucoseView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
         )
+        .task {
+            await fetchLatestGlucose()
+        }
     }
-    
+
+    private func fetchLatestGlucose() async {
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            if let last = data.glucose.last {
+                await MainActor.run {
+                    self.latestGlucoseValue = Int(last.value)
+                    self.latestGlucoseTimestamp = last.timestamp
+                }
+            }
+        } catch {
+            // No-op: keep nil to show placeholder
+        }
+    }
+
     private func getTimestamp() -> String {
-    guard let reading = dexcomManager.latestGlucoseReading else { return "" }
-    let timestamp = reading.timestamp
+        guard let timestamp = latestGlucoseTimestamp else { return "" }
         let formatter = RelativeDateTimeFormatter()
         return formatter.localizedString(for: timestamp, relativeTo: Date())
     }
@@ -347,30 +380,36 @@ struct RecentActivityView: View {
             Text("Recent Activity")
                 .font(.headline)
             
+            // Show an empty state that directs users to sync data or open the Logs tab
             VStack(spacing: 8) {
-                ActivityRow(
-                    icon: "drop.circle.fill",
-                    title: "Glucose Reading",
-                    subtitle: "145 mg/dL - Stable",
-                    time: "5 min ago",
-                    color: .green
-                )
-                
-                ActivityRow(
-                    icon: "figure.walk.circle.fill",
-                    title: "Walk Completed",
-                    subtitle: "2,847 steps - 23 min",
-                    time: "2 hours ago",
-                    color: .blue
-                )
-                
-                ActivityRow(
-                    icon: "fork.knife.circle.fill",
-                    title: "Meal Logged",
-                    subtitle: "Lunch - 45g carbs",
-                    time: "4 hours ago",
-                    color: .orange
-                )
+                Text("No recent activity to show")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                HStack(spacing: 12) {
+                    Button(action: {
+                        // Navigate to Log tab — caller binds Index 1
+                        // This button will be handled by QuickActionsView in practice
+                    }) {
+                        Text("Open Log")
+                            .font(.caption)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary))
+                    }
+
+                    Button(action: {
+                        // Trigger a sync via HealthKit permissions
+                        let manager = HealthKitManager()
+                        manager.requestHealthKitPermissions()
+                    }) {
+                        Text("Sync HealthKit")
+                            .font(.caption)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor))
+                            .foregroundColor(.white)
+                    }
+                }
             }
         }
         .padding()
@@ -413,6 +452,10 @@ struct ActivityRow: View {
 }
 
 struct QuickActionsView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
+    @Binding var selectedTab: Int
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
@@ -427,7 +470,44 @@ struct QuickActionsView: View {
                     icon: "arrow.clockwise.circle.fill",
                     color: .blue
                 ) {
-                    // Handle sync action
+                    Task {
+                        do {
+                            let healthData = try await healthKitManager.fetchLast24HoursData()
+                            let nutritionSource = healthData.nutrition.first
+                                    let apiHealthData = APIManagerHealthData(
+                                        glucose: healthData.glucose.map { sample in
+                                            APIManagerGlucoseReading(
+                                                value: Int(sample.value),
+                                                trend: "",
+                                                timestamp: sample.timestamp,
+                                                unit: sample.unit
+                                            )
+                                        },
+                                workouts: healthData.workouts.map { workout in
+                                    APIManagerWorkoutData(
+                                        type: workout.name,
+                                        duration: workout.duration,
+                                        calories: workout.calories,
+                                        startDate: workout.startDate,
+                                        endDate: workout.endDate
+                                    )
+                                },
+                                nutrition: [APIManagerNutritionData(
+                                    name: nutritionSource?.name ?? "Daily Nutrition",
+                                    calories: nutritionSource?.calories ?? 0,
+                                    carbs: nutritionSource?.carbs ?? 0,
+                                    protein: nutritionSource?.protein ?? 0,
+                                    fat: nutritionSource?.fat ?? 0,
+                                    timestamp: nutritionSource?.timestamp ?? Date()
+                                )],
+                                timestamp: Date()
+                            )
+
+                            _ = try await apiManager.syncHealthData(apiHealthData)
+                        } catch {
+                            print("Sync failed: \(error)")
+                        }
+                    }
                 }
                 
                 QuickActionButton(
@@ -435,15 +515,15 @@ struct QuickActionsView: View {
                     icon: "fork.knife.circle.fill",
                     color: .orange
                 ) {
-                    // Handle log meal action
+                    selectedTab = 1
                 }
                 
                 QuickActionButton(
-                    title: "View Trends",
-                    icon: "chart.line.uptrend.xyaxis.circle.fill",
+                    title: "View Log",
+                    icon: "list.bullet.rectangle",
                     color: .green
                 ) {
-                    // Handle view trends action
+                    selectedTab = 1
                 }
                 
                 QuickActionButton(
@@ -451,7 +531,7 @@ struct QuickActionsView: View {
                     icon: "brain.head.profile.fill",
                     color: .purple
                 ) {
-                    // Handle get insights action
+                    selectedTab = 2
                 }
             }
         }

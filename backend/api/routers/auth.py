@@ -12,7 +12,7 @@ from schemas.auth import UserCreate, UserLogin, UserResponse, Token, UserUpdate
 from schemas.dexcom import DexcomCredentials, DexcomResponse
 from services.auth import create_access_token, verify_password, get_password_hash, get_current_user
 from services.auth_apple import verify_apple_token
-from fastapi import Body
+from fastapi import Body, Request
 from utils.logging import get_logger
 from utils.encryption import encrypt_password
 from core.config import settings
@@ -21,7 +21,7 @@ from core.config import settings
 router = APIRouter()
 
 logger = get_logger(__name__)
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # --- Apple Registration Schema ---
 class AppleRegisterRequest(BaseModel):
@@ -32,12 +32,14 @@ class AppleRegisterRequest(BaseModel):
 @router.post("/apple/register", response_model=Token)
 async def apple_register(
     data: AppleRegisterRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db)
 ):
     """Register/authenticate with Apple ID token."""
     logger.info(f"Apple registration attempt: {data.email or '[no email]'}")
 
+    if not credentials or not getattr(credentials, 'credentials', None):
+        raise HTTPException(status_code=401, detail="Missing Authorization header with Apple id_token")
     claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
     logger.info(f"Apple token claims: {claims}")
     apple_user_id = claims.get('sub')
@@ -86,17 +88,28 @@ class SocialLoginRequest(BaseModel):
 
 @router.post("/social-login", response_model=Token)
 async def social_login(
+    request: Request,
     data: SocialLoginRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
     """Authenticate via Apple/Google. If USE_DATABASE is False, do not persist users; just mint app JWT."""
+    logger.info(f"Entered social_login handler for provider={data.provider} email={data.email}")
     logger.info(f"Social login attempt: {data.email or '[no email]'} via {data.provider}")
 
     apple_user_id = None
     if data.provider == 'apple':
-        logger.info(f"Apple id_token: {credentials.credentials}")
-        claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
+        # Use id_token supplied in JSON body
+        token = data.id_token
+        if not token:
+            raise HTTPException(status_code=400, detail="No Apple id_token provided in request body")
+        logger.info("Verifying Apple id_token from request body")
+        try:
+            claims = verify_apple_token(token, audience=settings.APPLE_CLIENT_ID or None)
+        except HTTPException:
+            # Bubble up AppleTokenError / HTTPException from verification
+            raise
+        except Exception:
+            raise HTTPException(status_code=401, detail="Failed to verify Apple id_token")
         logger.info(f"Apple token claims: {claims}")
         apple_user_id = claims.get('sub')
         # Only check email match if both are present
@@ -196,6 +209,35 @@ async def social_login(
         "token_type": "bearer",
         "expires_in": 1800
     }
+
+
+@router.post('/debug/social-login')
+async def debug_social_login(data: SocialLoginRequest):
+    """Debug-only endpoint to accept id_token without DB and return tokens.
+    Only available when settings.DEBUG is True.
+    """
+    if not settings.DEBUG:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Re-use the apple verification logic but do not persist to DB
+    if data.provider != 'apple':
+        raise HTTPException(status_code=400, detail="Only 'apple' provider supported in debug endpoint")
+    try:
+        claims = verify_apple_token(data.id_token, audience=settings.APPLE_CLIENT_ID or None)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    subject = data.email or claims.get('sub') or 'debug-anonymous'
+    access_token = create_access_token(data={"sub": subject})
+    refresh_token = create_access_token(data={"sub": subject, "type": "refresh"}, expires_delta=timedelta(days=7))
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "expires_in": 1800}
+
+
+@router.post("/social-login-unprotected")
+async def social_login_unprotected(data: SocialLoginRequest):
+    """Unprotected test endpoint to verify routing without Authorization header."""
+    logger.info("Entered social_login_unprotected handler")
+    return {"ok": True, "provider": data.provider, "email": data.email}
 
 # Keep Dexcom connect endpoint after auth
 @router.post("/connect-dexcom", response_model=DexcomResponse)

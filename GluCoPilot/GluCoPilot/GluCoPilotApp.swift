@@ -6,7 +6,6 @@ import HealthKit
 struct GluCoPilotApp: App {
     @StateObject private var authManager = AuthenticationManager()
     @StateObject private var healthManager = HealthKitManager()
-    @StateObject private var dexcomManager = DexcomManager()
     @StateObject private var apiManager = APIManager()
     
     var body: some Scene {
@@ -14,7 +13,6 @@ struct GluCoPilotApp: App {
             ContentView()
                 .environmentObject(authManager)
                 .environmentObject(healthManager)
-                .environmentObject(dexcomManager)
                 .environmentObject(apiManager)
                 .onAppear {
                     healthManager.requestHealthKitPermissions()

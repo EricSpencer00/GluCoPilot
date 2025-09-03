@@ -3,6 +3,7 @@ import Charts
 
 struct GraphingView: View {
     @EnvironmentObject private var apiManager: APIManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var selectedTimeframe: Timeframe = .day
     @State private var showGlucose: Bool = true
     @State private var showFood: Bool = true
@@ -102,17 +103,27 @@ struct GraphingView: View {
                             .frame(height: 300)
                             .frame(maxWidth: .infinity)
                         } else if glucoseReadings.isEmpty && foodEntries.isEmpty && workouts.isEmpty {
-                            VStack {
-                                Image(systemName: "chart.bar.xaxis")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.gray)
-                                Text("No data available")
+                            // No real data available — offer a direct action instead of decorative placeholders
+                            VStack(spacing: 12) {
+                                Text("No synced health data")
                                     .font(.headline)
-                                Text("Sync your health data to see charts")
+                                Text("Connect HealthKit and sync to populate graphs")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                Button(action: {
+                                    // Trigger permissions and a refresh
+                                    healthKitManager.requestHealthKitPermissions()
+                                    loadData()
+                                }) {
+                                    Text("Sync Health Data")
+                                        .font(.headline)
+                                        .padding(.vertical, 10)
+                                        .padding(.horizontal, 18)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor))
+                                        .foregroundColor(.white)
+                                }
                             }
-                            .frame(height: 300)
+                            .frame(height: 200)
                             .frame(maxWidth: .infinity)
                         } else {
                             // Main Chart
@@ -170,136 +181,56 @@ struct GraphingView: View {
     private func loadData() {
         isLoading = true
         error = nil
-        
+
         Task {
             await loadDataAsync()
         }
     }
-    
-    private func loadDataAsync() async {
-        // In a real implementation, we would fetch this data from the backend
-        // For now, we'll generate sample data (no throwing operations)
-        generateSampleData()
-        await MainActor.run {
-            isLoading = false
-        }
-    }
-    
-    private func generateSampleData() {
-        // Generate sample glucose readings
-        let hoursToGenerate = selectedTimeframe.hours
-        var newGlucoseReadings: [GlucoseReading] = []
-        var newFoodEntries: [FoodEntry] = []
-        var newWorkouts: [WorkoutData] = []
-        
-        // Generate glucose readings (one per hour)
-        for hour in 0..<hoursToGenerate {
-            let date = Calendar.current.date(byAdding: .hour, value: -hour, to: Date())!
-            
-            // Vary glucose based on time of day
-            let hourOfDay = Calendar.current.component(.hour, from: date)
-            var baseValue = 120.0
-            
-            // Higher in morning, lower at night
-            if hourOfDay >= 6 && hourOfDay <= 10 {
-                baseValue = 140.0 // Dawn phenomenon
-            } else if hourOfDay >= 11 && hourOfDay <= 14 {
-                baseValue = 130.0 // Lunch time
-            } else if hourOfDay >= 17 && hourOfDay <= 20 {
-                baseValue = 135.0 // Dinner time
-            } else if hourOfDay >= 21 || hourOfDay <= 5 {
-                baseValue = 110.0 // Overnight
-            }
-            
-            // Add some randomness
-            let value = Int(baseValue + Double.random(in: -20...20))
-            
-            // Determine trend
-            let trend: String
-            let previousValue = newGlucoseReadings.last?.value ?? value
-            let difference = value - previousValue
-            
-            if difference > 15 {
-                trend = "rising_quickly"
-            } else if difference > 5 {
-                trend = "rising"
-            } else if difference > -5 {
-                trend = "flat"
-            } else if difference > -15 {
-                trend = "falling"
-            } else {
-                trend = "falling_quickly"
-            }
-            
-            let reading = GlucoseReading(
-                value: value,
-                trend: trend,
-                timestamp: date,
-                unit: "mg/dL"
-            )
-            
-            newGlucoseReadings.append(reading)
-        }
-        
-        // Generate food entries (3 per day)
-        let daysToGenerate = hoursToGenerate / 24
-        for day in 0..<daysToGenerate {
-            // Breakfast
-            let breakfastTime = Calendar.current.date(byAdding: .hour, value: -(day * 24 + 8), to: Date())!
-            newFoodEntries.append(FoodEntry(
-                name: "Breakfast",
-                calories: Double.random(in: 300...600),
-                carbs: Double.random(in: 30...60),
-                protein: Double.random(in: 10...25),
-                fat: Double.random(in: 5...20),
-                timestamp: breakfastTime
-            ))
-            
-            // Lunch
-            let lunchTime = Calendar.current.date(byAdding: .hour, value: -(day * 24 + 13), to: Date())!
-            newFoodEntries.append(FoodEntry(
-                name: "Lunch",
-                calories: Double.random(in: 400...800),
-                carbs: Double.random(in: 40...80),
-                protein: Double.random(in: 20...40),
-                fat: Double.random(in: 10...30),
-                timestamp: lunchTime
-            ))
-            
-            // Dinner
-            let dinnerTime = Calendar.current.date(byAdding: .hour, value: -(day * 24 + 18), to: Date())!
-            newFoodEntries.append(FoodEntry(
-                name: "Dinner",
-                calories: Double.random(in: 500...900),
-                carbs: Double.random(in: 40...90),
-                protein: Double.random(in: 25...50),
-                fat: Double.random(in: 15...35),
-                timestamp: dinnerTime
-            ))
-        }
-        
-        // Generate workouts (1 per day)
-        for day in 0..<daysToGenerate {
-            let workoutTime = Calendar.current.date(byAdding: .hour, value: -(day * 24 + 17), to: Date())!
-            let duration = TimeInterval.random(in: 1800...3600) // 30-60 minutes
-            let endTime = workoutTime.addingTimeInterval(duration)
-            
-            let workoutTypes = ["Walking", "Running", "Cycling", "Strength Training", "Swimming"]
-            let randomType = workoutTypes.randomElement() ?? "Walking"
 
-            newWorkouts.append(WorkoutData(
-                type: randomType,
-                duration: duration,
-                calories: Double.random(in: 150...600),
-                startDate: workoutTime,
-                endDate: endTime
-            ))
+    private func loadDataAsync() async {
+        do {
+            // Attempt to fetch HealthKit-backed data and populate charts
+            let healthData = try await healthKitManager.fetchLast24HoursData()
+
+            await MainActor.run {
+                // Glucose (from HealthKit if available)
+                self.glucoseReadings = healthData.glucose.map { sample in
+                    GlucoseReading(
+                        value: Int(sample.value),
+                        trend: "",
+                        timestamp: sample.timestamp,
+                        unit: sample.unit
+                    )
+                }
+                // Nutrition: HealthKit returns an aggregated daily entry; map to FoodEntry for chart
+                self.foodEntries = healthData.nutrition.map { hk in
+                    NutritionData(
+                        name: hk.name,
+                        calories: hk.calories,
+                        carbs: hk.carbs,
+                        protein: hk.protein,
+                        fat: hk.fat,
+                        timestamp: hk.timestamp
+                    )
+                }
+                // Workouts mapping
+                self.workouts = healthData.workouts.map { w in
+                    WorkoutData(
+                        type: w.name,
+                        duration: w.duration,
+                        calories: w.calories,
+                        startDate: w.startDate,
+                        endDate: w.endDate
+                    )
+                }
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.error = error.localizedDescription
+            }
         }
-        
-        // Sort everything by timestamp
-        glucoseReadings = newGlucoseReadings.sorted(by: { $0.timestamp > $1.timestamp })
-        foodEntries = newFoodEntries.sorted(by: { $0.timestamp > $1.timestamp })
-        workouts = newWorkouts.sorted(by: { $0.startDate > $1.startDate })
     }
 }
 
@@ -332,7 +263,7 @@ struct CombinedDataChart: View {
             if showGlucose {
                 ForEach(glucoseReadings) { reading in
                     LineMark(
-                        x: .value("Time", reading.timestamp),
+                        x: .value("Time", reading.timestamp, unit: .hour),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red.gradient)
@@ -340,7 +271,7 @@ struct CombinedDataChart: View {
                     .interpolationMethod(.catmullRom)
                     
                     PointMark(
-                        x: .value("Time", reading.timestamp),
+                        x: .value("Time", reading.timestamp, unit: .hour),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red)
@@ -352,7 +283,7 @@ struct CombinedDataChart: View {
             if showFood {
                 ForEach(foodEntries) { entry in
                     BarMark(
-                        x: .value("Time", entry.timestamp),
+                        x: .value("Time", entry.timestamp, unit: .hour),
                         y: .value("Carbs", entry.carbs * 2) // Scale for visibility
                     )
                     .foregroundStyle(.green.opacity(0.7))
@@ -368,8 +299,8 @@ struct CombinedDataChart: View {
             if showWorkouts {
                 ForEach(workouts) { workout in
                     RectangleMark(
-                        xStart: .value("Start", workout.startDate),
-                        xEnd: .value("End", workout.endDate),
+                        xStart: .value("Start", workout.startDate, unit: .minute),
+                        xEnd: .value("End", workout.endDate, unit: .minute),
                         yStart: 50,
                         yEnd: 60
                     )

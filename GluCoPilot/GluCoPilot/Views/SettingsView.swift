@@ -2,10 +2,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @EnvironmentObject var dexcomManager: DexcomManager
     @EnvironmentObject var healthManager: HealthKitManager
     @State private var showLogoutAlert = false
-    @State private var showDexcomDisconnectAlert = false
+    @AppStorage("showHealthKitPermissionLogs") private var showHealthKitPermissionLogs: Bool = false
     
     var body: some View {
         List {
@@ -32,32 +31,30 @@ struct SettingsView: View {
             
             // Connections Section
             Section("Connections") {
-                // Dexcom Connection
+                // Glucose Source (HealthKit)
                 HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
+                    Image(systemName: "heart.fill")
                         .font(.title3)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.red)
                         .frame(width: 25)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Dexcom")
+                        Text("Apple Health (HealthKit)")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                        
-                        Text(dexcomManager.isConnected ? "Connected" : "Not Connected")
+
+                        Text(healthManager.isHealthKitAvailable ? "Available" : "Not Available")
                             .font(.caption)
-                            .foregroundStyle(dexcomManager.isConnected ? .green : .secondary)
+                            .foregroundStyle(healthManager.isHealthKitAvailable ? .green : .secondary)
                     }
-                    
+
                     Spacer()
-                    
-                    if dexcomManager.isConnected {
-                        Button("Disconnect") {
-                            showDexcomDisconnectAlert = true
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.red)
+
+                    Button("Manage") {
+                        healthManager.requestHealthKitPermissions()
                     }
+                    .font(.caption)
+                    .foregroundStyle(.blue)
                 }
                 
                 // Apple Health Connection
@@ -133,6 +130,15 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+            }
+
+            // HealthKit logs toggle
+            Section("HealthKit") {
+                Toggle("Show HealthKit permission logs", isOn: $showHealthKitPermissionLogs)
+                    .font(.subheadline)
+                Text("Enable this to see detailed HealthKit permission messages in the console. Useful for debugging permissions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             
             // Support Section
@@ -214,14 +220,7 @@ struct SettingsView: View {
         } message: {
             Text("Are you sure you want to sign out? You'll need to sign in again to access your data.")
         }
-        .alert("Disconnect Dexcom", isPresented: $showDexcomDisconnectAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Disconnect", role: .destructive) {
-                dexcomManager.disconnect()
-            }
-        } message: {
-            Text("Are you sure you want to disconnect your Dexcom account? You'll need to reconnect to sync glucose data.")
-        }
+    // Dexcom disconnect UI removed; integration deprecated.
     }
 }
 
@@ -229,7 +228,6 @@ struct SettingsView: View {
     NavigationStack {
         SettingsView()
             .environmentObject(AuthenticationManager())
-            .environmentObject(DexcomManager())
             .environmentObject(HealthKitManager())
     }
 }

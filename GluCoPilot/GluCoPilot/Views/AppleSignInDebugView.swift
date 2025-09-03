@@ -8,6 +8,8 @@ struct AppleSignInDebugView: View {
     @State private var currentToken: String?
     @State private var tokenHeader: String = ""
     @State private var tokenClaims: String = ""
+    @State private var manualToken: String = ""
+    @State private var backendExchangeResult: String = ""
     
     var body: some View {
         List {
@@ -64,6 +66,99 @@ struct AppleSignInDebugView: View {
                     tokenClaims = ""
                 } label: {
                     Text("Clear ID Token")
+                }
+                
+                Button {
+                    isLoading = true
+                    Task {
+                        // Fetch test recommendations via APIManager
+                        if let api = authManager.apiManager {
+                            do {
+                                let recs = try await api.fetchTestRecommendations()
+                                testResult = "Fetched \(recs.count) recommendations."
+                                // Optionally update currentToken to trigger display
+                                await MainActor.run {
+                                    currentToken = KeychainHelper().getValue(for: "apple_id_token")
+                                }
+                                print("[Debug] Test recommendations: \(recs.map { $0.title })")
+                            } catch {
+                                testResult = "Failed to fetch test recs: \(error.localizedDescription)"
+                            }
+                        } else {
+                            testResult = "APIManager not available"
+                        }
+                        isLoading = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Fetch Test Recommendations")
+                        Spacer()
+                        if isLoading {
+                            ProgressView()
+                        }
+                    }
+                }
+
+                // Debug: Exchange Apple id_token with backend debug endpoint
+                Section("Backend Exchange") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Raw id_token (paste to override keychain)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextEditor(text: $manualToken)
+                            .frame(minHeight: 80)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(.systemGray4)))
+                    }
+
+                    Button {
+                        isLoading = true
+                        Task {
+                            #if DEBUG
+                            guard let api = authManager.apiManager else {
+                                backendExchangeResult = "APIManager not available"
+                                isLoading = false
+                                return
+                            }
+
+                            // Prefer manual token if provided, otherwise use keychain-stored token
+                            let tokenToSend = manualToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? KeychainHelper().getValue(for: "apple_id_token") : manualToken
+
+                            guard let token = tokenToSend else {
+                                backendExchangeResult = "No id_token available to send"
+                                isLoading = false
+                                return
+                            }
+
+                            do {
+                                let (access, refresh) = try await api.debugSendAppleIdToken(token, email: KeychainHelper().getValue(for: "user_email"), firstName: nil, lastName: nil)
+                                backendExchangeResult = "access: \(access.prefix(20))... refresh: \(refresh?.prefix(20) ?? "nil")"
+                            } catch {
+                                backendExchangeResult = "Error: \(error.localizedDescription)"
+                            }
+                            #else
+                            backendExchangeResult = "Debug-only: compile with DEBUG to enable"
+                            #endif
+
+                            // Refresh displayed token from keychain if exchange saved a new app token
+                            await MainActor.run {
+                                currentToken = KeychainHelper().getValue(for: "apple_id_token")
+                            }
+
+                            isLoading = false
+                        }
+                    } label: {
+                        HStack {
+                            Text("Exchange id_token with backend (debug)")
+                            Spacer()
+                            if isLoading { ProgressView() }
+                        }
+                    }
+
+                    if !backendExchangeResult.isEmpty {
+                        Text(backendExchangeResult)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             

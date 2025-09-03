@@ -31,8 +31,8 @@ struct AppleSignInView: View {
             // Features List
             VStack(alignment: .leading, spacing: 16) {
                 FeatureRow(icon: "chart.line.uptrend.xyaxis", 
-                          title: "Dexcom Integration",
-                          description: "Connect your CGM for real-time glucose data")
+                          title: "Glucose Integration",
+                          description: "Connect your CGM or Apple Health for real-time glucose data")
                 
                 FeatureRow(icon: "heart.fill", 
                           title: "Health Data Sync",
@@ -48,6 +48,21 @@ struct AppleSignInView: View {
             
             // Sign In Button
             VStack(spacing: 16) {
+                if let error = authManager.authError {
+                    VStack(spacing: 8) {
+                        Text(error)
+                            .font(.callout)
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+
+                        Button("Retry") {
+                            authManager.authError = nil
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal)
+                }
+
                 SignInWithAppleButton(.signIn) { request in
                     authManager.handleSignInRequest(request)
                 } onCompletion: { result in
@@ -56,8 +71,9 @@ struct AppleSignInView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(height: 50)
                 .cornerRadius(25)
-                
-                Text("Secure authentication with Apple ID")
+                .disabled(authManager.isLoadingAuth)
+
+                Text(authManager.isLoadingAuth ? "Signing in…" : "Secure authentication with Apple ID")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

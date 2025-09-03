@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from contextlib import asynccontextmanager
+import base64
+import json
 import os
 from dotenv import load_dotenv
 
@@ -10,7 +12,6 @@ from api.routers.recommendations import router as recommendations
 from api.routers.food import router as food
 from api.routers.insulin import router as insulin
 from api.routers.integrations import router as integrations
-from api.routers.dexcom_trends import router as dexcom_trends
 from api.routers.detailed_insights import router as detailed_insights
 from api.routers.health import router as health
 from api.routers import forgot_password
@@ -78,12 +79,9 @@ app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 app.include_router(integrations, prefix="/api/v1/integrations", tags=["Integrations"])
 app.include_router(health, prefix="/api/v1/health", tags=["Health"])
-app.include_router(dexcom_trends, prefix="/api/v1", tags=["Trends"])
 app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insights"])
-from api.routers.dexcom_signin import router as dexcom_signin
-app.include_router(dexcom_signin, prefix="/api/v1", tags=["Dexcom"])
-from api.routers.dexcom_oauth import router as dexcom_oauth
-app.include_router(dexcom_oauth, prefix="/api/v1", tags=["Dexcom OAuth"])
+# Dexcom integration has been removed in favor of HealthKit data sources.
+# Previously included Dexcom routers have been disabled to avoid exposing Dexcom-specific endpoints.
 # Feedback router
 from api.routers import feedback
 if feedback:
@@ -93,8 +91,34 @@ if feedback:
 async def log_requests(request: Request, call_next):
     # Redact Authorization header and avoid logging bodies/sensitive data
     headers = dict(request.headers)
+    # Provide a masked preview of the Authorization header for debugging (do NOT log full token)
+    auth_header = None
     if 'authorization' in headers:
-        headers['authorization'] = 'Bearer [REDACTED]'
+        auth_header = headers.get('authorization')
+        try:
+            parts = auth_header.split(' ', 1)
+            token_type = parts[0] if len(parts) > 0 else 'unknown'
+            token_preview = parts[1][:8] + '...' if len(parts) > 1 else '[no-token]'
+            headers['authorization'] = f"{token_type} [REDACTED:{token_preview}]"
+            # Try to safely decode the JWT header (first part) to log alg/kid preview.
+            # We decode only the JWT header (no payload or signature) and log minimal metadata.
+            try:
+                if len(parts) > 1 and '.' in parts[1]:
+                    token = parts[1]
+                    header_b64 = token.split('.', 1)[0]
+                    # Add padding if necessary for base64 decoding
+                    padding = '=' * (-len(header_b64) % 4)
+                    header_json = base64.urlsafe_b64decode(header_b64 + padding).decode('utf-8')
+                    header_obj = json.loads(header_json)
+                    alg = header_obj.get('alg')
+                    kid = header_obj.get('kid')
+                    kid_preview = (kid[:8] + '...') if isinstance(kid, str) and len(kid) > 8 else kid
+                    headers['authorization_meta'] = f"alg={alg}, kid={kid_preview}"
+            except Exception:
+                # Fail silently if token header can't be decoded — do not raise or log raw token
+                pass
+        except Exception:
+            headers['authorization'] = 'Bearer [REDACTED]'
     logger.info(f"Incoming request: {request.method} {request.url}")
     logger.info(f"Headers: {headers}")
     logger.info(f"Client: {request.client}")

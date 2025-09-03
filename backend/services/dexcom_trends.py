@@ -2,7 +2,16 @@ import statistics
 from datetime import datetime, timedelta
 from pydexcom import Dexcom
 
-def get_long_term_trends(dexcom, days=30, low_mgdl=70, high_mgdl=180, start_date=None, end_date=None):
+"""
+Dexcom trends service removed.
+
+Formerly provided trend computation using Dexcom CGM exports. Trend
+calculations should now be performed on HealthKit data sent by the client or
+via HealthKit-to-backend adapters.
+"""
+
+def dexcom_trends_removed(*args, **kwargs):
+    raise RuntimeError("Dexcom trends service removed. Use HealthKit data instead.")
 
     # Dexcom API only allows 1-1440 minutes (1 day). Clamp to 1440.
     minutes = min(max(1, days * 1440), 1440)
