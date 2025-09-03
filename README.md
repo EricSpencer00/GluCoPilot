@@ -26,9 +26,6 @@ cd new-frontend
 open Package.swift  # Or open in Xcode
 # Build and run on device/simulator (iOS 18+ required)
 ```
-
----
-
 ---
 
 ## ✨ Core Features
