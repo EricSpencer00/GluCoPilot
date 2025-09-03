@@ -243,61 +243,10 @@ class APIManager: ObservableObject {
     
     // MARK: - Authentication
     func validateDexcomCredentials(username: String, password: String, isInternational: Bool) async throws -> Bool {
-        // Ensure we have an auth token to send (prefer backend access token, fallback to Apple id_token)
-        guard let authToken = getAuthToken() else {
-            throw APIManagerError.unauthorized
-        }
-        
-    // Detect simulator fallback token
-    let isSimulatorToken = authToken.starts(with: "dev_simulator_token_")
-        #if targetEnvironment(simulator)
-        if isSimulatorToken {
-            print("[APIManager] Using simulator fallback token - some features may be limited")
-        }
-        #endif
-
-        let url = URL(string: "\(baseURL)/api/v1/dexcom/signin")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-    // Add Authorization header with preferred token
-    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        
-        let body: [String: Any] = [
-            "username": username,
-            "password": password,
-            "ous": isInternational
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIManagerError.invalidResponse
-        }
-        
-        if httpResponse.statusCode == 200 {
-            return true
-        } else {
-            // Debug output: include response body to help diagnose auth issues (sanitized)
-            let bodyStr = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("[APIManager] validateDexcomCredentials -> status: \(httpResponse.statusCode), body: \(bodyStr)")
-            
-            // Special handling for simulator mode with fallback token
-            #if targetEnvironment(simulator)
-            if isSimulatorToken && (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) {
-                print("[APIManager] Simulator fallback token rejected by server as expected")
-                print("[APIManager] In simulator mode, returning mock success for testing UI")
-                return true // Return mock success for simulator testing
-            }
-            #endif
-            
-            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let errorMessage = errorData?["detail"] as? String ?? bodyStr
-            throw APIManagerError.serverError(errorMessage)
-        }
+    // Dexcom integration removed. This API previously validated Dexcom Share
+    // credentials against the backend. Dexcom is deprecated — prefer HealthKit.
+    print("[APIManager] validateDexcomCredentials called but Dexcom integration is removed")
+    return false
     }
     
     // Register a user with Apple ID
@@ -361,76 +310,9 @@ class APIManager: ObservableObject {
     }
     
     func fetchLatestGlucoseReading(username: String, password: String, isInternational: Bool) async throws -> APIManagerGlucoseReading {
-        guard let authToken = getAuthToken() else {
-            throw APIManagerError.unauthorized
-        }
-
-        let url = URL(string: "\(baseURL)/api/v1/glucose/stateless/sync")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-    // Add Authorization header with preferred token
-    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        
-        let body: [String: Any] = [
-            "username": username,
-            "password": password,
-            "ous": isInternational
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIManagerError.invalidResponse
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                throw APIManagerError.unauthorized
-            } else {
-                let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let errorMessage = errorData?["detail"] as? String ?? "Server returned status code \(httpResponse.statusCode)"
-                throw APIManagerError.serverError(errorMessage)
-            }
-        }
-        
-        do {
-            // Parse the response data
-            let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let readings = responseData?["readings"] as? [[String: Any]] ?? []
-            
-            guard let firstReading = readings.first,
-                  let value = firstReading["value"] as? Int,
-                  let trend = firstReading["trend"] as? String,
-                  let timestampString = firstReading["timestamp"] as? String else {
-                throw APIManagerError.invalidData
-            }
-            
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
-            // Try with fractional seconds first, then without if that fails
-            let timestamp: Date
-            if let date = formatter.date(from: timestampString) {
-                timestamp = date
-            } else {
-                formatter.formatOptions = [.withInternetDateTime]
-                timestamp = formatter.date(from: timestampString) ?? Date()
-            }
-            
-            return APIManagerGlucoseReading(
-                value: value,
-                trend: trend,
-                timestamp: timestamp,
-                unit: firstReading["unit"] as? String ?? "mg/dL"
-            )
-        } catch {
-            print("Error parsing glucose reading: \(error.localizedDescription)")
-            throw APIManagerError.decodingError(error)
-        }
+    // Dexcom stateless sync removed. Fetch glucose from HealthKit on the client
+    // and send to backend via syncHealthData(_:).
+    throw APIManagerError.invalidResponse
     }
     
     // MARK: - Health Data Sync
@@ -506,15 +388,13 @@ class APIManager: ObservableObject {
 
     // MARK: - Dev helper: fetch test recommendations using stateless backend bypass
     func fetchTestRecommendations() async throws -> [SimpleRecommendation] {
-        // Prefer existing auth token (could be backend access token or apple id token)
-        guard let authToken = getAuthToken() else {
-            throw APIManagerError.unauthorized
-        }
+    // Ensure we have a backend-issued access token for protected endpoints
+    let authToken = try await ensureBackendToken()
 
-        let url = URL(string: "\(baseURL)/api/v1/recommendations/stateless")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    let url = URL(string: "\(baseURL)/api/v1/recommendations/stateless")!
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
 
         let body: [String: Any] = ["username": "__test__", "password": "x", "ous": false]
@@ -713,23 +593,7 @@ class APIManager: ObservableObject {
             timestamp: Date()
         )
         
-        // 2. Fetch Dexcom data if available
-        if let username = keychain.getValue(for: "dexcom_username"),
-           let password = keychain.getValue(for: "dexcom_password") {
-            do {
-                let glucoseReading = try await fetchLatestGlucoseReading(
-                    username: username, 
-                    password: password, 
-                    isInternational: keychain.getValue(for: "dexcom_is_international") == "true"
-                )
-                
-                // Add to health data
-                healthData.glucose.append(glucoseReading)
-            } catch {
-                print("Failed to fetch Dexcom data: \(error.localizedDescription)")
-                // Continue with other data sources
-            }
-        }
+    // 2. Dexcom integration removed. HealthKit is the preferred source for glucose data.
         
         // 3. Sync the aggregated data
         do {
@@ -747,12 +611,12 @@ class APIManager: ObservableObject {
         return [
             AIInsight(
                 title: "Welcome to GluCoPilot",
-                description: "Connect your Dexcom account and sync health data to get personalized AI insights for better diabetes management.",
+                description: "Sync your Apple Health data to get personalized AI insights for better diabetes management.",
                 type: .lifestyle,
                 priority: .medium,
                 timestamp: Date(),
                 actionItems: [
-                    "Connect your Dexcom account in Settings",
+                    "Sync your Apple Health data",
                     "Sync your Apple Health data",
                     "Check back for AI-powered recommendations"
                 ],

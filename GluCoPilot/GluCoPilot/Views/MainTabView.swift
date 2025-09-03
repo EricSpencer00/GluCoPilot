@@ -4,7 +4,6 @@ import UIKit
 #endif
 
 struct MainTabView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
     @State private var selectedTab = 0
@@ -13,7 +12,6 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             // Home/Dashboard Tab
             DashboardView()
-                .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -22,9 +20,9 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            // Glucose/Dexcom Tab
-            DexcomConnectionView()
-                .environmentObject(dexcomManager)
+            // Glucose tab — relies on HealthKit and synced data
+            DataSyncView()
+                .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
@@ -63,7 +61,6 @@ struct MainTabView: View {
             
             // Settings Tab
             SettingsView()
-                .environmentObject(dexcomManager)
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
@@ -101,7 +98,6 @@ struct MainTabView: View {
 }
 
 struct DashboardView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
     @State private var currentTime = Date()
@@ -141,8 +137,11 @@ struct DashboardView: View {
     
     private func refreshDashboard() async {
         // Refresh all data
-        try? await dexcomManager.fetchLatestGlucoseReading(apiManager: apiManager)
         healthKitManager.requestHealthKitPermissions()
+        // Refresh HealthKit and backend-synced glucose data
+        healthKitManager.requestHealthKitPermissions()
+        // Trigger a backend sync or fetch latest aggregated glucose via APIManager
+        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
     }
 }
 
@@ -252,8 +251,10 @@ struct StatCard: View {
 }
 
 struct LatestGlucoseView: View {
-    @EnvironmentObject private var dexcomManager: DexcomManager
-    
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var latestGlucoseValue: Int? = nil
+    @State private var latestGlucoseTimestamp: Date? = nil
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -264,11 +265,8 @@ struct LatestGlucoseView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            if let reading = dexcomManager.latestGlucoseReading {
-                let value = reading.value
-                let trend = reading.trend
 
+            if let value = latestGlucoseValue {
                 HStack {
                     VStack(alignment: .leading) {
                         Text("\(value)")
@@ -283,10 +281,10 @@ struct LatestGlucoseView: View {
                     Spacer()
 
                     VStack {
-                        Image(systemName: getTrendIcon(trend))
+                        Image(systemName: "waveform.path.ecg")
                             .font(.title)
-                            .foregroundColor(getTrendColor(trend))
-                        Text(trend)
+                            .foregroundColor(.gray)
+                        Text("From HealthKit")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -302,11 +300,26 @@ struct LatestGlucoseView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
         )
+        .task {
+            await fetchLatestGlucose()
+        }
     }
-    
+
+    private func fetchLatestGlucose() async {
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            // HealthKitManagerHealthData.glucose is a Double; convert to Int
+            await MainActor.run {
+                self.latestGlucoseValue = Int(data.glucose)
+                self.latestGlucoseTimestamp = data.timestamp
+            }
+        } catch {
+            // No-op: keep nil to show placeholder
+        }
+    }
+
     private func getTimestamp() -> String {
-    guard let reading = dexcomManager.latestGlucoseReading else { return "" }
-    let timestamp = reading.timestamp
+        guard let timestamp = latestGlucoseTimestamp else { return "" }
         let formatter = RelativeDateTimeFormatter()
         return formatter.localizedString(for: timestamp, relativeTo: Date())
     }

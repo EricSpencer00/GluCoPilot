@@ -14,15 +14,11 @@ struct ContentView: View {
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
                 if authManager.showDexcomPrompt {
-                    DexcomPromptView(
-                        apiManager: apiManager,
-                        onComplete: {
-                            authManager.acknowledgeeDexcomPrompt()
-                        },
-                        onSkip: {
-                            authManager.acknowledgeeDexcomPrompt()
-                        }
-                    )
+                    // Previously prompted to connect Dexcom. Dexcom integration has been removed;
+                    // prompt will be acknowledged automatically and users should connect HealthKit.
+                    OnboardingView(onComplete: {
+                        authManager.acknowledgeeDexcomPrompt()
+                    })
                     .transition(.move(edge: .trailing))
                 } else {
                     MainTabView()
@@ -70,129 +66,7 @@ struct ContentView: View {
     }
 }
 
-struct DexcomPromptView: View {
-    let apiManager: APIManager
-    let onComplete: () -> Void
-    let onSkip: () -> Void
-    
-    @StateObject private var dexcomManager = DexcomManager()
-    @State private var username = ""
-    @State private var password = ""
-    @State private var isInternational = false
-    @State private var isConnecting = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 30) {
-                    // Header
-                    VStack(spacing: 16) {
-                        Image(systemName: "drop.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.blue.gradient)
-                        
-                        Text("Connect Dexcom")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        Text("For the best experience, connect your Dexcom CGM account to get real-time glucose data.")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    
-                    // Form
-                    VStack(spacing: 20) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Username")
-                                .font(.headline)
-                            
-                            TextField("Dexcom Share username", text: $username)
-                                .textFieldStyle(.roundedBorder)
-                                .autocapitalization(.none)
-                                .autocorrectionDisabled()
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Password")
-                                .font(.headline)
-                            
-                            SecureField("Dexcom Share password", text: $password)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        Toggle("Outside US (International)", isOn: $isInternational)
-                            .font(.subheadline)
-                            .padding(.vertical, 8)
-                        
-                        Button(action: connectDexcom) {
-                            if isConnecting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                            } else {
-                                Text("Connect")
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .frame(maxWidth: .infinity)
-                        .disabled(username.isEmpty || password.isEmpty || isConnecting)
-                        
-                        Button("Skip for now", action: onSkip)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 10)
-                    }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                    .padding(.horizontal)
-                }
-                .padding(.vertical)
-            }
-            .navigationTitle("Connect Dexcom")
-            .navigationBarTitleDisplayMode(.inline)
-            .alert(isPresented: $showError) {
-                Alert(
-                    title: Text("Connection Error"),
-                    message: Text(errorMessage),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-        }
-    }
-    
-    private func connectDexcom() {
-        isConnecting = true
-        
-        Task {
-            do {
-                try await dexcomManager.connect(
-                    username: username,
-                    password: password,
-                    isInternational: isInternational,
-                    apiManager: apiManager
-                )
-                
-                await MainActor.run {
-                    isConnecting = false
-                    onComplete()
-                }
-            } catch {
-                await MainActor.run {
-                    isConnecting = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                }
-            }
-        }
-    }
-}
+    // DexcomPromptView removed. Dexcom integration deprecated in favor of HealthKit.
 
 struct OnboardingView: View {
     let onComplete: () -> Void

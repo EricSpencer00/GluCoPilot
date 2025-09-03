@@ -1,20 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, status
-from services.auth import get_current_user
-from schemas.dexcom import DexcomCredentials, DexcomLoginResponse
-from pydexcom import Dexcom
+from fastapi import APIRouter, HTTPException, status
 
-router = APIRouter(prefix="/dexcom", tags=["Dexcom"])  
+router = APIRouter(prefix="/dexcom", tags=["Dexcom"])
 
-@router.post("/login", response_model=DexcomLoginResponse)
-async def dexcom_login(
-    body: DexcomCredentials,
-    _user=Depends(get_current_user),
-):
-    """Validate Dexcom credentials (stateless). Does not persist anything."""
-    try:
-        client = Dexcom(username=body.username, password=body.password, ous=body.ous or False)
-        # Lightweight call to ensure credentials/session are valid
-        _ = client.get_current_glucose_reading()
-        return {"message": "Dexcom login successful"}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Dexcom login failed: {str(e)}")
+@router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def dexcom_removed(path: str):
+    """Dexcom endpoints have been removed. Use HealthKit-backed endpoints instead."""
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Dexcom integration removed. Use HealthKit as the data source.")

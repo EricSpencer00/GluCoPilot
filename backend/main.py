@@ -12,7 +12,6 @@ from api.routers.recommendations import router as recommendations
 from api.routers.food import router as food
 from api.routers.insulin import router as insulin
 from api.routers.integrations import router as integrations
-from api.routers.dexcom_trends import router as dexcom_trends
 from api.routers.detailed_insights import router as detailed_insights
 from api.routers.health import router as health
 from api.routers import forgot_password
@@ -80,12 +79,9 @@ app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 app.include_router(integrations, prefix="/api/v1/integrations", tags=["Integrations"])
 app.include_router(health, prefix="/api/v1/health", tags=["Health"])
-app.include_router(dexcom_trends, prefix="/api/v1", tags=["Trends"])
 app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insights"])
-from api.routers.dexcom_signin import router as dexcom_signin
-app.include_router(dexcom_signin, prefix="/api/v1", tags=["Dexcom"])
-from api.routers.dexcom_oauth import router as dexcom_oauth
-app.include_router(dexcom_oauth, prefix="/api/v1", tags=["Dexcom OAuth"])
+# Dexcom integration has been removed in favor of HealthKit data sources.
+# Previously included Dexcom routers have been disabled to avoid exposing Dexcom-specific endpoints.
 # Feedback router
 from api.routers import feedback
 if feedback:
