@@ -2,6 +2,7 @@ import SwiftUI
 
 struct APIRequestDebugView: View {
     @EnvironmentObject var apiManager: APIManager
+    @EnvironmentObject var healthKitManager: HealthKitManager
     @State private var logs: [String] = []
     @State private var isRunning = false
     @State private var manualIdToken: String = ""
@@ -15,6 +16,11 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isRunning)
+
+                    Button(action: { Task { await fetchHealthKitDebug() } }) {
+                        Label("Fetch HealthKit Data", systemImage: "waveform.path.ecg")
+                    }
+                    .buttonStyle(.bordered)
 
                     Button("Clear") {
                         logs.removeAll()
@@ -63,6 +69,23 @@ struct APIRequestDebugView: View {
                 }
             }
             .navigationTitle("API Debug")
+        }
+    }
+
+    private func fetchHealthKitDebug() async {
+        append("Fetching HealthKit last 24h data...")
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let jsonData = try encoder.encode(data)
+            if let jsonStr = String(data: jsonData, encoding: .utf8) {
+                append("HealthKit payload: \n\(jsonStr)")
+            } else {
+                append("HealthKit payload: <failed to stringify>")
+            }
+        } catch {
+            append("HealthKit fetch error: \(error.localizedDescription)")
         }
     }
 
