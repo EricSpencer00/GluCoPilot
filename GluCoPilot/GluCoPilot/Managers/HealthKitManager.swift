@@ -96,15 +96,15 @@ class HealthKitManager: ObservableObject {
                     // Common actionable error: Failed to look up source with bundle identifier
                     if message.contains("Failed to look up source with bundle identifier") {
                         print("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
-                        #if targetEnvironment(simulator)
+#if targetEnvironment(simulator)
                         print("Running in simulator: HealthKit is not fully supported. Falling back to stubbed values for UI testing.")
                         self?.authorizationStatus = .sharingAuthorized
                         Task {
                             await self?.updatePublishedProperties()
                         }
-                        #else
+#else
                         self?.authorizationStatus = .sharingDenied
-                        #endif
+#endif
                     } else {
                         self?.authorizationStatus = .sharingDenied
                     }
@@ -154,13 +154,13 @@ class HealthKitManager: ObservableObject {
         let endDate = Date()
         let startDate = Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         
-    async let steps = fetchStepCount(from: startDate, to: endDate)
+        async let steps = fetchStepCount(from: startDate, to: endDate)
         async let calories = fetchActiveCalories(from: startDate, to: endDate)
         async let heartRate = fetchHeartRate(from: startDate, to: endDate)
         async let workouts = fetchWorkouts(from: startDate, to: endDate)
         async let sleep = fetchSleepData(from: startDate, to: endDate)
         async let nutrition = fetchNutritionData(from: startDate, to: endDate)
-    async let glucoseSamples = fetchGlucoseSamples(from: startDate, to: endDate)
+        async let glucoseSamples = fetchGlucoseSamples(from: startDate, to: endDate)
         
         let healthData = HealthKitManagerHealthData(
             steps: try await steps,
@@ -404,37 +404,42 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
-
+    
     private func fetchGlucoseSamples(from startDate: Date, to endDate: Date) async throws -> [HealthKitGlucoseSample] {
         // Attempt to read blood glucose samples (HKQuantityTypeIdentifier.bloodGlucose)
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else {
             // Not available on device / simulator: return empty array
             return []
         }
-
+        
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
-
+        
         return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: glucoseType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
+            let query = HKSampleQuery(sampleType: glucoseType,
+                                      predicate: predicate,
+                                      limit: HKObjectQueryNoLimit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
+                // Handle errors explicitly so `samples` is only used when present
                 if let error = error {
 #if DEBUG
                     print("Error fetching glucose samples: \(error.localizedDescription)")
 #endif
-                    continuation.resume(returning: [])
+                    continuation.resume(returning: [HealthKitGlucoseSample]())
                     return
                 }
-
+                
                 let glucoseSamples = (samples as? [HKQuantitySample])?.map { sample in
                     let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                     return HealthKitGlucoseSample(value: value, unit: "mg/dL", timestamp: sample.startDate)
-                } ?? []
-
+                } ?? [HealthKitGlucoseSample]()
+                
                 continuation.resume(returning: glucoseSamples)
             }
-
+            
             healthStore.execute(query)
         }
     }
+
 }
 
 // MARK: - Extensions
