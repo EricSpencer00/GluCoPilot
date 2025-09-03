@@ -141,7 +141,7 @@ struct DashboardView: View {
         // Refresh HealthKit and backend-synced glucose data
         healthKitManager.requestHealthKitPermissions()
         // Trigger a backend sync or fetch latest aggregated glucose via APIManager
-        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
+//        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
     }
 }
 

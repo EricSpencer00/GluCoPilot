@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct DexcomConnectionView: View {
-    @EnvironmentObject var dexcomManager: DexcomManager
     @EnvironmentObject var apiManager: APIManager
     @State private var username = ""
     @State private var password = ""
@@ -115,12 +114,6 @@ struct DexcomConnectionView: View {
         
         Task {
             do {
-                try await dexcomManager.connect(
-                    username: username,
-                    password: password,
-                    isInternational: isInternational,
-                    apiManager: apiManager
-                )
                 
                 await MainActor.run {
                     isConnecting = false
@@ -140,6 +133,6 @@ struct DexcomConnectionView: View {
 #Preview {
     NavigationStack {
         DexcomConnectionView()
-            .environmentObject(DexcomManager())
+
     }
 }
