@@ -479,32 +479,53 @@ class APIManager: ObservableObject {
     
     // MARK: - AI Insights
     func generateInsights() async throws -> [AIInsight] {
-        // Ensure backend-issued token is available for insights endpoint
-        let authToken = try await ensureBackendToken()
+        // Prefer a backend-issued token but allow stateless calls (backend supports this in non-prod)
+        let authToken = try? await ensureBackendToken()
 
         let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Use backend access token for insights endpoint
-    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        
-        // Request insights for the last 24 hours
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        // Request insights for the last 24 hours.
+        // Include an empty `health_data` object so the backend's stateless handler accepts the request
         let body: [String: Any] = [
             "timeframe": "24h",
-            "include_recommendations": true
+            "include_recommendations": true,
+            "health_data": [
+                "glucose": [],
+                "activity": [],
+                "food": []
+            ]
         ]
-        
+
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIManagerError.invalidResponse
         }
-        
+
         guard httpResponse.statusCode == 200 else {
+            // If unauthorized, try exchanging Apple id_token for a backend token and retry once.
+            if (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) {
+                if let newToken = await exchangeAppleIdTokenForBackendToken() {
+                    var retryRequest = URLRequest(url: url)
+                    retryRequest.httpMethod = "POST"
+                    retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                    retryRequest.httpBody = request.httpBody
+                    let (retryData, retryResponse) = try await session.data(for: retryRequest)
+                    if let retryHttp = retryResponse as? HTTPURLResponse, retryHttp.statusCode == 200 {
+                        return try parseInsightsResponse(data: retryData)
+                    }
+                }
+            }
+
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw APIManagerError.unauthorized
             } else {
@@ -514,29 +535,27 @@ class APIManager: ObservableObject {
             }
         }
         
+        return try parseInsightsResponse(data: data)
+    }
+
+    private func parseInsightsResponse(data: Data) throws -> [AIInsight] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        
-        // Parse the response
+
         do {
             let responseData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
-            
-            // Convert to AIInsight objects
+
             var insights: [AIInsight] = []
-            
             for insightData in insightsArray {
-                guard let title = insightData["title"] as? String,
-                      let description = insightData["description"] as? String,
-                      let typeString = insightData["type"] as? String,
-                      let priorityString = insightData["priority"] as? String else {
-                    continue
-                }
-                
-                let actionItems = insightData["action_items"] as? [String] ?? []
+                let title = insightData["title"] as? String ?? "Insight"
+                let desc = (insightData["content"] as? String) ?? (insightData["description"] as? String) ?? ""
+                let typeString = (insightData["type"] as? String) ?? (insightData["category"] as? String) ?? "pattern"
+                let priorityString = (insightData["priority"] as? String) ?? "medium"
+
+                let actionList = (insightData["action_items"] as? [String]) ?? []
                 let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
-                
-                // Map API insight type to our InsightType
+
                 let type: AIInsight.InsightType
                 switch typeString {
                 case "blood_sugar": type = .bloodSugar
@@ -547,8 +566,7 @@ class APIManager: ObservableObject {
                 case "pattern": type = .pattern
                 default: type = .pattern
                 }
-                
-                // Map API priority to our InsightPriority
+
                 let priority: AIInsight.InsightPriority
                 switch priorityString {
                 case "low": priority = .low
@@ -557,30 +575,50 @@ class APIManager: ObservableObject {
                 case "critical": priority = .critical
                 default: priority = .medium
                 }
-                
+
                 let insight = AIInsight(
                     title: title,
-                    description: description,
+                    description: desc,
                     type: type,
                     priority: priority,
                     timestamp: Date(),
-                    actionItems: actionItems,
+                    actionItems: actionList,
                     dataPoints: dataPoints
                 )
-                
                 insights.append(insight)
             }
-            
-            // If no insights from API, provide some default ones
-            if insights.isEmpty {
-                insights = getDefaultInsights()
-            }
-            
+
+            if insights.isEmpty { insights = getDefaultInsights() }
             return insights
         } catch {
             print("Error parsing insights response: \(error.localizedDescription)")
             throw APIManagerError.decodingError(error)
         }
+    }
+
+    // Attempt to exchange a stored Apple id_token for a backend-issued access token.
+    // Returns the new access token or nil on failure.
+    private func exchangeAppleIdTokenForBackendToken() async -> String? {
+        guard let appleToken = keychain.getValue(for: "apple_id_token") else { return nil }
+        let url = URL(string: "\(baseURL)/api/v1/auth/social-login")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["provider": "apple", "id_token": appleToken]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String {
+                keychain.setValue(access, for: "auth_access_token")
+                if let refresh = json["refresh_token"] as? String { keychain.setValue(refresh, for: "auth_refresh_token") }
+                return access
+            }
+        } catch {
+            print("Failed to exchange Apple id_token for backend token: \(error.localizedDescription)")
+        }
+        return nil
     }
     
     // Unified function to aggregate all health data and generate insights
@@ -647,7 +685,66 @@ class APIManager: ObservableObject {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
         guard httpResponse.statusCode == 200 else {
-            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw APIManagerError.unauthorized }
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                // Try exchanging Apple id_token for app token and retry once
+                if let newToken = await exchangeAppleIdTokenForBackendToken() {
+                    var retryRequest = URLRequest(url: url)
+                    retryRequest.httpMethod = "POST"
+                    retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                    retryRequest.httpBody = request.httpBody
+                    let (retryData, retryResponse) = try await session.data(for: retryRequest)
+                    if let retryHttp = retryResponse as? HTTPURLResponse, retryHttp.statusCode == 200 {
+                        let responseData = try JSONSerialization.jsonObject(with: retryData) as? [String: Any]
+                        let insightsArray = responseData?["insights"] as? [[String: Any]] ?? []
+                        var insights: [AIInsight] = []
+                        for insightData in insightsArray {
+                            guard let title = insightData["title"] as? String,
+                                  let description = insightData["description"] as? String,
+                                  let typeString = insightData["type"] as? String,
+                                  let priorityString = insightData["priority"] as? String else { continue }
+
+                            let actionItems = insightData["action_items"] as? [String] ?? []
+                            let dataPoints = insightData["data_points"] as? [String: Double] ?? [:]
+
+                            let type: AIInsight.InsightType
+                            switch typeString {
+                            case "blood_sugar": type = .bloodSugar
+                            case "diet": type = .diet
+                            case "exercise": type = .exercise
+                            case "medication": type = .medication
+                            case "lifestyle": type = .lifestyle
+                            case "pattern": type = .pattern
+                            default: type = .pattern
+                            }
+
+                            let priority: AIInsight.InsightPriority
+                            switch priorityString {
+                            case "low": priority = .low
+                            case "medium": priority = .medium
+                            case "high": priority = .high
+                            case "critical": priority = .critical
+                            default: priority = .medium
+                            }
+
+                            let insight = AIInsight(
+                                title: title,
+                                description: description,
+                                type: type,
+                                priority: priority,
+                                timestamp: Date(),
+                                actionItems: actionItems,
+                                dataPoints: dataPoints
+                            )
+                            insights.append(insight)
+                        }
+
+                        if insights.isEmpty { insights = getDefaultInsights() }
+                        return insights
+                    }
+                }
+                throw APIManagerError.unauthorized
+            }
             let err = String(data: data, encoding: .utf8) ?? "<no body>"
             throw APIManagerError.serverError(err)
         }
