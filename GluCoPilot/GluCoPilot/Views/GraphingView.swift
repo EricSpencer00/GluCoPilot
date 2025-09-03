@@ -206,7 +206,7 @@ struct GraphingView: View {
                         timestamp: hkNutrition.timestamp
                     )
                 }
-                self.workouts = healthData.workouts
+                self.workouts = healthData.workouts as! [WorkoutData]
                 self.isLoading = false
             }
         } catch {
