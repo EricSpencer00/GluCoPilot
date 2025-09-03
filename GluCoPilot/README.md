@@ -4,7 +4,7 @@ A modern SwiftUI-based iOS application for AI-powered diabetes management, built
 
 ## Overview
 
-GluCoPilot helps users manage their diabetes by integrating data from multiple sources and providing AI-powered insights and recommendations. The app connects with Dexcom CGM devices, Apple HealthKit, and MyFitnessPal to create a comprehensive diabetes management platform.
+GluCoPilot helps users manage their diabetes by integrating health data and providing AI-powered insights and recommendations. The app uses Apple HealthKit and MyFitnessPal to create a comprehensive diabetes management platform.
 
 ## Features
 
@@ -14,8 +14,7 @@ GluCoPilot helps users manage their diabetes by integrating data from multiple s
 - Automatic authentication state management
 
 ### 📊 Data Integration
-- **Dexcom CGM**: Real-time glucose readings and trends
-- **Apple HealthKit**: Steps, heart rate, sleep, exercise data
+- **Apple HealthKit**: Glucose, steps, heart rate, sleep, exercise data
 - **MyFitnessPal**: Nutrition and food logging (via Apple Health)
 - Automatic data synchronization with backend
 
@@ -48,11 +47,58 @@ The app follows the Model-View-ViewModel pattern with:
 - `DexcomManager`: Handles Dexcom CGM data and authentication
 - `APIManager`: Backend API communication and data synchronization
 
+# GluCoPilot iOS App
+
+A modern SwiftUI-based iOS application for AI-powered diabetes management, built with iOS 18+ components and Swift 6.
+
+## Overview
+
+GluCoPilot helps users manage their diabetes by integrating health data and providing AI-powered insights and recommendations. The app uses Apple HealthKit and MyFitnessPal to create a comprehensive diabetes management platform.
+
+## Features
+
+### 🔐 Authentication
+- Apple Sign In integration
+- Secure keychain storage for credentials
+- Automatic authentication state management
+
+### 📊 Data Integration
+- **Apple HealthKit**: Glucose, steps, heart rate, sleep, exercise data
+- **MyFitnessPal**: Nutrition and food logging (via Apple Health)
+- Automatic data synchronization with backend
+
+### 🧠 AI Insights
+- Personalized glucose management recommendations
+- Pattern recognition and trend analysis
+- Predictive insights for glucose levels
+- Correlation analysis between lifestyle factors and glucose
+
+### 📱 Modern UI/UX
+- Built with SwiftUI and iOS 18+ components
+- Dark mode support
+- Responsive design for iPhone and iPad
+- Intuitive tab-based navigation
+- Real-time data updates
+
+## Architecture
+
+### MVVM Pattern
+The app follows the Model-View-ViewModel pattern with:
+- **Views**: SwiftUI views for UI presentation
+- **Managers**: Business logic and data management
+- **Models**: Data structures and API responses
+
+### Key Components
+
+#### Managers
+- `AuthenticationManager`: Handles Apple Sign In and authentication state
+- `HealthKitManager`: Manages Apple HealthKit integration
+- `APIManager`: Backend API communication and data synchronization
+
 #### Views
 - `ContentView`: Root view with authentication flow
 - `MainTabView`: Main tab navigation with dashboard
 - `DashboardView`: Overview of glucose, health metrics, and quick actions
-- `DexcomConnectionView`: Dexcom account setup and glucose monitoring
 - `DataSyncView`: Health data synchronization interface
 - `AIInsightsView`: AI-powered insights and recommendations
 - `SettingsView`: App settings and account management
@@ -100,29 +146,27 @@ GluCoPilot/
 ├── GluCoPilotApp.swift          # App entry point
 ├── ContentView.swift            # Root view with auth flow
 ├── Info.plist                   # App configuration
-├── GluCoPilot.entitlements     # App capabilities
-├── Assets.xcassets/            # App icons and colors
+├── GluCoPilot.entitlements      # App capabilities
+├── Assets.xcassets/             # App icons and colors
 ├── Views/
-│   ├── LaunchScreen.swift      # Animated launch screen
-│   ├── MainTabView.swift       # Tab navigation and dashboard
-│   ├── AppleSignInView.swift   # Authentication interface
-│   ├── DexcomConnectionView.swift  # Dexcom setup
-│   ├── DataSyncView.swift      # Health data sync
-│   ├── AIInsightsView.swift    # AI recommendations
-│   └── SettingsView.swift      # App settings
+│   ├── LaunchScreen.swift       # Animated launch screen
+│   ├── MainTabView.swift        # Tab navigation and dashboard
+│   ├── AppleSignInView.swift    # Authentication interface
+│   ├── DataSyncView.swift       # Health data sync
+│   ├── AIInsightsView.swift     # AI recommendations
+│   └── SettingsView.swift       # App settings
 ├── Managers/
 │   ├── AuthenticationManager.swift  # Auth handling
-│   ├── HealthKitManager.swift      # HealthKit integration
-│   ├── DexcomManager.swift         # Dexcom API
-│   └── APIManager.swift            # Backend communication
+│   ├── HealthKitManager.swift       # HealthKit integration
+│   └── APIManager.swift             # Backend communication
 └── Utilities/
-    └── KeychainHelper.swift        # Secure storage
+    └── KeychainHelper.swift         # Secure storage
 ```
 
 ## Data Flow
 
 1. **Authentication**: User signs in with Apple ID
-2. **Data Connection**: Connect Dexcom and enable HealthKit
+2. **Data Connection**: Enable HealthKit and grant the app permission to read health data
 3. **Data Sync**: Automatic synchronization of glucose and health data
 4. **AI Processing**: Backend analyzes data patterns
 5. **Insights Delivery**: Personalized recommendations delivered to app
@@ -131,7 +175,7 @@ GluCoPilot/
 
 The app communicates with the GluCoPilot backend API for:
 - User authentication and management
-- Glucose data storage and retrieval
+- Glucose and health data storage and retrieval (via HealthKit)
 - Health data synchronization
 - AI insight generation
 - Data analytics and pattern recognition
