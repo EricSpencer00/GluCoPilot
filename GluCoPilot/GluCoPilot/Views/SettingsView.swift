@@ -4,7 +4,6 @@ struct SettingsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject var healthManager: HealthKitManager
     @State private var showLogoutAlert = false
-    @State private var showDexcomDisconnectAlert = false
     @AppStorage("showHealthKitPermissionLogs") private var showHealthKitPermissionLogs: Bool = false
     
     var body: some View {
@@ -221,7 +220,7 @@ struct SettingsView: View {
         } message: {
             Text("Are you sure you want to sign out? You'll need to sign in again to access your data.")
         }
-    // Dexcom disconnect UI removed; Dexcom integration deprecated.
+    // Dexcom disconnect UI removed; integration deprecated.
     }
 }
 

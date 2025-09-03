@@ -3,9 +3,10 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var authManager = AuthenticationManager()
     @StateObject private var apiManager = APIManager()
+    @StateObject private var healthKitManager = HealthKitManager()
     @State private var isLaunching = true
     @State private var showOnboarding = false
-    @State private var showDexcomSetup = false
+    
     
     var body: some View {
         ZStack {
@@ -19,12 +20,13 @@ struct ContentView: View {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
                     })
                     .environmentObject(apiManager)
-                    .environmentObject(HealthKitManager())
+                    .environmentObject(healthKitManager)
                     .environmentObject(authManager)
                     .transition(.move(edge: .trailing))
                 } else {
                     MainTabView()
                         .environmentObject(apiManager)
+                        .environmentObject(healthKitManager)
                         .transition(.move(edge: .bottom))
                 }
             } else {
@@ -47,15 +49,25 @@ struct ContentView: View {
         .onAppear {
             // Inject the apiManager dependency
             authManager.apiManager = apiManager
-            
+
+                        
             // Simulate launch time and check authentication
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                isLaunching = false
+            // DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            //     isLaunching = false
+
+            // Perform readiness checks immediately and show launch screen for a short minimum time
+            Task {
+                // Kick off auth check which may trigger async token refresh
                 authManager.checkAuthenticationStatus()
-                
-                // Show onboarding for new users
-                if !authManager.isAuthenticated && !UserDefaults.standard.bool(forKey: "hasSeenOnboarding") {
-                    showOnboarding = true
+
+                // Keep the launch screen visible at least briefly for polish
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                await MainActor.run {
+                    isLaunching = false
+                    // Show onboarding for new users
+                    if !authManager.isAuthenticated && !UserDefaults.standard.bool(forKey: "hasSeenOnboarding") {
+                        showOnboarding = true
+                    }
                 }
             }
         }
@@ -84,7 +96,7 @@ struct OnboardingView: View {
         OnboardingPage(
             title: "Connect Your Devices",
             subtitle: "Seamless data integration",
-            description: "Connect your Dexcom CGM and Apple Health to automatically track your glucose levels and health metrics.",
+                description: "Connect your Apple Health integration to automatically track your glucose levels and health metrics.",
             systemImage: "heart.circle.fill",
             color: .red
         ),

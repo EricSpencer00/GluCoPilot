@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HealthKitSetupView: View {
     @EnvironmentObject var healthKitManager: HealthKitManager
@@ -60,6 +61,12 @@ struct HealthKitSetupView: View {
             }
             .padding(.bottom)
 
+            if let result = requestResult, result.contains("not granted") {
+                Button(action: openSettings) {
+                    Text("Open Settings")
+                }
+            }
+
             Spacer()
         }
         .padding()
@@ -96,6 +103,13 @@ struct HealthKitSetupView: View {
 
     private func skip() {
         onComplete?()
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        }
     }
 }
 

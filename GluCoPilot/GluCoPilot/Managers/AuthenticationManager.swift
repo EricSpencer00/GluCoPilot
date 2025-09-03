@@ -11,7 +11,6 @@ class AuthenticationManager: NSObject, ObservableObject {
     @Published var isRegistering = false
     @Published var isLoadingAuth = false
     @Published var authError: String? = nil
-    @Published var showDexcomPrompt = false
     
     // This dependency is initialized in ContentView and passed to AuthManager
     var apiManager: APIManager?
@@ -32,10 +31,7 @@ class AuthenticationManager: NSObject, ObservableObject {
             userDisplayName = keychain.getValue(for: "user_display_name")
             userEmail = keychain.getValue(for: "user_email")
             
-            // Check if Dexcom should be prompted
-            if keychain.getValue(for: "has_seen_dexcom_prompt") != "true" {
-                showDexcomPrompt = true
-            }
+            // No deprecated Dexcom prompt
             // If apple_user_id exists but apple_id_token is missing, try to obtain a fresh id_token
             if keychain.getValue(for: "apple_id_token") == nil {
                 print("[AuthManager] apple_user_id present but apple_id_token missing — attempting interactive refresh")
@@ -193,10 +189,7 @@ class AuthenticationManager: NSObject, ObservableObject {
         }
     }
     
-    func acknowledgeeDexcomPrompt() {
-        keychain.setValue("true", for: "has_seen_dexcom_prompt")
-        showDexcomPrompt = false
-    }
+    // Deprecated: Dexcom prompt acknowledgement removed
     
     // Debug function to test Apple Sign In directly
     func testAppleSignIn() async -> String {
@@ -233,7 +226,8 @@ class AuthenticationManager: NSObject, ObservableObject {
         keychain.removeValue(for: "apple_id_token")
         keychain.removeValue(for: "user_display_name")
         keychain.removeValue(for: "user_email")
-        keychain.removeValue(for: "has_seen_dexcom_prompt")
+    // Deprecated Dexcom key cleared if present
+    keychain.removeValue(for: "has_seen_dexcom_prompt")
         // Clear any backend tokens stored by APIManager
         if let api = apiManager {
             api.clearTokens()
@@ -247,7 +241,7 @@ class AuthenticationManager: NSObject, ObservableObject {
         isAuthenticated = false
         userDisplayName = nil
         userEmail = nil
-        showDexcomPrompt = false
+    // ensure deprecated flag cleared
     isLoadingAuth = false
     authError = nil
         

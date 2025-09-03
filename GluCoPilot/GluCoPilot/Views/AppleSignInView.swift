@@ -31,8 +31,8 @@ struct AppleSignInView: View {
             // Features List
             VStack(alignment: .leading, spacing: 16) {
                 FeatureRow(icon: "chart.line.uptrend.xyaxis", 
-                          title: "Dexcom Integration",
-                          description: "Connect your CGM for real-time glucose data")
+                          title: "Glucose Integration",
+                          description: "Connect your CGM or Apple Health for real-time glucose data")
                 
                 FeatureRow(icon: "heart.fill", 
                           title: "Health Data Sync",

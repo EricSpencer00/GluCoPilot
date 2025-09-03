@@ -181,6 +181,36 @@ class APIManager: ObservableObject {
         return keychain.getValue(for: "apple_id_token")
     }
 
+    // MARK: - JWT helpers
+    private func base64UrlDecode(_ str: String) -> Data? {
+        var s = str
+        s = s.replacingOccurrences(of: "-", with: "+")
+        s = s.replacingOccurrences(of: "_", with: "/")
+        let pad = 4 - (s.count % 4)
+        if pad < 4 { s += String(repeating: "=", count: pad) }
+        return Data(base64Encoded: s)
+    }
+
+    private func parseJWTClaims(_ token: String) -> [String: Any]? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        let payload = String(parts[1])
+        guard let data = base64UrlDecode(payload) else { return nil }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return obj
+        }
+        return nil
+    }
+
+    private func tokenIsExpired(_ token: String, leeway: TimeInterval = 60) -> Bool {
+        guard let claims = parseJWTClaims(token) else { return false }
+        if let exp = claims["exp"] as? TimeInterval {
+            let expDate = Date(timeIntervalSince1970: exp)
+            return Date() > expDate.addingTimeInterval(-leeway)
+        }
+        return false
+    }
+
     // Try to detect Apple id_token by decoding JWT header and checking alg==RS256
     private func isAppleIdToken(_ token: String) -> Bool {
         let parts = token.split(separator: ".")
@@ -202,7 +232,18 @@ class APIManager: ObservableObject {
     private func ensureBackendToken() async throws -> String {
         // If we already have backend token, return it
         if let appToken = keychain.getValue(for: "auth_access_token") {
-            return appToken
+            // If token appears expired, try to exchange via Apple id_token
+            if tokenIsExpired(appToken) {
+                // Attempt to exchange using Apple id_token (may refresh tokens)
+                if let new = await exchangeAppleIdTokenForBackendToken() {
+                    return new
+                }
+                // If unable to refresh, remove stale token and fallthrough
+                keychain.removeValue(for: "auth_access_token")
+                keychain.removeValue(for: "auth_refresh_token")
+            } else {
+                return appToken
+            }
         }
 
         // If we have an Apple id_token, attempt exchange

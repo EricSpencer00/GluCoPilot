@@ -100,8 +100,8 @@ struct APIRequestDebugView: View {
             append("syncHealthData -> error: \(error.localizedDescription)")
         }
 
-        // 3) Test Dexcom validate (if you want, this will fail without valid creds)
-        append("Calling validateDexcomCredentials with placeholder creds (expected to fail unless valid)...")
+        // 3) Legacy Dexcom validate (Dexcom integration removed; this is a legacy call and will usually fail)
+        append("Calling legacy validateDexcomCredentials (Dexcom removed) — expected to fail in most environments...")
         do {
             let ok = try await apiManager.validateDexcomCredentials(username: "test@example.com", password: "password", isInternational: false)
             append("validateDexcomCredentials -> ok:\(ok)")
