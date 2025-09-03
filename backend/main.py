@@ -12,6 +12,7 @@ from api.routers.insulin import router as insulin
 from api.routers.integrations import router as integrations
 from api.routers.dexcom_trends import router as dexcom_trends
 from api.routers.detailed_insights import router as detailed_insights
+from api.routers.health import router as health
 from api.routers import forgot_password
 from core.database import get_db, create_tables
 from core.config import settings
@@ -76,6 +77,7 @@ app.include_router(prediction, prefix="/api/v1/predict", tags=["Prediction"])
 app.include_router(food, prefix="/api/v1/food", tags=["Food"])
 app.include_router(insulin, prefix="/api/v1/insulin", tags=["Insulin"])
 app.include_router(integrations, prefix="/api/v1/integrations", tags=["Integrations"])
+app.include_router(health, prefix="/api/v1/health", tags=["Health"])
 app.include_router(dexcom_trends, prefix="/api/v1", tags=["Trends"])
 app.include_router(detailed_insights, prefix="/api/v1/insights", tags=["AI Insights"])
 from api.routers.dexcom_signin import router as dexcom_signin

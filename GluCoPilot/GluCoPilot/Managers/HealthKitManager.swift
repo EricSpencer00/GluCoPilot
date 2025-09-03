@@ -73,7 +73,9 @@ class HealthKitManager: ObservableObject {
             print("HealthKit is not available on this device")
             return
         }
-        
+        // Request authorization. In some dev setups (simulator or mismatched bundle id)
+        // HealthKit may return an error like "Failed to look up source with bundle identifier".
+        // We log actionable hints so developers can correct Info.plist/product bundle settings.
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
@@ -84,8 +86,23 @@ class HealthKitManager: ObservableObject {
                         await self?.updatePublishedProperties()
                     }
                 } else {
-                    print("HealthKit authorization denied: \(error?.localizedDescription ?? "Unknown error")")
-                    self?.authorizationStatus = .sharingDenied
+                    let message = error?.localizedDescription ?? "Unknown error"
+                    print("HealthKit authorization denied: \(message)")
+                    // Common actionable error: Failed to look up source with bundle identifier
+                    if message.contains("Failed to look up source with bundle identifier") {
+                        print("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
+                        #if targetEnvironment(simulator)
+                        print("Running in simulator: HealthKit is not fully supported. Falling back to stubbed values for UI testing.")
+                        self?.authorizationStatus = .sharingAuthorized
+                        Task {
+                            await self?.updatePublishedProperties()
+                        }
+                        #else
+                        self?.authorizationStatus = .sharingDenied
+                        #endif
+                    } else {
+                        self?.authorizationStatus = .sharingDenied
+                    }
                 }
             }
         }

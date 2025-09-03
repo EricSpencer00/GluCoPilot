@@ -4,9 +4,9 @@ import UIKit
 #endif
 
 struct MainTabView: View {
-    @StateObject private var dexcomManager = DexcomManager()
-    @StateObject private var healthKitManager = HealthKitManager()
-    @StateObject private var apiManager = APIManager()
+    @EnvironmentObject private var dexcomManager: DexcomManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
     @State private var selectedTab = 0
     
     var body: some View {
@@ -228,7 +228,7 @@ struct StatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon)
+                Image(compatibleSystemName: icon, fallback: "questionmark.circle")
                     .font(.title3)
                     .foregroundColor(color)
                 Spacer()

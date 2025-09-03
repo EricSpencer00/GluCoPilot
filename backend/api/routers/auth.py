@@ -23,6 +23,59 @@ router = APIRouter()
 logger = get_logger(__name__)
 security = HTTPBearer()
 
+# --- Apple Registration Schema ---
+class AppleRegisterRequest(BaseModel):
+    apple_id: str
+    full_name: str | None = None
+    email: str | None = None
+
+@router.post("/apple/register", response_model=Token)
+async def apple_register(
+    data: AppleRegisterRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Register/authenticate with Apple ID token."""
+    logger.info(f"Apple registration attempt: {data.email or '[no email]'}")
+
+    claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
+    logger.info(f"Apple token claims: {claims}")
+    apple_user_id = claims.get('sub')
+    
+    # Verify the apple_id matches the token
+    if apple_user_id != data.apple_id:
+        raise HTTPException(status_code=400, detail="Apple ID mismatch")
+
+    # Only check email match if both are present
+    if claims.get("email") and data.email:
+        if claims.get("email") != data.email:
+            raise HTTPException(status_code=400, detail="Email verification failed")
+
+    if not settings.USE_DATABASE:
+        # Stateless mode: just return JWT without DB persistence
+        logger.info("Stateless mode: creating JWT without DB persistence")
+        access_token = create_access_token(data={"sub": apple_user_id})
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    # Database mode: find or create user
+    # Database mode: find or create user
+    user = db.query(User).filter(User.apple_id == apple_user_id).first()
+    if not user:
+        logger.info(f"Creating new user with Apple ID: {apple_user_id}")
+        user = User(
+            apple_id=apple_user_id,
+            email=data.email,
+            full_name=data.full_name,
+            first_name=data.full_name.split(' ')[0] if data.full_name else None,
+            last_name=' '.join(data.full_name.split(' ')[1:]) if data.full_name and ' ' in data.full_name else None
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
+
 # --- Social Login Schema ---
 class SocialLoginRequest(BaseModel):
     first_name: str | None = None
@@ -75,7 +128,7 @@ async def social_login(
 
     # If stateless, mint app token without DB
     if not settings.USE_DATABASE:
-        subject = data.email or apple_user_id
+        subject = data.email or apple_user_id or "anonymous"
         access_token = create_access_token(data={"sub": subject})
         refresh_token = create_access_token(data={"sub": subject, "type": "refresh"}, expires_delta=timedelta(days=7))
         return {
@@ -113,16 +166,16 @@ async def social_login(
         db.refresh(user)
     else:
         updated = False
-        if data.first_name and user.first_name != data.first_name:
+        if data.first_name and getattr(user, 'first_name', None) != data.first_name:
             user.first_name = data.first_name
             updated = True
-        if data.last_name and user.last_name != data.last_name:
+        if data.last_name and getattr(user, 'last_name', None) != data.last_name:
             user.last_name = data.last_name
             updated = True
-        if not user.is_active:
+        if not getattr(user, 'is_active', True):
             user.is_active = True
             updated = True
-        if not user.is_verified:
+        if not getattr(user, 'is_verified', True):
             user.is_verified = True
             updated = True
         if updated:
@@ -130,8 +183,12 @@ async def social_login(
 
     access_token = create_access_token(data={"sub": user.username})
     refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
-    user.refresh_token = refresh_token
-    db.commit()
+    try:
+        user.refresh_token = refresh_token
+        db.commit()
+    except Exception:
+        # In case some user fields aren't writable or DB issues occur, continue and return tokens
+        logger.info("Could not persist refresh token; continuing in stateless-like mode")
 
     return {
         "access_token": access_token,

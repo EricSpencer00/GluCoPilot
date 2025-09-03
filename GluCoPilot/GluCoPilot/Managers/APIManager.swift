@@ -248,6 +248,12 @@ class APIManager: ObservableObject {
             // Store the user ID in keychain
             keychain.setValue(userID, for: "apple_user_id")
             return true
+        } else if httpResponse.statusCode == 404 {
+            // Backend returned Not Found - this can happen if server doesn't support auto-registration.
+            // Treat it as non-fatal: log and return false so UI can continue working locally.
+            let bodyStr = String(data: data, encoding: .utf8) ?? "<no body>"
+            print("[APIManager] registerWithAppleID -> 404 Not Found: \(bodyStr)")
+            return false
         } else {
             let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let errorMessage = errorData?["detail"] as? String ?? "Registration failed"
