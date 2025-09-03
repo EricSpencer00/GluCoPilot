@@ -425,7 +425,7 @@ class HealthKitManager: ObservableObject {
                 }
 
                 let glucoseSamples = (samples as? [HKQuantitySample])?.map { sample in
-                    let value = sample.quantity.doubleValue(for: HKUnit.milligramPerDeciliter)
+                    let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                     return HealthKitGlucoseSample(value: value, unit: "mg/dL", timestamp: sample.startDate)
                 } ?? []
 
