@@ -330,6 +330,20 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// Debug helper: return runtime app identity and environment info useful for diagnosing HealthKit permission issues
+    func getAppIdentityReport() -> [String] {
+    var out: [String] = []
+    let bundleId = Bundle.main.bundleIdentifier ?? "<unknown>"
+    out.append("bundleIdentifier: \(bundleId)")
+    out.append("isHealthDataAvailable: \(HKHealthStore.isHealthDataAvailable())")
+#if targetEnvironment(simulator)
+    out.append("targetEnvironment: simulator")
+#else
+    out.append("targetEnvironment: device")
+#endif
+    return out
+    }
+
     /// Debug helper: fetch any available glucose samples (no predicate) to detect presence across all time
     func fetchAnyGlucoseSamples(limit: Int = 500) async throws -> [String] {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return [] }

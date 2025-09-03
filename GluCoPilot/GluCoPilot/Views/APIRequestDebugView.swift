@@ -125,6 +125,10 @@ struct APIRequestDebugView: View {
         let report = healthKitManager.getAuthorizationStatusReport()
         for r in report { append(r) }
 
+    append("App identity & environment:")
+    let identity = healthKitManager.getAppIdentityReport()
+    for i in identity { append(i) }
+
         append("Running permissive glucose sample query (no predicate)...")
         do {
             let any = try await healthKitManager.fetchAnyGlucoseSamples(limit: 200)
