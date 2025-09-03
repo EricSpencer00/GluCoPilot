@@ -284,9 +284,34 @@ struct LatestGlucoseView: View {
                     }
                 }
             } else {
-                Text("No recent glucose data")
-                    .foregroundColor(.secondary)
-                    .italic()
+                VStack(spacing: 8) {
+                    Text("No recent glucose data")
+                        .foregroundColor(.secondary)
+                        .italic()
+                    Button(action: {
+                        Task {
+                            healthKitManager.requestHealthKitPermissions()
+                            do {
+                                let data = try await healthKitManager.fetchLast24HoursData()
+                                if let last = data.glucose.last {
+                                    await MainActor.run {
+                                        self.latestGlucoseValue = Int(last.value)
+                                        self.latestGlucoseTimestamp = last.timestamp
+                                    }
+                                }
+                            } catch {
+                                // keep nil and let the UI show the message
+                            }
+                        }
+                    }) {
+                        Text("Sync Health Data")
+                            .font(.subheadline)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor))
+                            .foregroundColor(.white)
+                    }
+                }
             }
         }
         .padding()
@@ -356,30 +381,36 @@ struct RecentActivityView: View {
             Text("Recent Activity")
                 .font(.headline)
             
+            // Show an empty state that directs users to sync data or open the Logs tab
             VStack(spacing: 8) {
-                ActivityRow(
-                    icon: "drop.circle.fill",
-                    title: "Glucose Reading",
-                    subtitle: "145 mg/dL - Stable",
-                    time: "5 min ago",
-                    color: .green
-                )
-                
-                ActivityRow(
-                    icon: "figure.walk.circle.fill",
-                    title: "Walk Completed",
-                    subtitle: "2,847 steps - 23 min",
-                    time: "2 hours ago",
-                    color: .blue
-                )
-                
-                ActivityRow(
-                    icon: "fork.knife.circle.fill",
-                    title: "Meal Logged",
-                    subtitle: "Lunch - 45g carbs",
-                    time: "4 hours ago",
-                    color: .orange
-                )
+                Text("No recent activity to show")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                HStack(spacing: 12) {
+                    Button(action: {
+                        // Navigate to Log tab — caller binds Index 1
+                        // This button will be handled by QuickActionsView in practice
+                    }) {
+                        Text("Open Log")
+                            .font(.caption)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary))
+                    }
+
+                    Button(action: {
+                        // Trigger a sync via HealthKit permissions
+                        let manager = HealthKitManager()
+                        manager.requestHealthKitPermissions()
+                    }) {
+                        Text("Sync HealthKit")
+                            .font(.caption)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor))
+                            .foregroundColor(.white)
+                    }
+                }
             }
         }
         .padding()
