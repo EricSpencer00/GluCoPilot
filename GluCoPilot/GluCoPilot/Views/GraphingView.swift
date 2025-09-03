@@ -332,7 +332,7 @@ struct CombinedDataChart: View {
             if showGlucose {
                 ForEach(glucoseReadings) { reading in
                     LineMark(
-                        x: .value("Time", reading.timestamp),
+                        x: .value("Time", reading.timestamp, unit: .hour),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red.gradient)
@@ -340,7 +340,7 @@ struct CombinedDataChart: View {
                     .interpolationMethod(.catmullRom)
                     
                     PointMark(
-                        x: .value("Time", reading.timestamp),
+                        x: .value("Time", reading.timestamp, unit: .hour),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red)
@@ -352,7 +352,7 @@ struct CombinedDataChart: View {
             if showFood {
                 ForEach(foodEntries) { entry in
                     BarMark(
-                        x: .value("Time", entry.timestamp),
+                        x: .value("Time", entry.timestamp, unit: .hour),
                         y: .value("Carbs", entry.carbs * 2) // Scale for visibility
                     )
                     .foregroundStyle(.green.opacity(0.7))
@@ -368,8 +368,8 @@ struct CombinedDataChart: View {
             if showWorkouts {
                 ForEach(workouts) { workout in
                     RectangleMark(
-                        xStart: .value("Start", workout.startDate),
-                        xEnd: .value("End", workout.endDate),
+                        xStart: .value("Start", workout.startDate, unit: .minute),
+                        xEnd: .value("End", workout.endDate, unit: .minute),
                         yStart: 50,
                         yEnd: 60
                     )

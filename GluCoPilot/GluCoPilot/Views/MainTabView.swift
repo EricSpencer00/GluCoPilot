@@ -308,10 +308,11 @@ struct LatestGlucoseView: View {
     private func fetchLatestGlucose() async {
         do {
             let data = try await healthKitManager.fetchLast24HoursData()
-            // HealthKitManagerHealthData.glucose is a Double; convert to Int
-            await MainActor.run {
-                self.latestGlucoseValue = Int(data.glucose)
-                self.latestGlucoseTimestamp = data.timestamp
+            if let last = data.glucose.last {
+                await MainActor.run {
+                    self.latestGlucoseValue = Int(last.value)
+                    self.latestGlucoseTimestamp = last.timestamp
+                }
             }
         } catch {
             // No-op: keep nil to show placeholder
@@ -449,16 +450,15 @@ struct QuickActionsView: View {
                         do {
                             let healthData = try await healthKitManager.fetchLast24HoursData()
                             let nutritionSource = healthData.nutrition.first
-
-                            let apiHealthData = APIManagerHealthData(
-                                glucose: healthData.workouts.map { workout in
-                                    APIManagerGlucoseReading(
-                                        value: Int.random(in: 80...200),
-                                        trend: "flat",
-                                        timestamp: workout.startDate,
-                                        unit: "mg/dL"
-                                    )
-                                },
+                                    let apiHealthData = APIManagerHealthData(
+                                        glucose: healthData.glucose.map { sample in
+                                            APIManagerGlucoseReading(
+                                                value: Int(sample.value),
+                                                trend: "",
+                                                timestamp: sample.timestamp,
+                                                unit: sample.unit
+                                            )
+                                        },
                                 workouts: healthData.workouts.map { workout in
                                     APIManagerWorkoutData(
                                         type: workout.name,

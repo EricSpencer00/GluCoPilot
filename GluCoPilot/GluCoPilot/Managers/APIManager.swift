@@ -317,8 +317,22 @@ class APIManager: ObservableObject {
     
     // MARK: - Health Data Sync
     func syncHealthData(_ healthData: APIManagerHealthData) async throws -> APIManagerSyncResults {
-    // Ensure we have a backend-issued access token for protected health endpoints
-    let authToken = try await ensureBackendToken()
+    // Try to obtain a backend-issued access token; attempt exchange if missing.
+    var authToken: String? = try? await ensureBackendToken()
+    if authToken == nil {
+        authToken = await exchangeAppleIdTokenForBackendToken()
+    }
+
+    // If we still don't have a token, return a graceful result with an authentication error
+    if authToken == nil {
+        return APIManagerSyncResults(
+            glucoseReadings: healthData.glucose.count,
+            workouts: healthData.workouts?.count ?? 0,
+            nutritionEntries: healthData.nutrition?.count ?? 0,
+            errors: ["Authentication required"],
+            lastSyncDate: Date()
+        )
+    }
 
     let url = URL(string: "\(baseURL)/api/v1/health/sync")!
         var request = URLRequest(url: url)
@@ -326,7 +340,7 @@ class APIManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
     // Add Authorization header with preferred token
-    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("Bearer \(authToken!)", forHTTPHeaderField: "Authorization")
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -633,12 +647,14 @@ class APIManager: ObservableObject {
         
     // 2. Dexcom integration removed. HealthKit is the preferred source for glucose data.
         
-        // 3. Sync the aggregated data
+        // 3. Sync the aggregated data. If sync fails due to auth, continue — insights will still be attempted in stateless mode.
         do {
-            _ = try await syncHealthData(healthData)
+            let syncResult = try await syncHealthData(healthData)
+            if !syncResult.errors.isEmpty {
+                print("Info: syncHealthData returned errors: \(syncResult.errors)")
+            }
         } catch {
-            print("Warning: Failed to sync health data: \(error.localizedDescription)")
-            // Continue anyway to try getting insights
+            print("Info: syncHealthData failed; continuing to generate insights: \(error.localizedDescription)")
         }
         
         // 4. Generate insights

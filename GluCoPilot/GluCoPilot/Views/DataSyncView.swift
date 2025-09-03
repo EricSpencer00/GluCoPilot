@@ -123,12 +123,12 @@ struct DataSyncView: View {
                     let nutritionSource = healthData.nutrition.first
 
                     let apiHealthData = APIManagerHealthData(
-                        glucose: healthData.workouts.map { workout in
+                        glucose: healthData.glucose.map { sample in
                             APIManagerGlucoseReading(
-                                value: Int.random(in: 80...200), // placeholder for HealthKit glucose
-                                trend: "flat",
-                                timestamp: workout.startDate,
-                                unit: "mg/dL"
+                                value: Int(sample.value),
+                                trend: "",
+                                timestamp: sample.timestamp,
+                                unit: sample.unit
                             )
                         },
                         workouts: healthData.workouts.map { workout in

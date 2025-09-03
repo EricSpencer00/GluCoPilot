@@ -10,8 +10,7 @@ struct HealthKitManagerHealthData: Codable {
     let workouts: [HealthKitManagerWorkoutData]
     let sleepHours: Double
     let nutrition: [HealthKitManagerNutritionData]
-    let glucose: Double
-    let timestamp: Date
+    let glucose: [HealthKitGlucoseSample]
 }
 
 struct HealthKitManagerWorkoutData: Codable {
@@ -28,6 +27,12 @@ struct HealthKitManagerNutritionData: Codable {
     let carbs: Double
     let protein: Double
     let fat: Double
+    let timestamp: Date
+}
+
+struct HealthKitGlucoseSample: Codable {
+    let value: Double
+    let unit: String
     let timestamp: Date
 }
 
@@ -149,12 +154,13 @@ class HealthKitManager: ObservableObject {
         let endDate = Date()
         let startDate = Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         
-        async let steps = fetchStepCount(from: startDate, to: endDate)
+    async let steps = fetchStepCount(from: startDate, to: endDate)
         async let calories = fetchActiveCalories(from: startDate, to: endDate)
         async let heartRate = fetchHeartRate(from: startDate, to: endDate)
         async let workouts = fetchWorkouts(from: startDate, to: endDate)
         async let sleep = fetchSleepData(from: startDate, to: endDate)
         async let nutrition = fetchNutritionData(from: startDate, to: endDate)
+    async let glucoseSamples = fetchGlucoseSamples(from: startDate, to: endDate)
         
         let healthData = HealthKitManagerHealthData(
             steps: try await steps,
@@ -163,8 +169,7 @@ class HealthKitManager: ObservableObject {
             workouts: try await workouts,
             sleepHours: try await sleep,
             nutrition: [try await nutrition],
-            glucose: 120.0, // Default value, will be replaced by Dexcom data
-            timestamp: Date()
+            glucose: try await glucoseSamples
         )
         
         return healthData
@@ -396,6 +401,37 @@ class HealthKitManager: ObservableObject {
                 }
             }
             
+            healthStore.execute(query)
+        }
+    }
+
+    private func fetchGlucoseSamples(from startDate: Date, to endDate: Date) async throws -> [HealthKitGlucoseSample] {
+        // Attempt to read blood glucose samples (HKQuantityTypeIdentifier.bloodGlucose)
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else {
+            // Not available on device / simulator: return empty array
+            return []
+        }
+
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: glucoseType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, error in
+                if let error = error {
+#if DEBUG
+                    print("Error fetching glucose samples: \(error.localizedDescription)")
+#endif
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let glucoseSamples = (samples as? [HKQuantitySample])?.map { sample in
+                    let value = sample.quantity.doubleValue(for: HKUnit.milligramPerDeciliter)
+                    return HealthKitGlucoseSample(value: value, unit: "mg/dL", timestamp: sample.startDate)
+                } ?? []
+
+                continuation.resume(returning: glucoseSamples)
+            }
+
             healthStore.execute(query)
         }
     }
