@@ -57,6 +57,9 @@ class HealthKitManager: ObservableObject {
     @AppStorage("showHealthKitPermissionLogs") var showPermissionLogs: Bool = false
     
     private let healthStore = HKHealthStore()
+
+    // Track whether we've already logged a granted message to avoid duplicates
+    private var hasLoggedAuthorizationGranted = false
     
     // Health data types we want to read
     private let readTypes: Set<HKObjectType> = [
@@ -97,7 +100,12 @@ class HealthKitManager: ObservableObject {
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
-                    print("HealthKit authorization granted")
+                    if self?.showPermissionLogs ?? false {
+                        if self?.hasLoggedAuthorizationGranted == false {
+                            print("HealthKit authorization granted")
+                            self?.hasLoggedAuthorizationGranted = true
+                        }
+                    }
                     self?.authorizationStatus = .sharingAuthorized
                     // Update published properties after getting permissions
                     Task {
@@ -105,7 +113,11 @@ class HealthKitManager: ObservableObject {
                     }
                 } else {
                     let message = error?.localizedDescription ?? "Unknown error"
-                    print("HealthKit authorization denied: \(message)")
+                    if self?.showPermissionLogs ?? false {
+                        print("HealthKit authorization denied: \(message)")
+                    }
+                    // Reset logged-granted flag so future grants will log again
+                    self?.hasLoggedAuthorizationGranted = false
                     // Common actionable error: Failed to look up source with bundle identifier
                     if message.contains("Failed to look up source with bundle identifier") {
                         print("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
