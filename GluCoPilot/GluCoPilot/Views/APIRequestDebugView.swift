@@ -27,6 +27,11 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    Button(action: { Task { await runAuthAndAnySampleChecks() } }) {
+                        Label("Auth & Any-Glucose Check", systemImage: "checkmark.seal")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Clear") {
                         logs.removeAll()
                     }
@@ -107,6 +112,25 @@ struct APIRequestDebugView: View {
             }
         } catch {
             append("Glucose dump failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func runAuthAndAnySampleChecks() async {
+        append("Running authorization status report...")
+        let report = healthKitManager.getAuthorizationStatusReport()
+        for r in report { append(r) }
+
+        append("Running permissive glucose sample query (no predicate)...")
+        do {
+            let any = try await healthKitManager.fetchAnyGlucoseSamples(limit: 200)
+            if any.isEmpty {
+                append("No samples returned by permissive query")
+            } else {
+                append("Permissive query returned \(any.count) samples")
+                for l in any.prefix(20) { append(l) }
+            }
+        } catch {
+            append("Permissive glucose query error: \(error.localizedDescription)")
         }
     }
 

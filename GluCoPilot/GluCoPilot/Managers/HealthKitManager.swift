@@ -247,6 +247,75 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
+
+    /// Return authorization status for common read types (debug helper)
+    func getAuthorizationStatusReport() -> [String] {
+        var report: [String] = []
+
+        func statusString(for object: HKObjectType) -> String {
+            let status = healthStore.authorizationStatus(for: object)
+            return String(describing: status)
+        }
+
+        if let t = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+            report.append("bloodGlucose: \(statusString(for: t))")
+        }
+        if let t = HKObjectType.quantityType(forIdentifier: .stepCount) {
+            report.append("stepCount: \(statusString(for: t))")
+        }
+        if let t = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+            report.append("activeEnergyBurned: \(statusString(for: t))")
+        }
+        if let t = HKObjectType.quantityType(forIdentifier: .heartRate) {
+            report.append("heartRate: \(statusString(for: t))")
+        }
+        if let t = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            report.append("sleepAnalysis: \(statusString(for: t))")
+        }
+        report.append("workout: \(statusString(for: HKObjectType.workoutType()))")
+
+        return report
+    }
+
+    /// Debug helper: fetch any available glucose samples (no predicate) to detect presence across all time
+    func fetchAnyGlucoseSamples(limit: Int = 500) async throws -> [String] {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return [] }
+        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
+            if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
+            return []
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: glucoseType,
+                                      predicate: nil,
+                                      limit: limit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    #if DEBUG
+                    print("Error fetching any glucose samples: \(error.localizedDescription)")
+                    #endif
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let formatted: [String] = (samples as? [HKQuantitySample])?.map { sample in
+                    let mgdl = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
+                    let mmol = mgdl / 18.0182
+                    let mmolStr = String(format: "%.1f", mmol)
+                    let source = sample.sourceRevision.source.name
+                    let bundle = sample.sourceRevision.source.bundleIdentifier
+                    let device = sample.device?.name ?? "-"
+                    let meta = sample.metadata ?? [:]
+
+                    return "ts:\(sample.startDate) mg/dL:\(Int(round(mgdl))) mmol/L:\(mmolStr) source:\(source) bundle:\(bundle) device:\(device) metadata:\(meta)"
+                } ?? []
+
+                continuation.resume(returning: formatted)
+            }
+
+            healthStore.execute(query)
+        }
+    }
     
     private func fetchStepCount(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }
