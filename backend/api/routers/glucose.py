@@ -9,9 +9,9 @@ from core.config import settings
 from models.user import User
 from models.glucose import GlucoseReading
 from schemas.glucose import GlucoseReadingCreate, GlucoseReadingResponse, GlucoseStats
-from schemas.dexcom import DexcomCredentials
 from services.auth import get_current_active_user
-from services.dexcom import DexcomService
+from schemas.dexcom import DexcomCredentials
+# Dexcom integration removed; services.dexcom contains a removal stub. Avoid importing DexcomService.
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -213,46 +213,12 @@ async def sync_dexcom_data(
     the client must provide Dexcom credentials in the request body (DexcomCredentials) or
     call the stateless endpoints directly. This avoids accessing non-existent attributes on SimpleUser.
     """
-    # If running stateless, require credentials to be provided in the request body
-    if not settings.USE_DATABASE:
-        if not creds or not creds.username or not creds.password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Dexcom credentials required in stateless mode. Provide username/password in the request body or use /glucose/stateless/sync"
-            )
-        try:
-            dexcom_service = DexcomService()
-            results = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False)
-            logger.info(f"Stateless Dexcom sync completed: {len(results)} readings for username {creds.username}")
-            return {"message": f"Successfully fetched {len(results)} readings", "new_readings": len(results), "readings": results}
-        except Exception as e:
-            logger.error(f"Stateless Dexcom sync failed for username {creds.username}: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch Dexcom data: {str(e)}")
-
-    # DB-backed flow: use credentials stored on current_user
-    # Defensive: current_user might not have dexcom_username in some edge cases
-    if not getattr(current_user, 'dexcom_username', None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dexcom credentials not configured for this user"
-        )
-
-    try:
-        dexcom_service = DexcomService()
-        new_readings = await dexcom_service.sync_glucose_data(current_user, db)
-
-        logger.info(f"Dexcom sync completed: {len(new_readings)} new readings")
-        return {
-            "message": f"Successfully synced {len(new_readings)} new readings",
-            "new_readings": len(new_readings)
-        }
-
-    except Exception as e:
-        logger.error(f"Dexcom sync failed for user {getattr(current_user, 'id', None)}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sync Dexcom data: {str(e)}"
-        )
+    # Dexcom integration has been removed from the backend. Provide a clear 410 response
+    # so clients can migrate to HealthKit-based uploads or client-side sync flows.
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Dexcom integration removed. Use HealthKit on the client to collect glucose data and send it to the backend via /api/v1/health/sync or the appropriate stateless endpoints."
+    )
 
 @router.post('/stateless/sync')
 async def stateless_sync_dexcom(
@@ -273,13 +239,11 @@ async def stateless_sync_dexcom(
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Rate limit exceeded. Try again in {int(STATELESS_RATE_SECONDS - (now - last))}s")
     _stateless_rate_limit[username] = now
 
-    try:
-        dexcom_service = DexcomService()
-        results = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False, hours=hours)
-        return {"readings": results}
-    except Exception as e:
-        logger.error(f"Stateless Dexcom fetch failed for username {username}: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch Dexcom data")
+    # Dexcom removed — return 410 with guidance
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Dexcom integration removed. Please use HealthKit on the client device and the backend health sync endpoints."
+    )
 
 
 @router.post('/stateless/latest')
@@ -287,17 +251,10 @@ async def stateless_get_latest(
     creds: DexcomCredentials = Body(...),
 ):
     """Return the most recent Dexcom reading using provided credentials (no DB writes)."""
-    try:
-        dexcom_service = DexcomService()
-        result = await dexcom_service.get_current_glucose_stateless(username=creds.username, password=creds.password, ous=creds.ous or False)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Dexcom reading available")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Stateless get latest Dexcom failed for username {creds.username}: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch latest Dexcom reading")
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Dexcom integration removed. Use HealthKit on the client and upload readings via /api/v1/health/sync or a client-side sync."
+    )
 
 @router.post('/stateless/stats', response_model=GlucoseStats)
 async def stateless_get_stats(
@@ -306,38 +263,7 @@ async def stateless_get_stats(
 ):
     """Compute glucose statistics from Dexcom readings using provided credentials (no DB writes).
     Note: Dexcom Share via pydexcom limits history to ~24h (up to 72h depending on server)."""
-    try:
-        dexcom_service = DexcomService()
-        readings = await dexcom_service.sync_glucose_data_stateless(username=creds.username, password=creds.password, ous=creds.ous or False, hours=hours)
-        if not readings:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No glucose data available for the specified period")
-
-        values = [r["value"] for r in readings]
-        total_readings = len(values)
-        avg = sum(values) / total_readings
-        in_range_count = len([v for v in values if 70 <= v <= 180])
-        low_count = len([v for v in values if v < 70])
-        high_count = len([v for v in values if v > 180])
-        # Standard deviation
-        mean = avg
-        variance = sum((v - mean) ** 2 for v in values) / total_readings
-        stddev = variance ** 0.5
-        coef_var = (stddev / mean) * 100 if mean else 0.0
-        gmi = 3.31 + (0.02392 * avg)
-        period_days = max(1, int(round(hours / 24)))
-
-        return GlucoseStats(
-            total_readings=total_readings,
-            average_glucose=round(avg, 1),
-            time_in_range=round((in_range_count / total_readings) * 100, 1),
-            time_below_range=round((low_count / total_readings) * 100, 1),
-            time_above_range=round((high_count / total_readings) * 100, 1),
-            glucose_management_indicator=round(gmi, 1),
-            coefficient_of_variation=round(coef_var, 1),
-            period_days=period_days
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Stateless stats computation failed for username {creds.username}: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to compute glucose statistics")
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Dexcom integration removed. Use client-collected HealthKit data and call /api/v1/health/sync or the insights endpoints instead."
+    )

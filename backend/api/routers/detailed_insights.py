@@ -10,7 +10,7 @@ from ai.insights_engine import AIInsightsEngine
 from typing import Dict, Any, Optional
 from core.config import settings
 from schemas.dexcom import DexcomCredentials
-from services.dexcom import DexcomService
+# Dexcom integration removed: avoid importing DexcomService
 from datetime import datetime
 
 router = APIRouter()

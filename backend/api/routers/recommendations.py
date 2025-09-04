@@ -10,7 +10,7 @@ from ai.insights_engine import AIInsightsEngine
 from schemas.recommendations import RecommendationOut
 from core.config import settings
 from schemas.dexcom import DexcomCredentials
-from services.dexcom import DexcomService
+# Dexcom integration removed; avoid importing DexcomService
 from datetime import datetime, timezone
 
 router = APIRouter()
@@ -88,13 +88,8 @@ async def get_recommendations_stateless(
                 val = 90 + (i % 12 - 6) * 2  # simple oscillation around 90
                 readings.append({"value": val, "timestamp": ts})
         else:
-            dex_service = DexcomService()
-            readings = await dex_service.sync_glucose_data_stateless(
-                username=creds.username,
-                password=creds.password,
-                ous=creds.ous or False,
-                hours=24,
-            )
+            # Dexcom integration removed; instruct clients to use HealthKit or client-side sync
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Dexcom integration removed. Use HealthKit on the client to collect glucose data and send via /api/v1/health/sync or use client-side recommendations.")
 
         # Convert to minimal objects with attributes expected by the engine
         class _Reading:
