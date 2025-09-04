@@ -320,7 +320,14 @@ class AIInsightsEngine:
                         max_tokens=1024,
                     )
                     if completion.choices and completion.choices[0].message.content:
-                        return completion.choices[0].message.content.strip()
+                        ai_response = completion.choices[0].message.content.strip()
+                        # Log a trimmed preview of model output to help debug parsing issues
+                        try:
+                            preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
+                            logger.info(f"Model returned {len(ai_response)} chars; preview: {preview}")
+                        except Exception:
+                            logger.info("Model returned content (unable to preview)")
+                        return ai_response
                     logger.warning("No choices/content from model API; using fallback")
                     # Generate rule-based recs if we have data; else default placeholder
                     return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
@@ -596,7 +603,11 @@ class AIInsightsEngine:
             return recommendations[:5]
 
         # Final fallback
-        logger.warning("Failed to parse AI output; using fallback recommendations")
+        try:
+            short = ai_text[:1000].replace('\n', ' ') if ai_text else '<empty>'
+            logger.warning(f"Failed to parse AI output; using fallback recommendations. AI preview: {short}")
+        except Exception:
+            logger.warning("Failed to parse AI output; using fallback recommendations (preview unavailable)")
         return self._process_recommendations(self._fallback_recommendations(), user_id)
 
     def _attach_examples_and_graph(self, rec: dict) -> dict:
