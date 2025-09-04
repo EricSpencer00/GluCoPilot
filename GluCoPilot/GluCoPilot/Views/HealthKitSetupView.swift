@@ -50,7 +50,7 @@ struct HealthKitSetupView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(GradientButtonStyle(colors: [Color.red, Color.pink]))
             .controlSize(.large)
             .disabled(isRequesting)
             .padding(.horizontal)
@@ -79,6 +79,7 @@ struct HealthKitSetupView: View {
             Spacer()
         }
         .padding()
+    .withTopGradient()
     }
 
     private func requestPermissions() {

@@ -13,7 +13,7 @@ struct HealthKitManagerHealthData: Codable {
     let glucose: [HealthKitGlucoseSample]
 }
 
-struct HealthKitManagerWorkoutData: Codable {
+struct HealthKitManagerWorkoutData: Codable, Equatable {
     let name: String
     let duration: Double
     let calories: Double
@@ -78,6 +78,11 @@ class HealthKitManager: ObservableObject {
     
     // Add a new property to track read permissions
     private var readPermissionsGranted: Bool = false
+    // Anchor persistence key for incremental glucose sync
+    private let glucoseAnchorKey = "hk_glucose_anchor_v1"
+
+    // Published latest glucose sample (UI can observe this)
+    @Published var latestGlucoseSample: HealthKitGlucoseSample?
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -104,6 +109,8 @@ class HealthKitManager: ObservableObject {
                     // Instead of relying on WRITE status, mark read permissions as granted
                     self?.authorizationStatus = .sharingAuthorized
                     self?.readPermissionsGranted = true
+                    // Start observing glucose updates so app receives new samples in foreground & background
+                    self?.startGlucoseObserving()
                     Task {
                         await self?.updatePublishedProperties()
                     }
@@ -644,6 +651,119 @@ class HealthKitManager: ObservableObject {
             
             healthStore.execute(query)
         }
+    }
+
+    // MARK: - Observer & Anchored Query Helpers for incremental glucose updates
+    private var glucoseObserverQuery: HKObserverQuery?
+    private var glucoseAnchoredQuery: HKAnchoredObjectQuery?
+
+    /// Start observing glucose samples and enable background delivery.
+    /// Safe to call multiple times; will not register duplicates.
+    func startGlucoseObserving() {
+        guard HKHealthStore.isHealthDataAvailable(), readPermissionsGranted else { return }
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return }
+
+        // Enable background delivery so the system can wake the app when new samples arrive.
+        healthStore.enableBackgroundDelivery(for: glucoseType, frequency: .immediate) { success, error in
+            if let error = error {
+                #if DEBUG
+                print("enableBackgroundDelivery error: \(error.localizedDescription)")
+                #endif
+            } else if success {
+                #if DEBUG
+                print("Background delivery enabled for bloodGlucose")
+                #endif
+            }
+        }
+
+        // Create an observer query to be notified when new glucose samples are written.
+        if glucoseObserverQuery == nil {
+            glucoseObserverQuery = HKObserverQuery(sampleType: glucoseType, predicate: nil) { [weak self] _, completionHandler, error in
+                if let error = error {
+                    #if DEBUG
+                    print("HKObserverQuery error: \(error.localizedDescription)")
+                    #endif
+                    completionHandler()
+                    return
+                }
+
+                // Fetch new samples via anchored query
+                Task {
+                    await self?.fetchNewGlucoseSamplesViaAnchor(completion: {
+                        completionHandler()
+                    })
+                }
+            }
+            if let q = glucoseObserverQuery {
+                healthStore.execute(q)
+            }
+        }
+    }
+
+    func stopGlucoseObserving() {
+        if let q = glucoseObserverQuery {
+            healthStore.stop(q)
+            glucoseObserverQuery = nil
+        }
+        if let aq = glucoseAnchoredQuery {
+            healthStore.stop(aq)
+            glucoseAnchoredQuery = nil
+        }
+    }
+
+    private func loadSavedAnchor() -> HKQueryAnchor? {
+        guard let data = UserDefaults.standard.data(forKey: glucoseAnchorKey) else { return nil }
+        if let anchor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data) {
+            return anchor
+        }
+        return nil
+    }
+
+    private func saveAnchor(_ anchor: HKQueryAnchor) {
+        if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
+            UserDefaults.standard.set(data, forKey: glucoseAnchorKey)
+        }
+    }
+
+    /// Fetch new glucose samples using HKAnchoredObjectQuery and persist the new anchor.
+    /// Calls completion after processing samples so observer completionHandler can be called.
+    private func fetchNewGlucoseSamplesViaAnchor(completion: @escaping () -> Void = {}) async {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { completion(); return }
+
+        let anchor = loadSavedAnchor()
+        let anchored = HKAnchoredObjectQuery(type: glucoseType, predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { [weak self] _, addedOrNil, deletedOrNil, newAnchor, error in
+            if let error = error {
+                #if DEBUG
+                print("Anchored query error: \(error.localizedDescription)")
+                #endif
+                completion()
+                return
+            }
+
+            let added = (addedOrNil as? [HKQuantitySample]) ?? []
+            if !added.isEmpty {
+                // Process newest sample for quick UI update
+                if let latest = added.max(by: { $0.startDate < $1.startDate }) {
+                    let mgdl = latest.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
+                    let sample = HealthKitGlucoseSample(value: mgdl, unit: "mg/dL", timestamp: latest.startDate)
+                    Task { @MainActor in
+                        self?.latestGlucoseSample = sample
+                    }
+                }
+
+                // Optionally persist added samples into local DB / cache here
+            }
+
+            if let newAnchor = newAnchor {
+                self?.saveAnchor(newAnchor)
+            }
+
+            completion()
+        }
+
+        // Store reference so we can stop it if needed
+        glucoseAnchoredQuery = anchored
+        healthStore.execute(anchored)
     }
 
 }

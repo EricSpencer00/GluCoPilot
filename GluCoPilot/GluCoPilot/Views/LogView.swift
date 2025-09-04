@@ -11,6 +11,10 @@ struct LogView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Top decorative gradient area
+                    ZStack {
+                        Color.clear.frame(height: 0)
+                    }
                     Picker("Type", selection: $selectedType) {
                         Text("Food").tag("food")
                         Text("Insulin").tag("insulin")
@@ -45,22 +49,31 @@ struct LogView: View {
 
                     Button(action: addLog) {
                         Text("Add Log")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(.blue)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .font(.headline)
                     }
+                    .buttonStyle(GradientButtonStyle(colors: [Color.blue, Color.purple]))
+                    .padding(.horizontal)
                     .padding(.horizontal)
 
                     // Recent cached items (last 24h)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Recent Logs (24h)")
-                            .font(.headline)
-                            .padding(.horizontal)
+                        HStack {
+                            Text("Recent Logs (24h)")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        .padding(.horizontal)
 
                         ForEach(cache.getItems(since: Calendar.current.date(byAdding: .hour, value: -24, to: Date())!)) { item in
-                            HStack {
+                            HStack(alignment: .top, spacing: 12) {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.secondary.opacity(0.12))
+                                    .frame(width: 44, height: 44)
+                                    .overlay(
+                                        Image(systemName: iconForType(item.type))
+                                            .foregroundColor(colorForType(item.type))
+                                    )
+
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.type.capitalized)
                                         .font(.subheadline)
@@ -69,20 +82,24 @@ struct LogView: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
+
                                 Spacer()
+
                                 Text(item.timestamp, style: .relative)
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .padding(.horizontal)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
                         }
                     }
                 }
                 .padding(.vertical)
             }
             .navigationTitle("Log")
+            .withTopGradient()
         }
     }
 
@@ -103,6 +120,22 @@ struct LogView: View {
             let payload: [String: String] = ["note": noteField]
             cache.log(type: "other", payload: payload, at: now)
             noteField = ""
+        }
+    }
+
+    private func iconForType(_ type: String) -> String {
+        switch type.lowercased() {
+        case "food": return "fork.knife"
+        case "insulin": return "syringe"
+        default: return "note.text"
+        }
+    }
+
+    private func colorForType(_ type: String) -> Color {
+        switch type.lowercased() {
+        case "food": return .orange
+        case "insulin": return .pink
+        default: return .blue
         }
     }
 }

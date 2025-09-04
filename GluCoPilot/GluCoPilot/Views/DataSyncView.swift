@@ -46,12 +46,11 @@ struct DataSyncView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(.purple.gradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .buttonStyle(GradientButtonStyle(colors: [Color.purple, Color.blue]))
                 .disabled(isUploading)
                 .padding(.horizontal)
+                
                 
                 // Last run info
                 if let run = lastRun {
@@ -226,7 +225,9 @@ struct InstructionStep: View {
                 .fontWeight(.bold)
                 .foregroundStyle(.white)
                 .frame(width: 20, height: 20)
-                .background(.blue)
+                .background(
+                    LinearGradient(colors: [Color.blue, Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
                 .clipShape(Circle())
             
             Text(text)
@@ -257,9 +258,11 @@ struct SyncResultsView: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        DataSyncView()
-            .environmentObject(HealthKitManager())
+struct DataSyncView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            DataSyncView()
+                .environmentObject(HealthKitManager())
+        }
     }
 }

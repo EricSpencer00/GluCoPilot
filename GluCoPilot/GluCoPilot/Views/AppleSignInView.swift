@@ -81,14 +81,8 @@ struct AppleSignInView: View {
             
             Spacer()
         }
-        .padding()
-        .background(
-            LinearGradient(
-                colors: [.blue.opacity(0.1), .red.opacity(0.1)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+    .padding()
+    .withTopGradient()
     }
 }
 

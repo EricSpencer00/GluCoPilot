@@ -176,6 +176,9 @@ struct SettingsView: View {
             
             // DEBUG Section - Remove for production
             #if DEBUG
+            // Debug navigation links intentionally disabled for production-like UI.
+            // To re-enable for development, uncomment the NavigationLink below.
+            /*
             Section("Debug Options") {
                 NavigationLink {
                     AppleSignInDebugView()
@@ -191,6 +194,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            */
             #endif
             
             // Sign Out Section

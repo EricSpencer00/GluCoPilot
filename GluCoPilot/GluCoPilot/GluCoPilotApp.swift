@@ -14,6 +14,7 @@ struct GluCoPilotApp: App {
                 .environmentObject(authManager)
                 .environmentObject(healthManager)
                 .environmentObject(apiManager)
+                .withGlobalTopGradient()
                 // HealthKit permission requests are handled by the auth/HealthKit setup flow
                 // (for example, `HealthKitSetupView`) and should not be triggered unconditionally
                 // on app launch. Requesting too early can cause sandbox/service entitlement errors

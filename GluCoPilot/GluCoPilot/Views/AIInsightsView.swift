@@ -42,7 +42,7 @@ struct AIInsightsView: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 .padding(.horizontal)
-
+                
                 // Refresh Button
                 Button(action: refreshInsights) {
                     HStack {
@@ -57,13 +57,11 @@ struct AIInsightsView: View {
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.purple.gradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .buttonStyle(GradientButtonStyle(colors: [Color.purple, Color.blue]))
                 .disabled(isLoading)
                 .padding(.horizontal)
+                
                 
                 // Last Update Info
                 if let lastUpdate = lastUpdateDate {
@@ -107,9 +105,9 @@ struct AIInsightsView: View {
             .padding(.vertical)
         }
         .navigationTitle("AI Insights")
-        #if os(iOS)
+#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
+#endif
         .refreshable {
             await refreshInsightsAsync()
         }
@@ -128,6 +126,7 @@ struct AIInsightsView: View {
                 refreshInsights()
             }
         }
+        .withTopGradient()
     }
     
     private func refreshInsights() {
@@ -154,8 +153,12 @@ struct AIInsightsView: View {
                 },
                 timestamp: Date()
             )
-
-            let aiInsights = try await apiManager.generateInsights(healthData: apiHealth, prompt: userPrompt.isEmpty ? nil : userPrompt)
+            
+            // Include cached items from the last 24h
+            let since = Calendar.current.date(byAdding: .hour, value: -24, to: Date())!
+            let cached = CacheManager.shared.getItems(since: since)
+            // Upload both HealthKit data and cached logs for richer insights
+            let aiInsights = try await apiManager.uploadCacheAndGenerateInsights(healthData: apiHealth, cachedItems: cached)
             
             await MainActor.run {
                 isLoading = false
@@ -196,268 +199,270 @@ struct AIInsightsView: View {
             }
         }
     }
-}
-
-
-struct InsightDetailView: View {
-    let insight: AIInsight
-    @State private var selectedTimeframe: Timeframe = .day
     
-    enum Timeframe: String, CaseIterable {
-        case day = "24h"
-        case week = "7d"
-        case month = "30d"
-    }
     
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    HStack {
-                        Image(systemName: insight.icon)
-                            .font(.largeTitle)
-                            .foregroundStyle(insight.priorityColor)
-                        
-                        VStack(alignment: .leading) {
-                            Text(insight.title)
-                                .font(.title)
-                                .fontWeight(.bold)
+    struct InsightDetailView: View {
+        let insight: AIInsight
+        @State private var selectedTimeframe: Timeframe = .day
+        
+        enum Timeframe: String, CaseIterable {
+            case day = "24h"
+            case week = "7d"
+            case month = "30d"
+        }
+        
+        var body: some View {
+            NavigationView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Header
+                        HStack {
+                            Image(systemName: insight.icon)
+                                .font(.largeTitle)
+                                .foregroundStyle(insight.priorityColor)
                             
-                            Text(insight.category)
-                                .font(.subheadline)
-                                .textCase(.uppercase)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading) {
+                                Text(insight.title)
+                                    .font(.title)
+                                    .fontWeight(.bold)
+                                
+                                Text(insight.category)
+                                    .font(.subheadline)
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    }
-                    
-                    Divider()
-                    
-                    // Description
-                    Text("Analysis")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    
-                    Text(insight.description)
-                        .font(.body)
-                    
-                    Divider()
-                    
-                    // Glucose Visualization (if blood sugar related)
-                    if insight.type == .bloodSugar {
-                        Text("Glucose Trends")
+                        
+                        Divider()
+                        
+                        // Description
+                        Text("Analysis")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                         
-                        // Time Selector
-                        Picker("Timeframe", selection: $selectedTimeframe) {
-                            ForEach(Timeframe.allCases, id: \.self) { timeframe in
-                                Text(timeframe.rawValue).tag(timeframe)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.bottom)
+                        Text(insight.description)
+                            .font(.body)
                         
-                        // Sample glucose chart
-                        GlucoseChartView(timeframe: selectedTimeframe)
+                        Divider()
+                        
+                        // Glucose Visualization (if blood sugar related)
+                        if insight.type == .bloodSugar {
+                            Text("Glucose Trends")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            
+                            // Time Selector
+                            Picker("Timeframe", selection: $selectedTimeframe) {
+                                ForEach(Timeframe.allCases, id: \.self) { timeframe in
+                                    Text(timeframe.rawValue).tag(timeframe)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.bottom)
+                            
+                            // Sample glucose chart
+                            GlucoseChartView(timeframe: selectedTimeframe)
+                                .frame(height: 200)
+                                .padding(.bottom)
+                            
+                            Divider()
+                        }
+                        
+                        // Action Items
+                        if !insight.actionItems.isEmpty {
+                            Text("Recommended Actions")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(insight.actionItems, id: \.self) { action in
+                                    HStack(alignment: .top) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                            .font(.body)
+                                        
+                                        Text(action)
+                                            .font(.body)
+                                    }
+                                }
+                            }
+                            
+                            Divider()
+                        }
+                        
+                        // Data Visualization
+                        if !insight.dataPoints.isEmpty {
+                            Text("Data Points")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            
+                            // Chart for data points
+                            Chart {
+                                ForEach(Array(insight.dataPoints.keys.sorted()), id: \.self) { key in
+                                    if let value = insight.dataPoints[key] {
+                                        BarMark(
+                                            x: .value("Category", key.capitalized),
+                                            y: .value("Value", value)
+                                        )
+                                        .foregroundStyle(insight.priorityColor.gradient)
+                                    }
+                                }
+                            }
                             .frame(height: 200)
                             .padding(.bottom)
-                        
-                        Divider()
-                    }
-                    
-                    // Action Items
-                    if !insight.actionItems.isEmpty {
-                        Text("Recommended Actions")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(insight.actionItems, id: \.self) { action in
-                                HStack(alignment: .top) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                        .font(.body)
-                                    
-                                    Text(action)
-                                        .font(.body)
-                                }
-                            }
                         }
-                        
-                        Divider()
                     }
-                    
-                    // Data Visualization
-                    if !insight.dataPoints.isEmpty {
-                        Text("Data Points")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
-                        // Chart for data points
-                        Chart {
-                            ForEach(Array(insight.dataPoints.keys.sorted()), id: \.self) { key in
-                                if let value = insight.dataPoints[key] {
-                                    BarMark(
-                                        x: .value("Category", key.capitalized),
-                                        y: .value("Value", value)
-                                    )
-                                    .foregroundStyle(insight.priorityColor.gradient)
-                                }
-                            }
-                        }
-                        .frame(height: 200)
-                        .padding(.bottom)
-                    }
+                    .padding()
                 }
-                .padding()
-            }
-            .navigationTitle("Insight Details")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-struct GlucoseChartView: View {
-    let timeframe: InsightDetailView.Timeframe
-    
-    // Sample data for preview
-    let sampleData: [(Date, Double)] = (0..<24).map { hour in
-        let date = Calendar.current.date(byAdding: .hour, value: -hour, to: Date())!
-        let value = Double.random(in: 80...200)
-        return (date, value)
-    }
-    
-    var body: some View {
-        Chart {
-            ForEach(sampleData, id: \.0) { item in
-                LineMark(
-                    x: .value("Time", item.0),
-                    y: .value("Glucose", item.1)
-                )
-                .foregroundStyle(.red.gradient)
-                .interpolationMethod(.catmullRom)
-                
-                AreaMark(
-                    x: .value("Time", item.0),
-                    y: .value("Glucose", item.1)
-                )
-                .foregroundStyle(.red.opacity(0.1))
-                .interpolationMethod(.catmullRom)
-            }
-            
-            // Target range
-            RectangleMark(
-                yStart: 70,
-                yEnd: 180
-            )
-            .foregroundStyle(.green.opacity(0.1))
-        }
-        .chartYScale(domain: 40...300)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: timeframe == .day ? 4 : 24)) { value in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
-            }
-        }
-        .chartYAxis {
-            AxisMarks(values: .stride(by: 50)) { value in
-                AxisGridLine()
-                AxisValueLabel()
+                .navigationTitle("Insight Details")
+                .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
-}
-
-struct InsightCard: View {
-    let insight: AIInsight
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Image(systemName: insight.icon)
-                    .font(.title3)
-                    .foregroundStyle(insight.priorityColor)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(insight.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+    struct GlucoseChartView: View {
+        let timeframe: InsightDetailView.Timeframe
+        
+        // Sample data for preview
+        let sampleData: [(Date, Double)] = (0..<24).map { hour in
+            let date = Calendar.current.date(byAdding: .hour, value: -hour, to: Date())!
+            let value = Double.random(in: 80...200)
+            return (date, value)
+        }
+        
+        var body: some View {
+            Chart {
+                ForEach(sampleData, id: \.0) { item in
+                    LineMark(
+                        x: .value("Time", item.0),
+                        y: .value("Glucose", item.1)
+                    )
+                    .foregroundStyle(.red.gradient)
+                    .interpolationMethod(.catmullRom)
                     
-                    Text(insight.category)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                    AreaMark(
+                        x: .value("Time", item.0),
+                        y: .value("Glucose", item.1)
+                    )
+                    .foregroundStyle(.red.opacity(0.1))
+                    .interpolationMethod(.catmullRom)
                 }
                 
-                Spacer()
-                
-                Text(insight.priority.rawValue)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(insight.priorityColor.opacity(0.2))
-                    .foregroundStyle(insight.priorityColor)
-                    .clipShape(Capsule())
+                // Target range
+                RectangleMark(
+                    yStart: 70,
+                    yEnd: 180
+                )
+                .foregroundStyle(.green.opacity(0.1))
             }
-            
-            // Description
-            Text(insight.description)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            
-            // Action Items
-            if !insight.actionItems.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Recommended Actions:")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+            .chartYScale(domain: 40...300)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: timeframe == .day ? 4 : 24)) { value in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.hour())
+                }
+            }
+            .chartYAxis {
+                AxisMarks(values: .stride(by: 50)) { value in
+                    AxisGridLine()
+                    AxisValueLabel()
+                }
+            }
+        }
+    }
+    
+    struct InsightCard: View {
+        let insight: AIInsight
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
+                HStack {
+                    Image(systemName: insight.icon)
+                        .font(.title3)
+                        .foregroundStyle(insight.priorityColor)
                     
-                    ForEach(insight.actionItems.prefix(2), id: \.self) { action in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "checkmark.circle")
-                                .font(.caption)
-                                .foregroundStyle(.blue)
-                                .padding(.top, 2)
-                            
-                            Text(action)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            
-                            Spacer()
-                        }
-                    }
-                    
-                    if insight.actionItems.count > 2 {
-                        Text("... and \(insight.actionItems.count - 2) more")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(insight.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        Text(insight.category)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                    }
+                    
+                    Spacer()
+                    
+                    Text(insight.priority.rawValue)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(insight.priorityColor.opacity(0.2))
+                        .foregroundStyle(insight.priorityColor)
+                        .clipShape(Capsule())
+                }
+                
+                // Description
+                Text(insight.description)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                // Action Items
+                if !insight.actionItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recommended Actions:")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                        
+                        ForEach(insight.actionItems.prefix(2), id: \.self) { action in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.blue)
+                                    .padding(.top, 2)
+                                
+                                Text(action)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                
+                                Spacer()
+                            }
+                        }
+                        
+                        if insight.actionItems.count > 2 {
+                            Text("... and \(insight.actionItems.count - 2) more")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                
+                // Timestamp
+                HStack {
+                    Spacer()
+                    Text("Generated \(insight.timestamp.formatted(.relative(presentation: .named)))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
-            
-            // Timestamp
-            HStack {
-                Spacer()
-                Text("Generated \(insight.timestamp.formatted(.relative(presentation: .named)))")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        }
+    }
+    
+    struct AIInsightsView_Previews: PreviewProvider {
+        static var previews: some View {
+            NavigationStack {
+                AIInsightsView()
+                    .environmentObject(APIManager())
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-    }
-}
-
-#Preview {
-    NavigationStack {
-        AIInsightsView()
-            .environmentObject(APIManager())
     }
 }
