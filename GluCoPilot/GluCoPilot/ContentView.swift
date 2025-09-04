@@ -14,10 +14,6 @@ struct ContentView: View {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
-                // After sign-in: guide user to connect HealthKit and block progression until allowed.
-                // Inject HealthKitManager into the authManager so it can trigger requests directly.
-                authManager.healthKitManager = healthKitManager
-
                 // If the auth manager flagged that HealthKit authorization is required, show setup.
                 // Otherwise, fall back to the persisted flag / normal flow.
                 let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
@@ -52,18 +48,15 @@ struct ContentView: View {
                 }
             }
         }
-    .animation(.easeInOut(duration: 0.8), value: isLaunching)
-    .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
-    .animation(.easeInOut(duration: 0.5), value: showOnboarding)
+        .animation(.easeInOut(duration: 0.8), value: isLaunching)
+        .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.5), value: showOnboarding)
         .environmentObject(authManager)
         .onAppear {
             // Inject the apiManager dependency
             authManager.apiManager = apiManager
-
-                        
-            // Simulate launch time and check authentication
-            // DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            //     isLaunching = false
+            // Inject HealthKitManager dependency outside the view builder
+            authManager.healthKitManager = healthKitManager
 
             // Perform readiness checks immediately and show launch screen for a short minimum time
             Task {
