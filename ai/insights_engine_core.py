@@ -348,12 +348,12 @@ class AIInsightsEngine:
                         {"role": "user", "content": enhanced_prompt},
                     ]
                     
-                    # Prepare completion parameters
+                    # Prepare completion parameters (lower temp for structure, higher tokens to reduce truncation)
                     completion_params = {
                         "model": "openai/gpt-oss-20b:fireworks-ai",
                         "messages": messages,
-                        "temperature": 0.7,
-                        "max_tokens": 1024,
+                        "temperature": 0.2,
+                        "max_tokens": 1536,
                     }
                     
                     # Attempt to add response_format if supported by this client version
@@ -392,8 +392,34 @@ class AIInsightsEngine:
                         except Exception:
                             logger.info("Model returned content (unable to preview)")
                         
-                        # Always return the AI response, even if it might not be valid JSON
-                        # The _process_recommendations method will handle parsing with robust fallbacks
+                        # If response looks truncated, try a single continuation attempt
+                        try:
+                            if self._is_truncated(ai_response) and os.environ.get("AI_RETRY_ON_TRUNCATION", "true").lower() in ("1", "true", "yes"):
+                                try:
+                                    cont_messages = [
+                                        {"role": "system", "content": "Continue the previous reply by finishing the JSON array only. Output valid JSON with no extra text."},
+                                        {"role": "user", "content": ai_response + "\n\nFinish and close the JSON array. No commentary."},
+                                    ]
+                                    continuation = client.chat.completions.create(
+                                        model="openai/gpt-oss-20b:fireworks-ai",
+                                        messages=cont_messages,
+                                        temperature=0.0,
+                                        max_tokens=768,
+                                    )
+                                    if continuation.choices and continuation.choices[0].message.content:
+                                        extra = continuation.choices[0].message.content.strip()
+                                        logger.info(f"Continuation returned {len(extra)} chars")
+                                        candidate = ai_response + extra
+                                        repaired = self._repair_json(candidate)
+                                        if repaired:
+                                            logger.info("Continuation + repair produced valid JSON")
+                                            return repaired
+                                except Exception as e:
+                                    logger.warning(f"Continuation attempt failed: {e}")
+                        except Exception:
+                            pass
+
+                        # Always return the AI response; robust parsing will handle it
                         return ai_response
                     
                     logger.warning("No choices/content from model API; using fallback")
@@ -533,29 +559,250 @@ class AIInsightsEngine:
         ]
         """
 
+    # -------------------- JSON repair and parsing utilities --------------------
+    def _strip_code_fences(self, text: str) -> str:
+        try:
+            return re.sub(r"```json|```", "", text or "").strip()
+        except Exception:
+            return text or ""
+
+    def _is_truncated(self, text: str) -> bool:
+        """Heuristically detect if a JSON array string looks truncated (unbalanced brackets or open string)."""
+        if not text:
+            return False
+        s = self._strip_code_fences(text)
+        in_str = False
+        escape = False
+        stack = []  # track closing brackets expected
+        for ch in s:
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == '{':
+                    stack.append('}')
+                elif ch == '[':
+                    stack.append(']')
+                elif ch in ('}', ']'):
+                    if stack and stack[-1] == ch:
+                        stack.pop()
+        # Truncated if still inside string or unclosed brackets remain
+        if in_str or len(stack) > 0:
+            return True
+        # Also consider truncated if it ends with a comma or colon
+        tail = s.rstrip()[-2:]
+        return tail.endswith(',') or tail.endswith(':')
+
+    def _repair_json(self, text: str) -> Optional[str]:
+        """Attempt to repair common JSON issues and return a parseable JSON string if possible."""
+        if not text:
+            return None
+        s = self._strip_code_fences(text)
+        # If there's extra preface/suffix, try to isolate the outermost array
+        start = s.find('[')
+        if start != -1:
+            s = s[start:]
+        # Remove trailing junk after last likely bracket
+        last_bracket = max(s.rfind(']'), s.rfind('}'))
+        if last_bracket != -1:
+            s = s[: last_bracket + 1]
+        # Fix trailing commas
+        s = re.sub(r",(\s*[}\]])", r"\1", s)
+        # State-machine to balance strings and brackets
+        in_str = False
+        escape = False
+        stack = []
+        out = []
+        for ch in s:
+            out.append(ch)
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == '{':
+                    stack.append('}')
+                elif ch == '[':
+                    stack.append(']')
+                elif ch in ('}', ']'):
+                    if stack and stack[-1] == ch:
+                        stack.pop()
+        # Close open string
+        if in_str:
+            out.append('"')
+            in_str = False
+        # Close any remaining brackets
+        while stack:
+            out.append(stack.pop())
+        candidate = ''.join(out)
+        # Final trailing-comma cleanup after balancing
+        candidate = re.sub(r",(\s*[}\]])", r"\1", candidate)
+        # If it's an object, wrap in array to fit expected schema
+        cand_strip = candidate.lstrip()
+        if cand_strip.startswith('{') and not cand_strip.startswith('['):
+            candidate = '[' + candidate + ']'
+        try:
+            json.loads(candidate)
+            return candidate
+        except Exception:
+            return None
+
+    def _extract_json_array(self, text: str) -> Optional[str]:
+        """Extract the first top-level JSON array substring using bracket matching."""
+        if not text:
+            return None
+        s = self._strip_code_fences(text)
+        start = s.find('[')
+        if start == -1:
+            return None
+        in_str = False
+        escape = False
+        depth = 0
+        for i in range(start, len(s)):
+            ch = s[i]
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == '[':
+                    depth += 1
+                elif ch == ']':
+                    depth -= 1
+                    if depth == 0:
+                        return s[start : i + 1]
+        # If unbalanced, return from start to end; caller may repair
+        return s[start:]
+
+    def _split_json_array_objects(self, array_text: str) -> List[str]:
+        """Split a JSON array into object substrings using bracket and string awareness."""
+        result: List[str] = []
+        if not array_text:
+            return result
+        s = array_text.strip()
+        if not s.startswith('['):
+            return result
+        i = 1  # skip initial '['
+        in_str = False
+        escape = False
+        obj_depth = 0
+        start_idx = -1
+        while i < len(s):
+            ch = s[i]
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == '{':
+                    if obj_depth == 0:
+                        start_idx = i
+                    obj_depth += 1
+                elif ch == '}':
+                    obj_depth -= 1
+                    if obj_depth == 0 and start_idx != -1:
+                        result.append(s[start_idx : i + 1])
+                        start_idx = -1
+                # commas and spaces between objects are ignored
+            i += 1
+        return result
+
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
         recommendations: List[Dict[str, Any]] = []
-        
         # Enhanced logging to better diagnose parsing issues
         try:
             preview = ai_text[:500].replace('\n', ' ') if ai_text else '<empty>'
             logger.info(f"Processing recommendations from text ({len(ai_text)} chars): {preview}...")
         except Exception:
             logger.info("Processing recommendations (preview unavailable)")
-            
-        # Method 1: Try standard JSON parsing first (most reliable when it works)
+
+        # Method 1: Direct parse after repair
         try:
-            # Fix common model output issues that break JSON parsing
-            clean_text = ai_text.strip()
-            # Remove any markdown code block markers
-            clean_text = re.sub(r'```json|```', '', clean_text)
-            # Fix trailing commas in arrays which are invalid JSON
-            clean_text = re.sub(r',(\s*[\]}])', r'\1', clean_text)
-            
-            parsed = json.loads(clean_text)
-            if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
-                logger.info(f"Successfully parsed clean JSON array with {len(parsed)} items")
-                for item in parsed:
+            repaired = self._repair_json(ai_text)
+            if repaired:
+                parsed = json.loads(repaired)
+                if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+                    logger.info(f"Successfully parsed repaired JSON array with {len(parsed)} items")
+                    for item in parsed:
+                        rec = {
+                            'title': item.get('title', ''),
+                            'description': item.get('description', ''),
+                            'category': item.get('category', 'general'),
+                            'priority': item.get('priority', 'medium'),
+                            'confidence': float(item.get('confidence', 0.8)),
+                            'action': item.get('action', ''),
+                            'timing': item.get('timing', ''),
+                            'context': self._attach_examples_and_graph(item),
+                        }
+                        recommendations.append(rec)
+                    return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Repaired JSON parsing failed: {str(e)}")
+
+        # Method 2: Extract array, then split into objects with state-aware parser
+        try:
+            array_str = self._extract_json_array(ai_text)
+            if array_str:
+                repaired_array = self._repair_json(array_str) or array_str
+                objects = self._split_json_array_objects(repaired_array)
+                logger.info(f"Split array into {len(objects)} potential objects (state-aware)")
+                for i, obj_str in enumerate(objects):
+                    try:
+                        repaired_obj = self._repair_json(obj_str) or obj_str
+                        item = json.loads(repaired_obj)
+                        rec = {
+                            'title': item.get('title', ''),
+                            'description': item.get('description', ''),
+                            'category': item.get('category', 'general'),
+                            'priority': item.get('priority', 'medium'),
+                            'confidence': float(item.get('confidence', 0.8)),
+                            'action': item.get('action', ''),
+                            'timing': item.get('timing', ''),
+                            'context': self._attach_examples_and_graph(item),
+                        }
+                        recommendations.append(rec)
+                    except Exception as e:
+                        logger.info(f"Failed to parse object {i+1}: {str(e)}")
+                        continue
+                if recommendations:
+                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using state-aware parsing")
+                    return recommendations[:5]
+        except Exception as e:
+            logger.info(f"State-aware array parsing failed: {str(e)}")
+
+        # Method 3: Regex object extraction as last resort before text heuristics
+        try:
+            json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
+            logger.info(f"Found {len(json_objects)} potential JSON objects using regex")
+            for i, obj_str in enumerate(json_objects):
+                try:
+                    repaired_obj = self._repair_json(obj_str) or obj_str
+                    item = json.loads(repaired_obj)
+                    if not ('title' in item or 'description' in item):
+                        continue
                     rec = {
                         'title': item.get('title', ''),
                         'description': item.get('description', ''),
@@ -567,107 +814,10 @@ class AIInsightsEngine:
                         'context': self._attach_examples_and_graph(item),
                     }
                     recommendations.append(rec)
-                return recommendations[:5]
-        except Exception as e:
-            logger.info(f"Standard JSON parsing failed: {str(e)}")
-        
-        # Method 2: Tolerant JSON array parsing - handle malformed arrays
-        try:
-            text = ai_text.strip()
-            # Remove any markdown code block markers
-            text = re.sub(r'```json|```', '', text)
-            
-            # Find the outermost array brackets
-            if '[' in text and ']' in text:
-                start_idx = text.find('[')
-                end_idx = text.rfind(']')
-                if start_idx < end_idx:
-                    text = text[start_idx+1:end_idx]  # Extract just the array contents
-                    logger.info("Extracted array contents for object-by-object parsing")
-            
-            # Split into individual JSON objects with relaxed delimiter matching
-            obj_strs = re.split(r'\},\s*\{|\}\s*,\s*\{', text)
-            logger.info(f"Split array into {len(obj_strs)} potential objects")
-            
-            for i, obj_str in enumerate(obj_strs):
-                if not obj_str.strip():
-                    continue
-                try:
-                    # Ensure proper object syntax
-                    if not obj_str.startswith('{'):
-                        obj_str = '{' + obj_str
-                    if not obj_str.endswith('}'):
-                        obj_str = obj_str + '}'
-                    
-                    # Fix trailing commas in objects which are invalid JSON
-                    obj_str = re.sub(r',(\s*\})', r'\1', obj_str)
-                    
-                    # Fix unquoted property names
-                    obj_str = re.sub(r'(\{|\,)\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', obj_str)
-                    
-                    # Fix single-quoted strings (JSON requires double quotes)
-                    # Match single-quoted values while being careful not to break already valid JSON
-                    pattern = r':\s*\'([^\']*)\''
-                    obj_str = re.sub(pattern, r':"\1"', obj_str)
-                    
-                    item = json.loads(obj_str)
-                    logger.info(f"Successfully parsed object {i+1}/{len(obj_strs)}")
-                    
-                    rec = {
-                        'title': item.get('title', ''),
-                        'description': item.get('description', ''),
-                        'category': item.get('category', 'general'),
-                        'priority': item.get('priority', 'medium'),
-                        'confidence': float(item.get('confidence', 0.8) or 0.8),
-                        'action': item.get('action', ''),
-                        'timing': item.get('timing', ''),
-                        'context': self._attach_examples_and_graph(item),
-                    }
-                    recommendations.append(rec)
-                except Exception as e:
-                    logger.info(f"Failed to parse object {i+1}: {str(e)}")
-                    continue
-                    
-            if recommendations:
-                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 2")
-                return recommendations[:5]
-        except Exception as e:
-            logger.info(f"Tolerant JSON parsing failed: {str(e)}")
-            
-        # Method 3: Last resort - extract any JSON-like objects from anywhere in the text
-        try:
-            json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
-            logger.info(f"Found {len(json_objects)} potential JSON objects using regex")
-            
-            for i, obj_str in enumerate(json_objects):
-                try:
-                    # Fix common JSON issues
-                    obj_str = re.sub(r',(\s*\})', r'\1', obj_str)  # Fix trailing commas
-                    obj_str = re.sub(r'(\{|\,)\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', obj_str)  # Fix unquoted property names
-                    obj_str = re.sub(r':\s*\'([^\']*)\'' , r':"\1"', obj_str)  # Fix single quotes
-                    
-                    item = json.loads(obj_str)
-                    
-                    # Only accept objects that look like recommendations
-                    if not ('title' in item or 'description' in item):
-                        continue
-                        
-                    rec = {
-                        'title': item.get('title', ''),
-                        'description': item.get('description', ''),
-                        'category': item.get('category', 'general'),
-                        'priority': item.get('priority', 'medium'),
-                        'confidence': float(item.get('confidence', 0.8) or 0.8),
-                        'action': item.get('action', ''),
-                        'timing': item.get('timing', ''),
-                        'context': self._attach_examples_and_graph(item),
-                    }
-                    recommendations.append(rec)
                 except Exception:
                     continue
-                    
             if recommendations:
-                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 3")
+                logger.info(f"Successfully extracted {len(recommendations)} recommendations using regex objects")
                 return recommendations[:5]
         except Exception as e:
             logger.info(f"Regex JSON extraction failed: {str(e)}")
