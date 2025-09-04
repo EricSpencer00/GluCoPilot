@@ -97,6 +97,7 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func fetchHealthKitDebug() async {
         append("Fetching HealthKit last 24h data...")
         do {
@@ -114,6 +115,7 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func fetchGlucoseSamplesDebug() async {
         append("Dumping recent glucose samples (detailed)...")
         do {
@@ -130,18 +132,19 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func runAuthAndAnySampleChecks() async {
         append("Running authorization status report...")
         let report = healthKitManager.getAuthorizationStatusReport()
         for r in report { append(r) }
 
-    append("App identity & environment:")
-    let identity = healthKitManager.getAppIdentityReport()
-    for i in identity { append(i) }
+        append("App identity & environment:")
+        let identity = $healthKitManager.getAppIdentityReport
+        for i in identity { append(i) }
 
         append("Running permissive glucose sample query (no predicate)...")
         do {
-            let any = try await healthKitManager.fetchAnyGlucoseSamples(limit: 200)
+            let any = try await $healthKitManager.fetchAnyGlucoseSamples(limit: 200)
             if any.isEmpty {
                 append("No samples returned by permissive query")
             } else {
@@ -154,7 +157,7 @@ struct APIRequestDebugView: View {
 
         // Also include sources and total sample count for more diagnosis
         append("Fetching glucose writer sources...")
-        let sources = await healthKitManager.fetchGlucoseSourcesReport()
+        let sources = await $healthKitManager.fetchGlucoseSourcesReport
         if sources.isEmpty {
             append("No glucose sources found (none have written samples)")
         } else {
@@ -163,18 +166,17 @@ struct APIRequestDebugView: View {
 
         append("Fetching total glucose sample count (permissive)...")
         do {
-            let count = try await healthKitManager.fetchGlucoseSampleCount()
+            let count = try await $healthKitManager.fetchGlucoseSampleCount
             append("Total glucose samples (permissive): \(count)")
         } catch {
             append("Error fetching glucose sample count: \(error.localizedDescription)")
         }
     }
 
+    @MainActor
     private func requestHealthPermissions() async {
         append("Requesting HealthKit permissions (system sheet may appear)...")
-        await MainActor.run {
-            healthKitManager.requestHealthKitPermissions()
-        }
+        healthKitManager.requestHealthKitPermissions()
         // Small delay to allow user to respond to the permissions sheet
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         append("Requested permissions; reporting new status...")
@@ -182,12 +184,14 @@ struct APIRequestDebugView: View {
         for r in report { append(r) }
     }
 
+    @MainActor
     private func runAuthorizationRequestStatus() async {
         append("Checking authorization request status for readTypes...")
-        let status = await healthKitManager.getAuthorizationRequestStatus()
+        let status = await $healthKitManager.getAuthorizationRequestStatus
         append("Authorization request status: \(status)")
     }
 
+    @MainActor
     private func fetchAllSourcesReport() async {
         append("Fetching sources report for common types...")
         let report = await healthKitManager.fetchSourcesReportAll()
@@ -204,9 +208,10 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func runAllTests() async {
         guard !isRunning else { return }
-        await MainActor.run { isRunning = true }
+        isRunning = true
         append("Starting API smoke tests...")
 
         // 1) Test generateInsights with sample health payload
@@ -256,7 +261,7 @@ struct APIRequestDebugView: View {
         }
 
         append("API smoke tests finished")
-        await MainActor.run { isRunning = false }
+        isRunning = false
     }
 
     #if DEBUG
