@@ -87,7 +87,7 @@ class AIInsightsEngine:
             )
 
             # Call AI
-            ai_text = await self._generate_ai_recommendations(context)
+            ai_text = await self._generate_ai_recommendations(context, glucose_data=glucose_data, patterns=patterns)
 
             # Parse and enrich
             recommendations = self._process_recommendations(ai_text, getattr(user, 'id', 0))
@@ -289,7 +289,7 @@ class AIInsightsEngine:
         return events
 
     # -------------------- AI call and parsing --------------------
-    async def _generate_ai_recommendations(self, context: str) -> str:
+    async def _generate_ai_recommendations(self, context: str, glucose_data: Optional[List[GlucoseReading]] = None, patterns: Optional[Dict[str, Any]] = None) -> str:
         prompt = f"{context}\n\nRecommendations:"
         json_instructions = (
             "Please provide exactly 5 personalized, actionable recommendations as a JSON array. "
@@ -298,13 +298,16 @@ class AIInsightsEngine:
             "Respond ONLY with a valid JSON array, no extra text."
         )
         try:
-            if settings.MODEL_NAME == "openai/gpt-oss-20b":
+            # Prefer remote model when enabled via settings, regardless of exact model name string
+            if getattr(settings, "USE_REMOTE_MODEL", True):
                 try:
                     from openai import OpenAI
                     enhanced_prompt = f"{prompt}\n\n{json_instructions}"
+                    # Accept token via several env/config names
+                    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or getattr(settings, "HUGGINGFACE_TOKEN", "")
                     client = OpenAI(
                         base_url="https://router.huggingface.co/v1",
-                        api_key=os.environ.get("HF_TOKEN", ""),
+                        api_key=token,
                     )
                     messages = [
                         {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data. Output only valid JSON."},
@@ -319,15 +322,89 @@ class AIInsightsEngine:
                     if completion.choices and completion.choices[0].message.content:
                         return completion.choices[0].message.content.strip()
                     logger.warning("No choices/content from model API; using fallback")
-                    return self._fallback_recommendations()
+                    # Generate rule-based recs if we have data; else default placeholder
+                    return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
                 except Exception as e:
                     logger.error(f"Error with model API: {e}")
-                    return self._fallback_recommendations()
+                    return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
             else:
                 # No local generator on Heroku; use fallback
-                return self._fallback_recommendations()
+                return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
         except Exception as e:
             logger.error(f"Error generating AI recommendations: {e}")
+            return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
+
+    def _rule_based_recommendations(self, glucose_data: Optional[List[GlucoseReading]], patterns: Optional[Dict[str, Any]]) -> str:
+        """Produce simple, tailored JSON recommendations when the remote model isn't available."""
+        try:
+            vals = [g.value for g in (glucose_data or [])]
+            if not vals:
+                return self._fallback_recommendations()
+            avg = sum(vals) / len(vals)
+            highs_pct = 100.0 * len([v for v in vals if v > 180]) / len(vals)
+            lows_pct = 100.0 * len([v for v in vals if v < 70]) / len(vals)
+            time_in_range = 100.0 * len([v for v in vals if 70 <= v <= 180]) / len(vals)
+            cov = patterns.get('variability', {}).get('coefficient_of_variation', 0.0) if isinstance(patterns, dict) else 0.0
+
+            recs: list[dict[str, Any]] = []
+            # Highs
+            if highs_pct >= 20 or avg > 170:
+                recs.append({
+                    "title": "Reduce post-meal spikes",
+                    "description": f"Average glucose ~{avg:.0f} mg/dL with {highs_pct:.0f}% readings >180 in last 24h. Consider pre-bolus and balancing carbs.",
+                    "category": "insulin",
+                    "priority": "medium" if highs_pct < 40 else "high",
+                    "action": "Pre-bolus 10–15 minutes before higher-carb meals; add protein/fiber.",
+                    "timing": "next meal",
+                    "confidence": 0.75
+                })
+            # Lows
+            if lows_pct >= 5:
+                recs.append({
+                    "title": "Address frequent lows",
+                    "description": f"About {lows_pct:.0f}% of readings <70 mg/dL. Review correction factor and snacks around activity.",
+                    "category": "monitoring",
+                    "priority": "high" if lows_pct >= 10 else "medium",
+                    "action": "Keep fast carbs available; discuss basal/correction settings with your clinician.",
+                    "timing": "today",
+                    "confidence": 0.8
+                })
+            # Variability
+            if cov and cov > 36:
+                recs.append({
+                    "title": "Lower glucose variability",
+                    "description": f"Glucose variability (CV) ~{cov:.0f}%. Consistent meal timing and gentle post-meal walks can help.",
+                    "category": "lifestyle",
+                    "priority": "medium",
+                    "action": "Aim for 10–15 minute walk after meals when possible.",
+                    "timing": "after meals",
+                    "confidence": 0.7
+                })
+            # General monitoring
+            if time_in_range < 70 and len(recs) < 5:
+                recs.append({
+                    "title": "Increase time in range",
+                    "description": f"Time in range ~{time_in_range:.0f}%. Monitor trends 2–3 hours after meals and adjust as needed.",
+                    "category": "monitoring",
+                    "priority": "medium",
+                    "action": "Review CGM 2 hours post-meal and log spikes vs meals.",
+                    "timing": "next 24 hours",
+                    "confidence": 0.7
+                })
+            # Ensure 5 items
+            while len(recs) < 5:
+                recs.append({
+                    "title": "Daily check-in",
+                    "description": "Briefly review your glucose trend and note any patterns tied to meals, stress, or activity.",
+                    "category": "general",
+                    "priority": "low",
+                    "action": "Open your trends view and add a short note.",
+                    "timing": "tonight",
+                    "confidence": 0.6
+                })
+
+            return json.dumps(recs)
+        except Exception:
             return self._fallback_recommendations()
 
     def _fallback_recommendations(self) -> str:

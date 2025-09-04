@@ -89,8 +89,78 @@ async def generate_insights(
             food_items = health_data.get('food', [])
             activity_items = health_data.get('activity', [])
 
-            # Create minimal objects for food/insulin if desired (engine tolerates empty lists)
+            # Create minimal objects for food/activity/insulin; the engine mainly uses timestamps and simple values
+            class _Food:
+                def __init__(self, name: str, calories: float | int | None, carbs: float | int | None, timestamp):
+                    self.name = name
+                    self.calories = calories or 0
+                    # support both 'carbs' and 'total_carbs' keys
+                    self.total_carbs = carbs or 0
+                    try:
+                        if isinstance(timestamp, str):
+                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        elif isinstance(timestamp, datetime):
+                            dt = timestamp
+                        else:
+                            dt = datetime.utcnow()
+                        if getattr(dt, 'tzinfo', None) is not None:
+                            from datetime import timezone as _tz
+                            dt = dt.astimezone(_tz.utc).replace(tzinfo=None)
+                        self.timestamp = dt
+                    except Exception:
+                        self.timestamp = datetime.utcnow()
+
+            class _Activity:
+                def __init__(self, type: str, duration: float | int | None, calories: float | int | None, start, end=None):
+                    self.type = type
+                    self.duration = float(duration or 0)
+                    self.calories = float(calories or 0)
+                    # Prefer 'start'/'end' fields if present; fallback to timestamp
+                    def _parse(d):
+                        if d is None:
+                            return None
+                        if isinstance(d, str):
+                            try:
+                                return datetime.fromisoformat(d.replace('Z', '+00:00'))
+                            except Exception:
+                                return None
+                        if isinstance(d, datetime):
+                            return d
+                        return None
+                    self.start_time = _parse(start) or datetime.utcnow()
+                    self.end_time = _parse(end) or self.start_time
+                    # For compatibility with any code expecting `.timestamp`
+                    self.timestamp = self.start_time
+
             food_objs = []
+            for f in food_items:
+                try:
+                    food_objs.append(
+                        _Food(
+                            f.get('name') or f.get('title') or 'Food',
+                            f.get('calories'),
+                            f.get('carbs') or f.get('total_carbs'),
+                            f.get('timestamp')
+                        )
+                    )
+                except Exception:
+                    continue
+
+            activity_objs = []
+            for a in activity_items:
+                try:
+                    activity_objs.append(
+                        _Activity(
+                            a.get('type') or a.get('name') or 'activity',
+                            a.get('duration'),
+                            a.get('calories'),
+                            a.get('start') or a.get('startDate') or a.get('timestamp'),
+                            a.get('end') or a.get('endDate')
+                        )
+                    )
+                except Exception:
+                    continue
+
             insulin_objs = []
 
             # Create or reuse a lightweight stateless user object
@@ -107,6 +177,7 @@ async def generate_insights(
                 insulin_data=insulin_objs,
                 food_data=food_objs,
                 db=None,
+                activity_data=activity_objs,
             )
         else:
             # Gather user data (last 24h glucose, last 50 insulin, last 50 food)
@@ -138,7 +209,10 @@ async def generate_insights(
                 "id": rec.get("context", {}).get("recommendation_id", f"insight_{len(insights)}"),
                 "title": rec.get("title", ""),
                 "content": rec.get("description", ""),
+                "description": rec.get("description", ""),
+                # Map to frontend's expected enums; also include a type alias
                 "category": rec.get("category", "general"),
+                "type": rec.get("category", "pattern"),
                 "priority": rec.get("priority", "medium"),
                 "confidence": rec.get("confidence", 0.8),
                 "actionable": bool(rec.get("action", "")),
