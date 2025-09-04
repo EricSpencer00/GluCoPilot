@@ -326,6 +326,7 @@ struct LatestGlucoseView: View {
     @State private var latestGlucoseValue: Int? = nil
     @State private var latestGlucoseTimestamp: Date? = nil
     @State private var glucoseTrend: String? = nil
+    @State private var isLoading: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -338,7 +339,17 @@ struct LatestGlucoseView: View {
                     .foregroundColor(.secondary)
             }
 
-            if let value = latestGlucoseValue {
+            if isLoading {
+                // Show a compact loading skeleton while fetching
+                HStack {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonCard(height: 32, cornerRadius: 8)
+                        SkeletonCard(height: 12, cornerRadius: 6)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            } else if let value = latestGlucoseValue {
                 HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -399,15 +410,16 @@ struct LatestGlucoseView: View {
     }
 
     private func fetchLatestGlucose() async {
-        // Only attempt to fetch if HealthKit permissions were granted
-        guard healthKitManager.authorizationStatus == .sharingAuthorized else { return }
+        // Fetch data regardless of authorizationStatus; HealthKitManager returns
+        // empty results when not available. This avoids UI hiding when read-only
+        // permissions are present but write-status flags are inaccurate.
         do {
             let data = try await healthKitManager.fetchLast24HoursData()
             if let last = data.glucose.last {
                 await MainActor.run {
                     self.latestGlucoseValue = Int(last.value)
                     self.latestGlucoseTimestamp = last.timestamp
-                    
+
                     // Simulate a trend based on recent values (in a real app, get this from CGM)
                     if data.glucose.count >= 2 {
                         let secondLast = data.glucose[data.glucose.count - 2]
@@ -428,6 +440,10 @@ struct LatestGlucoseView: View {
             }
         } catch {
             // No-op: keep nil to show placeholder
+        }
+
+        await MainActor.run {
+            self.isLoading = false
         }
     }
 

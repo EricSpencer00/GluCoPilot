@@ -86,8 +86,8 @@ struct GraphingView: View {
                             .padding(.horizontal)
                         
                         if isLoading {
-                            ProgressView()
-                                .frame(height: 300)
+                            LoadingStack(count: 6)
+                                .frame(height: 220)
                         } else if let errorMessage = error {
                             VStack {
                                 Image(systemName: "exclamationmark.triangle")
@@ -190,26 +190,17 @@ struct GraphingView: View {
 
     private func loadDataAsync() async {
         do {
-            // Only attempt HealthKit-backed fetches if authorization was granted
-            guard healthKitManager.authorizationStatus == .sharingAuthorized else {
-                // No permissions: clear or keep existing placeholders
-                await MainActor.run {
-                    self.glucoseReadings = []
-                    self.foodEntries = []
-                    self.workouts = []
-                    self.isLoading = false
-                }
-                return
-            }
-
-            // Attempt to fetch HealthKit-backed data and populate charts
+            // Attempt to fetch HealthKit-backed data and populate charts. Do not rely
+            // on write-only authorization flags — run the queries and handle empty results.
             let healthData = try await healthKitManager.fetchLast24HoursData()
 
             await MainActor.run {
                 // Glucose (from HealthKit if available)
+                // Preserve exact timestamps from HealthKit so the Chart plots at
+                // the correct 5-minute (or per-sample) resolution instead of aggregating.
                 self.glucoseReadings = healthData.glucose.map { sample in
                     GlucoseReading(
-                        value: Int(sample.value),
+                        value: Int(round(sample.value)),
                         trend: "",
                         timestamp: sample.timestamp,
                         unit: sample.unit
@@ -276,7 +267,7 @@ struct CombinedDataChart: View {
             if showGlucose {
                 ForEach(glucoseReadings) { reading in
                     LineMark(
-                        x: .value("Time", reading.timestamp, unit: .hour),
+                        x: .value("Time", reading.timestamp),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red.gradient)
@@ -284,7 +275,7 @@ struct CombinedDataChart: View {
                     .interpolationMethod(.catmullRom)
                     
                     PointMark(
-                        x: .value("Time", reading.timestamp, unit: .hour),
+                        x: .value("Time", reading.timestamp),
                         y: .value("Glucose", reading.value)
                     )
                     .foregroundStyle(.red)
