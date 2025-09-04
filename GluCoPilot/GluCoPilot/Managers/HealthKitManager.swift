@@ -244,12 +244,12 @@ class HealthKitManager: ObservableObject {
     func getAuthorizationStatusReport() -> [String] {
         var report: [String] = []
 
-        // Note: These values reflect WRITE authorization only.
+        // Updated: These values now reflect READ authorization for debugging
         func readableStatus(_ status: HKAuthorizationStatus) -> String {
             switch status {
-            case .notDetermined: return "0 (write:notDetermined)"
-            case .sharingDenied: return "1 (write:denied)"
-            case .sharingAuthorized: return "2 (write:authorized)"
+            case .notDetermined: return "0 (read:notDetermined)"
+            case .sharingDenied: return "1 (read:denied)"
+            case .sharingAuthorized: return "2 (read:authorized)"
             @unknown default: return "? (unknown)"
             }
         }
@@ -260,21 +260,21 @@ class HealthKitManager: ObservableObject {
         }
 
         if let t = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
-            report.append("bloodGlucose (WRITE): \(statusString(for: t))")
+            report.append("bloodGlucose (READ): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .stepCount) {
-            report.append("stepCount (WRITE): \(statusString(for: t))")
+            report.append("stepCount (READ): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
-            report.append("activeEnergyBurned (WRITE): \(statusString(for: t))")
+            report.append("activeEnergyBurned (READ): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .heartRate) {
-            report.append("heartRate (WRITE): \(statusString(for: t))")
+            report.append("heartRate (READ): \(statusString(for: t))")
         }
         if let t = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
-            report.append("sleepAnalysis (WRITE): \(statusString(for: t))")
+            report.append("sleepAnalysis (READ): \(statusString(for: t))")
         }
-        report.append("workout (WRITE): \(statusString(for: HKObjectType.workoutType()))")
+        report.append("workout (READ): \(statusString(for: HKObjectType.workoutType()))")
 
         return report
     }
