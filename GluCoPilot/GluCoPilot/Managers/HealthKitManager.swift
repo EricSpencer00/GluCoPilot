@@ -370,6 +370,79 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
+
+        /// Return the authorization request status for the current readTypes (helper for debugging)
+        func getAuthorizationRequestStatus() async -> String {
+            return await withCheckedContinuation { continuation in
+                healthStore.getRequestStatusForAuthorization(toShare: nil, read: readTypes) { status, error in
+                    if let error = error {
+                        continuation.resume(returning: "error: \(error.localizedDescription)")
+                        return
+                    }
+
+                    switch status {
+                    case .unknown:
+                        continuation.resume(returning: "unknown")
+                    case .shouldRequest:
+                        continuation.resume(returning: "shouldRequest (should prompt user)")
+                    case .unnecessary:
+                        continuation.resume(returning: "unnecessary (already granted or no relevant types)")
+                    @unknown default:
+                        continuation.resume(returning: "unknown-status")
+                    }
+                }
+            }
+        }
+
+        /// Debug helper: fetch writer sources for several common sample types (permissive)
+        func fetchSourcesReportAll() async -> [String] {
+            var out: [String] = []
+
+            let typeIdentifiers: [HKSampleType?] = [
+                HKObjectType.quantityType(forIdentifier: .bloodGlucose),
+                HKObjectType.quantityType(forIdentifier: .heartRate),
+                HKObjectType.quantityType(forIdentifier: .stepCount),
+                HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
+                HKObjectType.categoryType(forIdentifier: .sleepAnalysis),
+                HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)
+            ]
+
+            for t in typeIdentifiers {
+                guard let sampleType = t else { continue }
+                let typeName: String
+                if let q = sampleType as? HKQuantityType {
+                    typeName = q.identifier.rawValue
+                } else if let c = sampleType as? HKCategoryType {
+                    typeName = c.identifier.rawValue
+                } else {
+                    typeName = "unknownType"
+                }
+
+                let sources = await withCheckedContinuation { continuation in
+                    let query = HKSourceQuery(sampleType: sampleType, samplePredicate: nil) { _, sourcesOrNil, error in
+                        if let error = error {
+                            continuation.resume(returning: ["error: \(typeName): \(error.localizedDescription)"])
+                            return
+                        }
+
+                        let list = (sourcesOrNil ?? []).map { s in
+                            return "name:\(s.name) bundle:\(s.bundleIdentifier ?? "-")"
+                        }
+                        continuation.resume(returning: list)
+                    }
+                    healthStore.execute(query)
+                }
+
+                if sources.isEmpty {
+                    out.append("\(typeName): <no sources>")
+                } else {
+                    out.append("\(typeName): \(sources.count) sources")
+                    out.append(contentsOf: sources.prefix(20))
+                }
+            }
+
+            return out
+        }
     
     private func fetchStepCount(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }

@@ -37,6 +37,16 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    Button(action: { Task { await runAuthorizationRequestStatus() } }) {
+                        Label("Check Auth Request Status", systemImage: "questionmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: { Task { await fetchAllSourcesReport() } }) {
+                        Label("Fetch Sources (all types)", systemImage: "tray.full")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Clear") {
                         logs.removeAll()
                     }
@@ -170,6 +180,22 @@ struct APIRequestDebugView: View {
         append("Requested permissions; reporting new status...")
         let report = healthKitManager.getAuthorizationStatusReport()
         for r in report { append(r) }
+    }
+
+    private func runAuthorizationRequestStatus() async {
+        append("Checking authorization request status for readTypes...")
+        let status = await healthKitManager.getAuthorizationRequestStatus()
+        append("Authorization request status: \(status)")
+    }
+
+    private func fetchAllSourcesReport() async {
+        append("Fetching sources report for common types...")
+        let report = await healthKitManager.fetchSourcesReportAll()
+        if report.isEmpty {
+            append("No sources report returned")
+        } else {
+            for r in report.prefix(200) { append(r) }
+        }
     }
 
     private func append(_ text: String) {
