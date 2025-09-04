@@ -374,7 +374,8 @@ class HealthKitManager: ObservableObject {
         /// Return the authorization request status for the current readTypes (helper for debugging)
         func getAuthorizationRequestStatus() async -> String {
             return await withCheckedContinuation { continuation in
-                healthStore.getRequestStatusForAuthorization(toShare: nil, read: readTypes) { status, error in
+                // Pass an empty Set for toShare (cannot pass `nil` on some SDKs)
+                healthStore.getRequestStatusForAuthorization(toShare: Set<HKSampleType>(), read: readTypes) { status, error in
                     if let error = error {
                         continuation.resume(returning: "error: \(error.localizedDescription)")
                         return
@@ -411,9 +412,10 @@ class HealthKitManager: ObservableObject {
                 guard let sampleType = t else { continue }
                 let typeName: String
                 if let q = sampleType as? HKQuantityType {
-                    typeName = q.identifier.rawValue
+                    // identifier may be a String or an enum depending on SDK; stringify safely
+                    typeName = "\(q.identifier)"
                 } else if let c = sampleType as? HKCategoryType {
-                    typeName = c.identifier.rawValue
+                    typeName = "\(c.identifier)"
                 } else {
                     typeName = "unknownType"
                 }
