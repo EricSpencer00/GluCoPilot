@@ -2,7 +2,12 @@ import SwiftUI
 
 struct APIRequestDebugView: View {
     @EnvironmentObject var apiManager: APIManager
-    @EnvironmentObject var healthKitManager: HealthKitManager
+    @ObservedObject var healthKitManager: HealthKitManager
+    
+    // Initialize ObservedObject wrapper when passing a HealthKitManager instance
+    init(healthKitManager: HealthKitManager) {
+        self._healthKitManager = ObservedObject(wrappedValue: healthKitManager)
+    }
     @State private var logs: [String] = []
     @State private var isRunning = false
     @State private var manualIdToken: String = ""
@@ -288,7 +293,6 @@ struct APIRequestDebugView: View {
 }
 
 #Preview {
-    APIRequestDebugView()
+    APIRequestDebugView(healthKitManager: HealthKitManager())
         .environmentObject(APIManager())
-        .environmentObject(HealthKitManager())
 }

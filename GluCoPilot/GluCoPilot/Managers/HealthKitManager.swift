@@ -315,6 +315,74 @@ class HealthKitManager: ObservableObject {
 
         return out
     }
+
+    // MARK: - Backwards-compatible debug helpers used by legacy debug UI
+    func getAppIdentityReport() -> [String] {
+        var out: [String] = []
+        let bundle = Bundle.main.bundleIdentifier ?? "-"
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "-")
+        out.append("bundleIdentifier: \(bundle)")
+        out.append("appName: \(name)")
+#if targetEnvironment(simulator)
+        out.append("environment: simulator")
+#else
+        out.append("environment: device")
+#endif
+        out.append("healthKitAvailable: \(isHealthKitAvailable)")
+        out.append("readPermissionsGranted: \(readPermissionsGranted)")
+        return out
+    }
+
+    func fetchAnyGlucoseSamples(limit: Int = 200) async throws -> [String] {
+        // Reuse the existing recent glucose samples helper (permissive)
+        return try await fetchRecentGlucoseSamples(limit: limit)
+    }
+
+    func fetchGlucoseSourcesReport() async -> [String] {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return [] }
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSourceQuery(sampleType: glucoseType, samplePredicate: nil) { _, sourcesOrNil, error in
+                if let error = error {
+                    continuation.resume(returning: ["error: \(error.localizedDescription)"])
+                    return
+                }
+
+                let list = (sourcesOrNil ?? []).map { s in
+                    return "name:\(s.name) bundle:\(s.bundleIdentifier ?? "-")"
+                }
+                continuation.resume(returning: list)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func fetchGlucoseSampleCount() async throws -> Int {
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return 0 }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: glucoseType, predicate: nil, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samplesOrNil, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let count = (samplesOrNil ?? []).count
+                continuation.resume(returning: count)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func getAuthorizationRequestStatus() async -> String {
+        // Return a concise summary used by the debug UI
+        var parts: [String] = []
+        if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+            let s = healthStore.authorizationStatus(for: glucoseType)
+            parts.append("bloodGlucose:\(s)")
+        }
+        parts.append("readPermissionsGranted:\(readPermissionsGranted)")
+        return parts.joined(separator: ", ")
+    }
     
     private func fetchStepCount(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }

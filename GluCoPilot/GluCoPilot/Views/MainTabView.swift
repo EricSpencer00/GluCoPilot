@@ -65,7 +65,7 @@ struct MainTabView: View {
 
 #if DEBUG
             // Debug Tab (only in debug builds)
-            APIRequestDebugView()
+            APIRequestDebugView(healthKitManager: healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 99 ? "ant.fill" : "ant")
