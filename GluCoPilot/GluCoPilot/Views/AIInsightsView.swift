@@ -155,7 +155,11 @@ struct AIInsightsView: View {
                 timestamp: Date()
             )
 
-            let aiInsights = try await apiManager.generateInsights(healthData: apiHealth, prompt: userPrompt.isEmpty ? nil : userPrompt)
+            // Include cached items from the last 24h
+            let since = Calendar.current.date(byAdding: .hour, value: -24, to: Date())!
+            let cached = CacheManager.shared.getItems(since: since)
+            // Upload both HealthKit data and cached logs for richer insights
+            let aiInsights = try await apiManager.uploadCacheAndGenerateInsights(healthData: apiHealth, cachedItems: cached)
             
             await MainActor.run {
                 isLoading = false
