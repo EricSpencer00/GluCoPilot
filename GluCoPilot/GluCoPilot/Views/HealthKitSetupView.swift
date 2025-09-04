@@ -105,7 +105,7 @@ struct HealthKitSetupView: View {
             await MainActor.run {
                 isRequesting = false
                 if healthKitManager.authorizationStatus == .sharingAuthorized {
-                    requestResult = "Permissions granted \u2014 syncing data..."
+                    requestResult = "Permissions granted \u{2014} syncing data..."
                     // Fetch initial properties
                     Task {
                         await healthKitManager.updatePublishedProperties()
