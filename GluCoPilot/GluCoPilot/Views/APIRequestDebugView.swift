@@ -78,10 +78,11 @@ struct APIRequestDebugView: View {
                     }
                 }
                 #endif
-
+                
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(logs, id: \ .self) { line in
+                        // Use enumerated indices to avoid duplicate ID warnings and any dynamicMember issues
+                        ForEach(Array(logs.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.caption)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -139,12 +140,12 @@ struct APIRequestDebugView: View {
         for r in report { append(r) }
 
         append("App identity & environment:")
-        let identity = $healthKitManager.getAppIdentityReport
+        let identity = healthKitManager.getAppIdentityReport()
         for i in identity { append(i) }
 
         append("Running permissive glucose sample query (no predicate)...")
         do {
-            let any = try await $healthKitManager.fetchAnyGlucoseSamples(limit: 200)
+            let any = try await healthKitManager.fetchAnyGlucoseSamples(limit: 200)
             if any.isEmpty {
                 append("No samples returned by permissive query")
             } else {
@@ -157,7 +158,7 @@ struct APIRequestDebugView: View {
 
         // Also include sources and total sample count for more diagnosis
         append("Fetching glucose writer sources...")
-        let sources = await $healthKitManager.fetchGlucoseSourcesReport
+        let sources = await healthKitManager.fetchGlucoseSourcesReport()
         if sources.isEmpty {
             append("No glucose sources found (none have written samples)")
         } else {
@@ -166,7 +167,7 @@ struct APIRequestDebugView: View {
 
         append("Fetching total glucose sample count (permissive)...")
         do {
-            let count = try await $healthKitManager.fetchGlucoseSampleCount
+            let count = try await healthKitManager.fetchGlucoseSampleCount()
             append("Total glucose samples (permissive): \(count)")
         } catch {
             append("Error fetching glucose sample count: \(error.localizedDescription)")
@@ -187,7 +188,7 @@ struct APIRequestDebugView: View {
     @MainActor
     private func runAuthorizationRequestStatus() async {
         append("Checking authorization request status for readTypes...")
-        let status = await $healthKitManager.getAuthorizationRequestStatus
+        let status = await healthKitManager.getAuthorizationRequestStatus()
         append("Authorization request status: \(status)")
     }
 
@@ -267,7 +268,7 @@ struct APIRequestDebugView: View {
     #if DEBUG
     private func runIdTokenExchange() async {
         append("Starting id_token exchange...")
-    let api = apiManager
+        let api = apiManager
 
         let tokenToSend = manualIdToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? KeychainHelper().getValue(for: "apple_id_token") : manualIdToken
 
@@ -289,4 +290,5 @@ struct APIRequestDebugView: View {
 #Preview {
     APIRequestDebugView()
         .environmentObject(APIManager())
+        .environmentObject(HealthKitManager())
 }
