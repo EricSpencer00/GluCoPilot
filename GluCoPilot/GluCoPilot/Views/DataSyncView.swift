@@ -104,10 +104,9 @@ struct DataSyncView: View {
             Text(errorMessage)
         }
         .onAppear {
-            // Request HealthKit permissions if not already granted
-            if healthManager.authorizationStatus != .sharingAuthorized {
-                healthManager.requestHealthKitPermissions()
-            }
+            // Do not request HealthKit permissions automatically on appear.
+            // Users should initiate permission requests from the HealthKit setup flow
+            // or an explicit button to avoid early HealthKit system interactions.
         }
     }
     

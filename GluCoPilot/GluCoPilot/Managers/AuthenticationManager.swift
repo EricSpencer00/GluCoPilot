@@ -132,16 +132,10 @@ class AuthenticationManager: NSObject, ObservableObject {
                 // After a successful interactive sign-in (regardless of backend result), we should
                 // request HealthKit permissions immediately and prevent the user from proceeding
                 // until they grant permissions.
-                if let hk = self.healthKitManager {
-                    // Mark that we require HealthKit authorization flow
-                    self.requiresHealthKitAuthorization = true
-                    hk.requestHealthKitPermissions()
-                } else {
-                    // If HealthKitManager hasn't been injected yet, still mark requirement so
-                    // UI can surface the setup view. The actual request will be triggered when
-                    // HealthKitManager is attached (ContentView injects it on appear).
-                    self.requiresHealthKitAuthorization = true
-                }
+                // Mark that we require HealthKit authorization flow. The UI (HealthKitSetupView)
+                // will trigger the actual permission request when appropriate. Avoid making the
+                // request here to prevent HealthKit calls from running too early in app lifecycle.
+                self.requiresHealthKitAuthorization = true
             }
         }
 
