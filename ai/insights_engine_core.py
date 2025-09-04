@@ -291,43 +291,111 @@ class AIInsightsEngine:
     # -------------------- AI call and parsing --------------------
     async def _generate_ai_recommendations(self, context: str, glucose_data: Optional[List[GlucoseReading]] = None, patterns: Optional[Dict[str, Any]] = None) -> str:
         prompt = f"{context}\n\nRecommendations:"
-        json_instructions = (
-            "Please provide exactly 5 personalized, actionable recommendations as a JSON array. "
-            "Each item must have: title (string), description (string), category (one of ['insulin','nutrition','activity','timing','monitoring','sleep','stress','general']), "
-            "priority ('high'|'medium'|'low'), action (string), timing (string or null), and confidence (float between 0 and 1). "
-            "Respond ONLY with a valid JSON array, no extra text."
-        )
+        json_instructions = """
+        IMPORTANT: Return your response as a JSON array of recommendation objects, with exactly 5 recommendations.
+        Each recommendation object must have this exact structure:
+        {
+          "title": "Short, actionable title",
+          "description": "Detailed explanation (1-3 sentences)",
+          "category": "One of: insulin, glucose, nutrition, activity, sleep, stress, monitoring, general",
+          "priority": "One of: high, medium, low",
+          "confidence": 0.7,  // A number between 0.0 and 1.0
+          "action": "Clear next step the user should take",
+          "timing": "When to take action (can be null)"
+        }
+        
+        Your response must be a valid JSON array that can be parsed with json.loads().
+        Do not include any text outside the JSON array.
+        Do not include ```json or ``` markdown code block markers.
+        
+        Example of a correct response format:
+        [
+          {
+            "title": "Example recommendation 1",
+            "description": "Description text here.",
+            "category": "general",
+            "priority": "medium",
+            "confidence": 0.8,
+            "action": "Action text here",
+            "timing": null
+          },
+          // 4 more recommendations...
+        ]
+        """
+
         try:
             # Prefer remote model when enabled via settings, regardless of exact model name string
             if getattr(settings, "USE_REMOTE_MODEL", True):
                 try:
                     from openai import OpenAI
+                    # Enhanced prompt with stronger JSON guidance
                     enhanced_prompt = f"{prompt}\n\n{json_instructions}"
+                    
                     # Accept token via several env/config names
                     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or getattr(settings, "HUGGINGFACE_TOKEN", "")
+                    if not token:
+                        logger.warning("No HF_TOKEN/HUGGINGFACE_TOKEN found; using fallback recommendations")
+                        return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
+                    
                     client = OpenAI(
                         base_url="https://router.huggingface.co/v1",
                         api_key=token,
                     )
+                    
+                    # Enhanced system message with stronger JSON emphasis
                     messages = [
-                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data. Output only valid JSON."},
+                        {"role": "system", "content": "You are a diabetes management assistant that provides personalized, evidence-based recommendations. Be specific, actionable, and concise. Focus on the user's unique patterns and data. Your response MUST be formatted as a proper JSON array of 5 recommendation objects with no text outside the array."},
                         {"role": "user", "content": enhanced_prompt},
                     ]
-                    completion = client.chat.completions.create(
-                        model="openai/gpt-oss-20b:fireworks-ai",
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=1024,
-                    )
+                    
+                    # Prepare completion parameters
+                    completion_params = {
+                        "model": "openai/gpt-oss-20b:fireworks-ai",
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 1024,
+                    }
+                    
+                    # Attempt to add response_format if supported by this client version
+                    try:
+                        # Add response_format if the client supports it (newer OpenAI SDK versions)
+                        completion_params["response_format"] = {"type": "json_object"}
+                        logger.info("Using response_format parameter for JSON output")
+                    except Exception:
+                        logger.info("response_format parameter not supported, proceeding without it")
+                    
+                    completion = client.chat.completions.create(**completion_params)
+                    
                     if completion.choices and completion.choices[0].message.content:
                         ai_response = completion.choices[0].message.content.strip()
                         # Log a trimmed preview of model output to help debug parsing issues
                         try:
                             preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
                             logger.info(f"Model returned {len(ai_response)} chars; preview: {preview}")
+                            
+                            # Quick validation - attempt to parse here just for logging
+                            try:
+                                json.loads(ai_response)
+                                logger.info("Model returned valid JSON that parsed successfully")
+                            except json.JSONDecodeError as je:
+                                logger.warning(f"Model returned invalid JSON: {str(je)}")
+                                
+                                # Try to clean the response for JSON parsing
+                                cleaned_response = re.sub(r'```json|```', '', ai_response).strip()
+                                try:
+                                    json.loads(cleaned_response)
+                                    logger.info("Cleaned response is valid JSON")
+                                    ai_response = cleaned_response
+                                except json.JSONDecodeError:
+                                    logger.warning("Even after cleaning, JSON is invalid")
+                                
                         except Exception:
                             logger.info("Model returned content (unable to preview)")
+                        
+                        # Always return the AI response, even if it might not be valid JSON
+                        # The _process_recommendations method will handle parsing with robust fallbacks
                         return ai_response
+                    
                     logger.warning("No choices/content from model API; using fallback")
                     # Generate rule-based recs if we have data; else default placeholder
                     return self._rule_based_recommendations(glucose_data, patterns) if glucose_data else self._fallback_recommendations()
@@ -467,10 +535,26 @@ class AIInsightsEngine:
 
     def _process_recommendations(self, ai_text: str, user_id: int) -> List[Dict[str, Any]]:
         recommendations: List[Dict[str, Any]] = []
-        # Try JSON first
+        
+        # Enhanced logging to better diagnose parsing issues
         try:
-            parsed = json.loads(ai_text)
+            preview = ai_text[:500].replace('\n', ' ') if ai_text else '<empty>'
+            logger.info(f"Processing recommendations from text ({len(ai_text)} chars): {preview}...")
+        except Exception:
+            logger.info("Processing recommendations (preview unavailable)")
+            
+        # Method 1: Try standard JSON parsing first (most reliable when it works)
+        try:
+            # Fix common model output issues that break JSON parsing
+            clean_text = ai_text.strip()
+            # Remove any markdown code block markers
+            clean_text = re.sub(r'```json|```', '', clean_text)
+            # Fix trailing commas in arrays which are invalid JSON
+            clean_text = re.sub(r',(\s*[\]}])', r'\1', clean_text)
+            
+            parsed = json.loads(clean_text)
             if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+                logger.info(f"Successfully parsed clean JSON array with {len(parsed)} items")
                 for item in parsed:
                     rec = {
                         'title': item.get('title', ''),
@@ -484,130 +568,289 @@ class AIInsightsEngine:
                     }
                     recommendations.append(rec)
                 return recommendations[:5]
-        except Exception:
-            pass
-
-        # Tolerant JSON array parsing
-        text = ai_text.strip()
-        if text.startswith('['):
-            text = text[1:]
-        if text.endswith(']'):
-            text = text[:-1]
-        obj_strs = re.split(r'\},\s*\{', text)
-        for obj_str in obj_strs:
-            if not obj_str.strip():
-                continue
-            if not obj_str.startswith('{'):
-                obj_str = '{' + obj_str
-            if not obj_str.endswith('}'):
-                obj_str = obj_str + '}'
-            try:
-                item = json.loads(obj_str)
-                rec = {
-                    'title': item.get('title', ''),
-                    'description': item.get('description', ''),
-                    'category': item.get('category', 'general'),
-                    'priority': item.get('priority', 'medium'),
-                    'confidence': float(item.get('confidence', 0.8)),
-                    'action': item.get('action', ''),
-                    'timing': item.get('timing', ''),
-                    'context': self._attach_examples_and_graph(item),
-                }
-                recommendations.append(rec)
-            except Exception:
-                continue
-        if recommendations:
-            return recommendations[:5]
-
-        # Extract JSON-like objects anywhere
-        json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
-        for obj_str in json_objects:
-            try:
-                item = json.loads(obj_str)
-                rec = {
-                    'title': item.get('title', ''),
-                    'description': item.get('description', ''),
-                    'category': item.get('category', 'general'),
-                    'priority': item.get('priority', 'medium'),
-                    'confidence': float(item.get('confidence', 0.8)),
-                    'action': item.get('action', ''),
-                    'timing': item.get('timing', ''),
-                    'context': self._attach_examples_and_graph(item),
-                }
-                recommendations.append(rec)
-            except Exception:
-                continue
-        if recommendations:
-            return recommendations[:5]
-
-        # Numbered text fallback
-        numbered_items = re.split(r'\n(?=\d+[\.)] )', ai_text.strip())
-        if len(numbered_items) > 1:
-            for item in numbered_items:
-                item = item.strip()
-                if not item:
+        except Exception as e:
+            logger.info(f"Standard JSON parsing failed: {str(e)}")
+        
+        # Method 2: Tolerant JSON array parsing - handle malformed arrays
+        try:
+            text = ai_text.strip()
+            # Remove any markdown code block markers
+            text = re.sub(r'```json|```', '', text)
+            
+            # Find the outermost array brackets
+            if '[' in text and ']' in text:
+                start_idx = text.find('[')
+                end_idx = text.rfind(']')
+                if start_idx < end_idx:
+                    text = text[start_idx+1:end_idx]  # Extract just the array contents
+                    logger.info("Extracted array contents for object-by-object parsing")
+            
+            # Split into individual JSON objects with relaxed delimiter matching
+            obj_strs = re.split(r'\},\s*\{|\}\s*,\s*\{', text)
+            logger.info(f"Split array into {len(obj_strs)} potential objects")
+            
+            for i, obj_str in enumerate(obj_strs):
+                if not obj_str.strip():
                     continue
-                title = re.search(r'Title:?\s*(.*)', item, re.IGNORECASE)
-                description = re.search(r'Description:?\s*([\s\S]*?)(?:\nCategory:|\nPriority:|\nAction:|\nTiming:|$)', item, re.IGNORECASE)
-                category = re.search(r'Category:?\s*(.*)', item, re.IGNORECASE)
-                priority = re.search(r'Priority:?\s*(.*)', item, re.IGNORECASE)
-                action = re.search(r'Action:?\s*(.*)', item, re.IGNORECASE)
-                timing = re.search(r'Timing:?\s*(.*)', item, re.IGNORECASE)
-                rec = {
-                    'title': title.group(1).strip() if title else '',
-                    'description': description.group(1).strip() if description else '',
-                    'category': (category.group(1).strip().lower() if category else 'general'),
-                    'priority': (priority.group(1).strip().lower() if priority else 'medium'),
-                    'confidence': 0.8,
-                    'action': action.group(1).strip() if action else '',
-                    'timing': timing.group(1).strip() if timing else '',
-                    'context': self._attach_examples_and_graph({
+                try:
+                    # Ensure proper object syntax
+                    if not obj_str.startswith('{'):
+                        obj_str = '{' + obj_str
+                    if not obj_str.endswith('}'):
+                        obj_str = obj_str + '}'
+                    
+                    # Fix trailing commas in objects which are invalid JSON
+                    obj_str = re.sub(r',(\s*\})', r'\1', obj_str)
+                    
+                    # Fix unquoted property names
+                    obj_str = re.sub(r'(\{|\,)\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', obj_str)
+                    
+                    # Fix single-quoted strings (JSON requires double quotes)
+                    # Match single-quoted values while being careful not to break already valid JSON
+                    pattern = r':\s*\'([^\']*)\''
+                    obj_str = re.sub(pattern, r':"\1"', obj_str)
+                    
+                    item = json.loads(obj_str)
+                    logger.info(f"Successfully parsed object {i+1}/{len(obj_strs)}")
+                    
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': float(item.get('confidence', 0.8) or 0.8),
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item),
+                    }
+                    recommendations.append(rec)
+                except Exception as e:
+                    logger.info(f"Failed to parse object {i+1}: {str(e)}")
+                    continue
+                    
+            if recommendations:
+                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 2")
+                return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Tolerant JSON parsing failed: {str(e)}")
+            
+        # Method 3: Last resort - extract any JSON-like objects from anywhere in the text
+        try:
+            json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
+            logger.info(f"Found {len(json_objects)} potential JSON objects using regex")
+            
+            for i, obj_str in enumerate(json_objects):
+                try:
+                    # Fix common JSON issues
+                    obj_str = re.sub(r',(\s*\})', r'\1', obj_str)  # Fix trailing commas
+                    obj_str = re.sub(r'(\{|\,)\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', obj_str)  # Fix unquoted property names
+                    obj_str = re.sub(r':\s*\'([^\']*)\'' , r':"\1"', obj_str)  # Fix single quotes
+                    
+                    item = json.loads(obj_str)
+                    
+                    # Only accept objects that look like recommendations
+                    if not ('title' in item or 'description' in item):
+                        continue
+                        
+                    rec = {
+                        'title': item.get('title', ''),
+                        'description': item.get('description', ''),
+                        'category': item.get('category', 'general'),
+                        'priority': item.get('priority', 'medium'),
+                        'confidence': float(item.get('confidence', 0.8) or 0.8),
+                        'action': item.get('action', ''),
+                        'timing': item.get('timing', ''),
+                        'context': self._attach_examples_and_graph(item),
+                    }
+                    recommendations.append(rec)
+                except Exception:
+                    continue
+                    
+            if recommendations:
+                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 3")
+                return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Regex JSON extraction failed: {str(e)}")
+
+        # Method 4: Numbered text fallback
+        try:
+            numbered_items = re.split(r'\n(?=\d+[\.)] )', ai_text.strip())
+            logger.info(f"Found {len(numbered_items)} potential numbered items")
+            
+            if len(numbered_items) > 1:
+                for i, item in enumerate(numbered_items):
+                    item = item.strip()
+                    if not item:
+                        continue
+                    try:
+                        title = re.search(r'Title:?\s*(.*)', item, re.IGNORECASE)
+                        description = re.search(r'Description:?\s*([\s\S]*?)(?:\nCategory:|\nPriority:|\nAction:|\nTiming:|$)', item, re.IGNORECASE)
+                        category = re.search(r'Category:?\s*(.*)', item, re.IGNORECASE)
+                        priority = re.search(r'Priority:?\s*(.*)', item, re.IGNORECASE)
+                        action = re.search(r'Action:?\s*(.*)', item, re.IGNORECASE)
+                        timing = re.search(r'Timing:?\s*(.*)', item, re.IGNORECASE)
+                        
+                        rec = {
+                            'title': title.group(1).strip() if title else '',
+                            'description': description.group(1).strip() if description else '',
+                            'category': (category.group(1).strip().lower() if category else 'general'),
+                            'priority': (priority.group(1).strip().lower() if priority else 'medium'),
+                            'confidence': 0.8,
+                            'action': action.group(1).strip() if action else '',
+                            'timing': timing.group(1).strip() if timing else '',
+                            'context': self._attach_examples_and_graph({
+                                'title': title.group(1).strip() if title else '',
+                                'description': description.group(1).strip() if description else '',
+                                'category': (category.group(1).strip().lower() if category else 'general'),
+                            }),
+                        }
+                        if rec['title'] or rec['description']:
+                            recommendations.append(rec)
+                            logger.info(f"Added item {i+1} from text format with title: {rec['title'][:30]}...")
+                    except Exception as e:
+                        logger.info(f"Failed to parse numbered item {i+1}: {str(e)}")
+                        continue
+                        
+                if recommendations:
+                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 4")
+                    return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Numbered text parsing failed: {str(e)}")
+
+        # Method 5: Markdown-style fallback
+        try:
+            items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
+            logger.info(f"Found {len(items)} potential markdown items")
+            
+            for i, item in enumerate(items):
+                if not item.strip():
+                    continue
+                try:
+                    title = re.search(r'\*\*\d+\. Title:\*\*\s*(.*)', item)
+                    description = re.search(r'\*\*Description:\*\*\s*([\s\S]*?)\n\*\*Category:', item)
+                    category = re.search(r'\*\*Category:\*\*\s*(.*)', item)
+                    priority = re.search(r'\*\*Priority:\*\*\s*(.*)', item)
+                    action = re.search(r'\*\*Action:\*\*\s*(.*)', item)
+                    timing = re.search(r'\*\*Timing:\*\*\s*(.*)', item)
+                    
+                    rec = {
                         'title': title.group(1).strip() if title else '',
                         'description': description.group(1).strip() if description else '',
                         'category': (category.group(1).strip().lower() if category else 'general'),
-                    }),
-                }
-                if rec['title'] or rec['description']:
-                    recommendations.append(rec)
+                        'priority': (priority.group(1).strip().lower() if priority else 'medium'),
+                        'confidence': 0.8,
+                        'action': action.group(1).strip() if action else '',
+                        'timing': timing.group(1).strip() if timing else '',
+                        'context': self._attach_examples_and_graph({
+                            'title': title.group(1).strip() if title else '',
+                            'description': description.group(1).strip() if description else '',
+                            'category': (category.group(1).strip().lower() if category else 'general'),
+                        }),
+                    }
+                    if rec['title'] or rec['description']:
+                        recommendations.append(rec)
+                        logger.info(f"Added item {i+1} from markdown format with title: {rec['title'][:30]}...")
+                except Exception as e:
+                    logger.info(f"Failed to parse markdown item {i+1}: {str(e)}")
+                    continue
+                    
             if recommendations:
+                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 5")
                 return recommendations[:5]
-
-        # Markdown-style fallback
-        items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
-        for item in items:
-            if not item.strip():
-                continue
-            title = re.search(r'\*\*\d+\. Title:\*\*\s*(.*)', item)
-            description = re.search(r'\*\*Description:\*\*\s*([\s\S]*?)\n\*\*Category:', item)
-            category = re.search(r'\*\*Category:\*\*\s*(.*)', item)
-            priority = re.search(r'\*\*Priority:\*\*\s*(.*)', item)
-            action = re.search(r'\*\*Action:\*\*\s*(.*)', item)
-            timing = re.search(r'\*\*Timing:\*\*\s*(.*)', item)
-            rec = {
-                'title': title.group(1).strip() if title else '',
-                'description': description.group(1).strip() if description else '',
-                'category': (category.group(1).strip().lower() if category else 'general'),
-                'priority': (priority.group(1).strip().lower() if priority else 'medium'),
-                'confidence': 0.8,
-                'action': action.group(1).strip() if action else '',
-                'timing': timing.group(1).strip() if timing else '',
-                'context': self._attach_examples_and_graph({
-                    'title': title.group(1).strip() if title else '',
-                    'description': description.group(1).strip() if description else '',
-                    'category': (category.group(1).strip().lower() if category else 'general'),
-                }),
-            }
-            if rec['title'] or rec['description']:
-                recommendations.append(rec)
-        if recommendations:
-            return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Markdown parsing failed: {str(e)}")
+        
+        # Method 6: Last resort - look for title-description pairs anywhere in text
+        try:
+            title_matches = re.findall(r'(?:^|\n)(?:Title:?\s*|Recommendation\s*\d+:?\s*)(.*?)(?:\n|$)', ai_text, re.IGNORECASE)
+            logger.info(f"Found {len(title_matches)} potential title matches in raw text")
+            
+            if title_matches and len(title_matches) <= 10:  # Reasonable number of recommendations
+                for i, title in enumerate(title_matches):
+                    title = title.strip()
+                    if not title or len(title) < 5 or len(title) > 100:  # Skip likely invalid titles
+                        continue
+                        
+                    # Try to find a description near this title
+                    title_pos = ai_text.find(title)
+                    if title_pos >= 0:
+                        # Look for a description in the next 500 chars after the title
+                        next_chunk = ai_text[title_pos:title_pos+500]
+                        desc_match = re.search(r'(?:Description:?\s*)(.*?)(?:\n|$)', next_chunk, re.IGNORECASE)
+                        description = desc_match.group(1).strip() if desc_match else ""
+                        
+                        if not description and len(next_chunk) > 50:
+                            # If no explicit description, take the next paragraph
+                            lines = next_chunk.split('\n')
+                            if len(lines) > 1:
+                                description = lines[1].strip()
+                        
+                        rec = {
+                            'title': title,
+                            'description': description,
+                            'category': 'general',
+                            'priority': 'medium',
+                            'confidence': 0.7,
+                            'action': '',
+                            'timing': '',
+                            'context': self._attach_examples_and_graph({
+                                'title': title,
+                                'description': description,
+                                'category': 'general',
+                            }),
+                        }
+                        recommendations.append(rec)
+                        logger.info(f"Added item {i+1} from title-description with title: {title[:30]}...")
+                
+                if recommendations:
+                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 6")
+                    return recommendations[:5]
+        except Exception as e:
+            logger.info(f"Title-description parsing failed: {str(e)}")
 
         # Final fallback
         try:
             short = ai_text[:1000].replace('\n', ' ') if ai_text else '<empty>'
-            logger.warning(f"Failed to parse AI output; using fallback recommendations. AI preview: {short}")
+            logger.warning(f"Failed to parse AI output with all methods; using fallback recommendations. AI preview: {short}")
         except Exception:
             logger.warning("Failed to parse AI output; using fallback recommendations (preview unavailable)")
+        
+        # Try to extract at least something from the AI response even if it's not fully formatted
+        if ai_text and len(ai_text) > 100:
+            try:
+                # If the text is substantial but couldn't be parsed in standard formats,
+                # create at least one recommendation from it to show something from the AI
+                paragraphs = [p for p in ai_text.split('\n\n') if p.strip()]
+                if paragraphs:
+                    first_para = paragraphs[0].strip()
+                    desc_paras = ' '.join([p.strip() for p in paragraphs[1:3]]) if len(paragraphs) > 1 else ""
+                    
+                    # Try to find a sensible title in the first paragraph
+                    title = first_para.split('.')[0] if '.' in first_para else first_para
+                    if len(title) > 80:  # Too long for a title
+                        title = ' '.join(title.split()[:10]) + '...'
+                        
+                    recommendations.append({
+                        'title': title,
+                        'description': desc_paras or "Review this AI analysis of your glucose patterns.",
+                        'category': 'general',
+                        'priority': 'medium',
+                        'confidence': 0.6,
+                        'action': 'Review the insights provided',
+                        'timing': '',
+                        'context': self._attach_examples_and_graph({
+                            'title': title,
+                            'description': desc_paras,
+                            'category': 'general',
+                            'ai_raw_text': ai_text[:2000] if len(ai_text) > 2000 else ai_text,
+                        }),
+                    })
+                    logger.info("Created one recommendation from unstructured AI text")
+                    return recommendations
+            except Exception as e:
+                logger.info(f"Failed to create recommendation from unstructured text: {str(e)}")
+        
+        # Ultimate fallback - use hardcoded recommendations
         return self._process_recommendations(self._fallback_recommendations(), user_id)
 
     def _attach_examples_and_graph(self, rec: dict) -> dict:
