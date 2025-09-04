@@ -50,9 +50,7 @@ struct DataSyncView: View {
                 .buttonStyle(GradientButtonStyle(colors: [Color.purple, Color.blue]))
                 .disabled(isUploading)
                 .padding(.horizontal)
-                }
-                .disabled(isUploading)
-                .padding(.horizontal)
+                
                 
                 // Last run info
                 if let run = lastRun {
@@ -260,9 +258,11 @@ struct SyncResultsView: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        DataSyncView()
-            .environmentObject(HealthKitManager())
+struct DataSyncView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            DataSyncView()
+                .environmentObject(HealthKitManager())
+        }
     }
 }
