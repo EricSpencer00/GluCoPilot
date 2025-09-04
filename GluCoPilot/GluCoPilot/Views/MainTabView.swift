@@ -125,6 +125,7 @@ struct DashboardView: View {
                 await refreshDashboard()
             }
         }
+    .withTopGradient()
         .onReceive(timer) { _ in
             currentTime = Date()
         }
@@ -411,10 +412,8 @@ struct RecentActivityView: View {
                     }) {
                         Text("Sync HealthKit")
                             .font(.caption)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor))
-                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(GradientButtonStyle(colors: [Color.green, Color.blue]))
                     }
                 }
             }
@@ -561,21 +560,16 @@ struct QuickActionButton: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(color)
-                
+                    .foregroundColor(.white)
+
                 Text(title)
                     .font(.caption)
                     .fontWeight(.medium)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-            )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(GradientButtonStyle(colors: [color, color.opacity(0.8)]))
     }
 }
 

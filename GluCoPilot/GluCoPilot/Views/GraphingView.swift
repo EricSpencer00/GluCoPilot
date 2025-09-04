@@ -176,6 +176,7 @@ struct GraphingView: View {
                 loadData()
             }
         }
+    .withTopGradient()
     }
     
     private func loadData() {

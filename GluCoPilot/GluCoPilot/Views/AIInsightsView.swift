@@ -57,10 +57,10 @@ struct AIInsightsView: View {
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.purple.gradient)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(GradientButtonStyle(colors: [Color.purple, Color.blue]))
+                .disabled(isLoading)
+                .padding(.horizontal)
                 }
                 .disabled(isLoading)
                 .padding(.horizontal)
@@ -128,6 +128,7 @@ struct AIInsightsView: View {
                 refreshInsights()
             }
         }
+    .withTopGradient()
     }
     
     private func refreshInsights() {
