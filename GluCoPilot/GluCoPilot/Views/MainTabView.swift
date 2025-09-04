@@ -98,39 +98,44 @@ struct DashboardView: View {
     @State private var currentTime = Date()
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
+
     var body: some View {
-        NavigationView {
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    // Welcome Header
-                    WelcomeHeaderView()
-                    
-                    // Quick Stats Cards
-                    QuickStatsView()
-                    
-                    // Latest Glucose Reading
-                    LatestGlucoseView()
-                    
-                    // Recent Activity
-                    RecentActivityView()
-                    
-                    // Quick Actions
-                    QuickActionsView(selectedTab: $selectedTab)
+        VStack(spacing: 8) {
+            Text("No recent activity to show")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            HStack(spacing: 12) {
+                Button(action: {
+                    // Navigate to Log tab  caller binds Index 1
+                    // This button will be handled by QuickActionsView in practice
+                }) {
+                    Text("Open Log")
+                        .font(.caption)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary))
                 }
-                .padding()
-            }
-            .navigationTitle("Dashboard")
-            .refreshable {
-                await refreshDashboard()
+
+                Button(action: {
+                    // Trigger a sync via HealthKit permissions
+                    let manager = HealthKitManager()
+                    manager.requestHealthKitPermissions()
+                }) {
+                    Text("Sync HealthKit")
+                        .font(.caption)
+                }
+                .buttonStyle(GradientButtonStyle(colors: [Color.green, Color.blue]))
             }
         }
-    .withTopGradient()
-        .onReceive(timer) { _ in
-            currentTime = Date()
-        }
+        .withTopGradient()
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+        )
+
     }
-    
+
     private func refreshDashboard() async {
         // Refresh all data
         // Do not request permissions automatically during a refresh. Permission requests
@@ -404,7 +409,7 @@ struct RecentActivityView: View {
                             .padding(.horizontal, 12)
                             .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary))
                     }
-
+                    
                     Button(action: {
                         // Trigger a sync via HealthKit permissions
                         let manager = HealthKitManager()
@@ -414,7 +419,6 @@ struct RecentActivityView: View {
                             .font(.caption)
                     }
                     .buttonStyle(GradientButtonStyle(colors: [Color.green, Color.blue]))
-                    }
                 }
             }
         }
@@ -424,155 +428,160 @@ struct RecentActivityView: View {
                 .fill(.ultraThinMaterial)
         )
     }
-}
-
-struct ActivityRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let time: String
-    let color: Color
     
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(color)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text(subtitle)
-                    .font(.caption)
+    
+    struct ActivityRow: View {
+        let icon: String
+        let title: String
+        let subtitle: String
+        let time: String
+        let color: Color
+        
+        var body: some View {
+            HStack {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(color)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Text(time)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            
-            Spacer()
-            
-            Text(time)
-                .font(.caption2)
-                .foregroundColor(.secondary)
         }
     }
-}
-
-struct QuickActionsView: View {
-    @EnvironmentObject private var healthKitManager: HealthKitManager
-    @EnvironmentObject private var apiManager: APIManager
-    @Binding var selectedTab: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quick Actions")
-                .font(.headline)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
-                QuickActionButton(
-                    title: "Sync Data",
-                    icon: "arrow.clockwise.circle.fill",
-                    color: .blue
-                ) {
-                    Task {
-                        do {
-                            let healthData = try await healthKitManager.fetchLast24HoursData()
-                            let nutritionSource = healthData.nutrition.first
-                                    let apiHealthData = APIManagerHealthData(
-                                        glucose: healthData.glucose.map { sample in
-                                            APIManagerGlucoseReading(
-                                                value: Int(sample.value),
-                                                trend: "",
-                                                timestamp: sample.timestamp,
-                                                unit: sample.unit
-                                            )
-                                        },
-                                workouts: healthData.workouts.map { workout in
-                                    APIManagerWorkoutData(
-                                        type: workout.name,
-                                        duration: workout.duration,
-                                        calories: workout.calories,
-                                        startDate: workout.startDate,
-                                        endDate: workout.endDate
-                                    )
-                                },
-                                nutrition: [APIManagerNutritionData(
-                                    name: nutritionSource?.name ?? "Daily Nutrition",
-                                    calories: nutritionSource?.calories ?? 0,
-                                    carbs: nutritionSource?.carbs ?? 0,
-                                    protein: nutritionSource?.protein ?? 0,
-                                    fat: nutritionSource?.fat ?? 0,
-                                    timestamp: nutritionSource?.timestamp ?? Date()
-                                )],
-                                timestamp: Date()
-                            )
-
-                            _ = try await apiManager.syncHealthData(apiHealthData)
-                        } catch {
-                            print("Sync failed: \(error)")
+    
+    struct QuickActionsView: View {
+        @EnvironmentObject private var healthKitManager: HealthKitManager
+        @EnvironmentObject private var apiManager: APIManager
+        @Binding var selectedTab: Int
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Quick Actions")
+                    .font(.headline)
+                
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 12) {
+                    QuickActionButton(
+                        title: "Sync Data",
+                        icon: "arrow.clockwise.circle.fill",
+                        color: .blue
+                    ) {
+                        Task {
+                            do {
+                                let healthData = try await healthKitManager.fetchLast24HoursData()
+                                let nutritionSource = healthData.nutrition.first
+                                let apiHealthData = APIManagerHealthData(
+                                    glucose: healthData.glucose.map { sample in
+                                        APIManagerGlucoseReading(
+                                            value: Int(sample.value),
+                                            trend: "",
+                                            timestamp: sample.timestamp,
+                                            unit: sample.unit
+                                        )
+                                    },
+                                    workouts: healthData.workouts.map { workout in
+                                        APIManagerWorkoutData(
+                                            type: workout.name,
+                                            duration: workout.duration,
+                                            calories: workout.calories,
+                                            startDate: workout.startDate,
+                                            endDate: workout.endDate
+                                        )
+                                    },
+                                    nutrition: [APIManagerNutritionData(
+                                        name: nutritionSource?.name ?? "Daily Nutrition",
+                                        calories: nutritionSource?.calories ?? 0,
+                                        carbs: nutritionSource?.carbs ?? 0,
+                                        protein: nutritionSource?.protein ?? 0,
+                                        fat: nutritionSource?.fat ?? 0,
+                                        timestamp: nutritionSource?.timestamp ?? Date()
+                                    )],
+                                    timestamp: Date()
+                                )
+                                
+                                _ = try await apiManager.syncHealthData(apiHealthData)
+                            } catch {
+                                print("Sync failed: \(error)")
+                            }
                         }
                     }
-                }
-                
-                QuickActionButton(
-                    title: "Log Meal",
-                    icon: "fork.knife.circle.fill",
-                    color: .orange
-                ) {
-                    selectedTab = 1
-                }
-                
-                QuickActionButton(
-                    title: "View Log",
-                    icon: "list.bullet.rectangle",
-                    color: .green
-                ) {
-                    selectedTab = 1
-                }
-                
-                QuickActionButton(
-                    title: "Get Insights",
-                    icon: "brain.head.profile.fill",
-                    color: .purple
-                ) {
-                    selectedTab = 2
+                    
+                    QuickActionButton(
+                        title: "Log Meal",
+                        icon: "fork.knife.circle.fill",
+                        color: .orange
+                    ) {
+                        selectedTab = 1
+                    }
+                    
+                    QuickActionButton(
+                        title: "View Log",
+                        icon: "list.bullet.rectangle",
+                        color: .green
+                    ) {
+                        selectedTab = 1
+                    }
+                    
+                    QuickActionButton(
+                        title: "Get Insights",
+                        icon: "brain.head.profile.fill",
+                        color: .purple
+                    ) {
+                        selectedTab = 2
+                    }
                 }
             }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+            )
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        )
     }
-}
-
-struct QuickActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
     
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(.white)
-
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .multilineTextAlignment(.center)
+    struct QuickActionButton: View {
+        let title: String
+        let icon: String
+        let color: Color
+        let action: () -> Void
+        
+        var body: some View {
+            Button(action: action) {
+                VStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(.white)
+                    
+                    Text(title)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .buttonStyle(GradientButtonStyle(colors: [color, color.opacity(0.8)]))
         }
-        .buttonStyle(GradientButtonStyle(colors: [color, color.opacity(0.8)]))
     }
-}
-
-#Preview {
-    MainTabView()
+    
+    struct MainTabView_Previews: PreviewProvider {
+        static var previews: some View {
+            MainTabView()
+                .environmentObject(APIManager())
+                .environmentObject(HealthKitManager())
+        }
+    }
 }
