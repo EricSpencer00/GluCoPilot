@@ -13,7 +13,7 @@ struct HealthKitManagerHealthData: Codable {
     let glucose: [HealthKitGlucoseSample]
 }
 
-struct HealthKitManagerWorkoutData: Codable {
+struct HealthKitManagerWorkoutData: Codable, Equatable {
     let name: String
     let duration: Double
     let calories: Double

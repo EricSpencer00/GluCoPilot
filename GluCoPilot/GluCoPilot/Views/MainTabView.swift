@@ -19,7 +19,7 @@ struct MainTabView: View {
                     Text("Home")
                 }
                 .tag(0)
-            
+
             // Log tab — log food, insulin, and other events
             LogView()
                 .environmentObject(healthKitManager)
@@ -29,8 +29,8 @@ struct MainTabView: View {
                     Text("Glucose")
                 }
                 .tag(1)
-            
-            // Insights Tab (previously Data)
+
+            // Insights Tab
             AIInsightsView()
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
@@ -39,20 +39,16 @@ struct MainTabView: View {
                     Text("AI")
                 }
                 .tag(2)
-            
+
             // Graph Tab
             GraphingView()
                 .environmentObject(apiManager)
                 .tabItem {
-                    // Use a widely available chart symbol to avoid missing symbol on older OSes
                     Image(systemName: selectedTab == 3 ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
                     Text("Graphs")
                 }
                 .tag(3)
-            
-            // AI Insights Tab
-            // Removed duplicate Insights tab (consolidated under tag 2)
-            
+
             // Settings Tab
             SettingsView()
                 .environmentObject(healthKitManager)
@@ -73,10 +69,10 @@ struct MainTabView: View {
                 }
                 .tag(99)
 #endif
-    }
-    .environmentObject(apiManager)
-    .accentColor(.accentColor)
-    .onAppear {
+        }
+        .environmentObject(apiManager)
+        .accentColor(.accentColor)
+        .onAppear {
             setupTabBarAppearance()
         }
     }
@@ -149,85 +145,146 @@ struct DashboardView: View {
     }
 }
 
-struct WelcomeHeaderView: View {
+struct WelcomeBannerView: View {
+    @State private var currentTime = Date()
+    @Environment(\.colorScheme) private var colorScheme
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Good \(getGreeting())")
-                        .font(.title2)
-                        .fontWeight(.medium)
-                    Text("Here's your diabetes overview")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("\(formattedDate())")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+                
                 Spacer()
-                Image(systemName: "sun.max.fill")
-                    .font(.title)
-                    .foregroundColor(.orange)
+                
+                Image(systemName: timeBasedIcon())
+                    .font(.system(size: 36))
+                    .foregroundStyle(timeBasedColor())
+            }
+            
+            Text("Here's your diabetes overview for today")
+                .font(.headline)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Material.ultraThinMaterial)
+        )
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            currentTime = Date()
+        }
+    }
+    
+    private func getGreeting() -> String {
+        let hour = Calendar.current.component(.hour, from: currentTime)
+        switch hour {
+        case 0..<5: return "Night"
+        case 5..<12: return "Morning"
+        case 12..<17: return "Afternoon"
+        case 17..<22: return "Evening"
+        default: return "Night"
+        }
+    }
+    
+    private func timeBasedIcon() -> String {
+        let hour = Calendar.current.component(.hour, from: currentTime)
+        switch hour {
+        case 6..<8: return "sunrise.fill"
+        case 8..<17: return "sun.max.fill"
+        case 17..<20: return "sunset.fill"
+        default: return "moon.stars.fill"
+        }
+    }
+    
+    private func timeBasedColor() -> Color {
+        let hour = Calendar.current.component(.hour, from: currentTime)
+        switch hour {
+        case 6..<8: return .orange
+        case 8..<17: return .yellow
+        case 17..<20: return .orange
+        default: return .indigo
+        }
+    }
+    
+    private func formattedDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        return formatter.string(from: currentTime)
+    }
+}
+
+struct HealthKitStatsView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Health Stats Today")
+                .font(.headline)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                HealthStatCard(
+                    title: "Steps",
+                    value: "\(healthKitManager.todaySteps)",
+                    icon: "figure.walk",
+                    color: .green,
+                    goal: 10000,
+                    current: Double(healthKitManager.todaySteps)
+                )
+                
+                HealthStatCard(
+                    title: "Active Minutes",
+                    value: "\(Int(healthKitManager.activeMinutes))",
+                    icon: "flame.fill",
+                    color: .orange,
+                    goal: 30,
+                    current: healthKitManager.activeMinutes
+                )
+                
+                HealthStatCard(
+                    title: "Sleep",
+                    value: String(format: "%.1f hrs", healthKitManager.sleepHours),
+                    icon: "bed.double.fill",
+                    color: .indigo,
+                    goal: 8,
+                    current: healthKitManager.sleepHours
+                )
+                
+                HealthStatCard(
+                    title: "Heart Rate",
+                    value: "\(Int(healthKitManager.averageHeartRate)) bpm",
+                    icon: "heart.fill",
+                    color: .red,
+                    goal: nil,
+                    current: nil
+                )
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
+                .fill(Material.ultraThinMaterial)
         )
     }
-    
-    private func getGreeting() -> String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 0..<12: return "Morning"
-        case 12..<17: return "Afternoon"
-        default: return "Evening"
-        }
-    }
 }
 
-struct QuickStatsView: View {
-    @EnvironmentObject private var healthKitManager: HealthKitManager
-    
-    var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible())
-        ], spacing: 16) {
-            StatCard(
-                title: "Steps Today",
-                value: "\(healthKitManager.todaySteps)",
-                icon: "figure.walk",
-                color: .green
-            )
-            
-            StatCard(
-                title: "Active Minutes",
-                value: "\(Int(healthKitManager.activeMinutes))",
-                icon: "heart.fill",
-                color: .red
-            )
-            
-            StatCard(
-                title: "Sleep Hours",
-                value: String(format: "%.1f", healthKitManager.sleepHours),
-                icon: "bed.double.fill",
-                color: .purple
-            )
-            
-            StatCard(
-                title: "Heart Rate",
-                value: "\(Int(healthKitManager.averageHeartRate))",
-                icon: "heart.pulse",
-                color: .pink
-            )
-        }
-    }
-}
-
-struct StatCard: View {
+struct HealthStatCard: View {
     let title: String
     let value: String
     let icon: String
     let color: Color
+    let goal: Double?
+    let current: Double?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -245,11 +302,21 @@ struct StatCard: View {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
+            
+            if let goal = goal, let current = current {
+                let progress = min(current / goal, 1.0)
+                ProgressView(value: progress)
+                    .tint(color)
+                
+                Text("\(Int(progress * 100))% of goal")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
+                .fill(Material.ultraThinMaterial)
         )
     }
 }
@@ -258,6 +325,7 @@ struct LatestGlucoseView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var latestGlucoseValue: Int? = nil
     @State private var latestGlucoseTimestamp: Date? = nil
+    @State private var glucoseTrend: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -271,23 +339,32 @@ struct LatestGlucoseView: View {
             }
 
             if let value = latestGlucoseValue {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("\(value)")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(getGlucoseColor(value))
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(value)")
+                                .font(.system(size: 48, weight: .bold, design: .rounded))
+                                .foregroundColor(getGlucoseColor(value))
+                            
+                            if let trend = glucoseTrend {
+                                Image(systemName: getTrendIcon(trend))
+                                    .font(.title)
+                                    .foregroundColor(getTrendColor(trend))
+                            }
+                        }
                         Text("mg/dL")
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
 
                     Spacer()
-
-                    VStack {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.title)
-                            .foregroundColor(.gray)
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(getGlucoseStatusText(value))
+                            .font(.headline)
+                            .foregroundColor(getGlucoseColor(value))
+                            .multilineTextAlignment(.trailing)
+                        
                         Text("From HealthKit")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -298,28 +375,15 @@ struct LatestGlucoseView: View {
                     Text("No recent glucose data")
                         .foregroundColor(.secondary)
                         .italic()
-                    Button(action: {
-                        Task {
-                            healthKitManager.requestHealthKitPermissions()
-                            do {
-                                let data = try await healthKitManager.fetchLast24HoursData()
-                                if let last = data.glucose.last {
-                                    await MainActor.run {
-                                        self.latestGlucoseValue = Int(last.value)
-                                        self.latestGlucoseTimestamp = last.timestamp
-                                    }
-                                }
-                            } catch {
-                                // keep nil and let the UI show the message
-                            }
-                        }
-                    }) {
-                        Text("Sync Health Data")
-                            .font(.subheadline)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 14)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor))
-                            .foregroundColor(.white)
+                    
+                    HStack {
+                        Spacer()
+                        
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.title)
+                            .foregroundColor(.gray.opacity(0.6))
+                            
+                        Spacer()
                     }
                 }
             }
@@ -327,7 +391,7 @@ struct LatestGlucoseView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
+                .fill(Material.ultraThinMaterial)
         )
         .task {
             await fetchLatestGlucose()
@@ -343,6 +407,23 @@ struct LatestGlucoseView: View {
                 await MainActor.run {
                     self.latestGlucoseValue = Int(last.value)
                     self.latestGlucoseTimestamp = last.timestamp
+                    
+                    // Simulate a trend based on recent values (in a real app, get this from CGM)
+                    if data.glucose.count >= 2 {
+                        let secondLast = data.glucose[data.glucose.count - 2]
+                        let diff = last.value - secondLast.value
+                        if diff > 10 {
+                            self.glucoseTrend = "rising_quickly"
+                        } else if diff > 3 {
+                            self.glucoseTrend = "rising"
+                        } else if diff < -10 {
+                            self.glucoseTrend = "falling_quickly"
+                        } else if diff < -3 {
+                            self.glucoseTrend = "falling"
+                        } else {
+                            self.glucoseTrend = "stable"
+                        }
+                    }
                 }
             }
         } catch {
@@ -361,6 +442,17 @@ struct LatestGlucoseView: View {
         case 70...180: return .green
         case 181...250: return .orange
         default: return .red
+        }
+    }
+    
+    private func getGlucoseStatusText(_ value: Int) -> String {
+        switch value {
+        case 70...180: return "In Target Range"
+        case 181...250: return "Above Target"
+        case 251...: return "High"
+        case ..<54: return "Urgently Low"
+        case 54..<70: return "Below Target"
+        default: return "Unknown"
         }
     }
     
@@ -425,163 +517,339 @@ struct RecentActivityView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
+                .fill(Material.ultraThinMaterial)
         )
     }
+}
+
+// MARK: - New Components
+
+struct HealthKitActivitiesView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var workouts: [HealthKitManagerWorkoutData] = []
     
-    
-    struct ActivityRow: View {
-        let icon: String
-        let title: String
-        let subtitle: String
-        let time: String
-        let color: Color
-        
-        var body: some View {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(color)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent Workouts")
+                .font(.headline)
+            
+            if workouts.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "figure.run")
+                            .font(.title)
+                            .foregroundColor(.secondary)
+                        Text("No recent workouts")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
                 }
+                .padding(.vertical, 10)
+            } else {
+                ForEach(workouts.prefix(3), id: \.startDate) { workout in
+                    WorkoutRow(workout: workout)
+                    
+                    if workout != workouts.prefix(3).last {
+                        Divider()
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Material.ultraThinMaterial)
+        )
+        .task {
+            await fetchWorkouts()
+        }
+    }
+    
+    private func fetchWorkouts() async {
+        guard healthKitManager.authorizationStatus == .sharingAuthorized else { return }
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            await MainActor.run {
+                self.workouts = data.workouts.sorted(by: { $0.startDate > $1.startDate })
+            }
+        } catch {
+            // Handle error or keep empty array
+        }
+    }
+}
+
+struct WorkoutRow: View {
+    let workout: HealthKitManagerWorkoutData
+    
+    var body: some View {
+        HStack {
+            Image(systemName: workoutIcon(for: workout.name))
+                .font(.title3)
+                .foregroundColor(workoutColor(for: workout.name))
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(workoutColor(for: workout.name).opacity(0.2))
+                )
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workout.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                 
-                Spacer()
-                
-                Text(time)
-                    .font(.caption2)
+                Text("\(Int(workout.duration / 60)) min • \(Int(workout.calories)) cal")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
+            
+            Spacer()
+            
+            Text(relativeTime(from: workout.startDate))
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
     
-    struct QuickActionsView: View {
-        @EnvironmentObject private var healthKitManager: HealthKitManager
-        @EnvironmentObject private var apiManager: APIManager
-        @Binding var selectedTab: Int
-        
-        var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Quick Actions")
-                    .font(.headline)
-                
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
-                    QuickActionButton(
-                        title: "Sync Data",
-                        icon: "arrow.clockwise.circle.fill",
-                        color: .blue
-                    ) {
-                        Task {
-                            do {
-                                let healthData = try await healthKitManager.fetchLast24HoursData()
-                                let nutritionSource = healthData.nutrition.first
-                                let apiHealthData = APIManagerHealthData(
-                                    glucose: healthData.glucose.map { sample in
-                                        APIManagerGlucoseReading(
-                                            value: Int(sample.value),
-                                            trend: "",
-                                            timestamp: sample.timestamp,
-                                            unit: sample.unit
-                                        )
-                                    },
-                                    workouts: healthData.workouts.map { workout in
-                                        APIManagerWorkoutData(
-                                            type: workout.name,
-                                            duration: workout.duration,
-                                            calories: workout.calories,
-                                            startDate: workout.startDate,
-                                            endDate: workout.endDate
-                                        )
-                                    },
-                                    nutrition: [APIManagerNutritionData(
-                                        name: nutritionSource?.name ?? "Daily Nutrition",
-                                        calories: nutritionSource?.calories ?? 0,
-                                        carbs: nutritionSource?.carbs ?? 0,
-                                        protein: nutritionSource?.protein ?? 0,
-                                        fat: nutritionSource?.fat ?? 0,
-                                        timestamp: nutritionSource?.timestamp ?? Date()
-                                    )],
-                                    timestamp: Date()
-                                )
-                                
-                                _ = try await apiManager.syncHealthData(apiHealthData)
-                            } catch {
-                                print("Sync failed: \(error)")
-                            }
-                        }
-                    }
-                    
-                    QuickActionButton(
-                        title: "Log Meal",
-                        icon: "fork.knife.circle.fill",
+    private func workoutIcon(for name: String) -> String {
+        let lowercasedName = name.lowercased()
+        if lowercasedName.contains("run") {
+            return "figure.run"
+        } else if lowercasedName.contains("walk") {
+            return "figure.walk"
+        } else if lowercasedName.contains("cycle") || lowercasedName.contains("bike") {
+            return "figure.outdoor.cycle"
+        } else if lowercasedName.contains("swim") {
+            return "figure.pool.swim"
+        } else if lowercasedName.contains("yoga") {
+            return "figure.mind.and.body"
+        } else if lowercasedName.contains("strength") || lowercasedName.contains("train") {
+            return "dumbbell"
+        } else {
+            return "figure.mixed.cardio"
+        }
+    }
+    
+    private func workoutColor(for name: String) -> Color {
+        let lowercasedName = name.lowercased()
+        if lowercasedName.contains("run") {
+            return .green
+        } else if lowercasedName.contains("walk") {
+            return .blue
+        } else if lowercasedName.contains("cycle") || lowercasedName.contains("bike") {
+            return .orange
+        } else if lowercasedName.contains("swim") {
+            return .cyan
+        } else if lowercasedName.contains("yoga") {
+            return .purple
+        } else if lowercasedName.contains("strength") || lowercasedName.contains("train") {
+            return .red
+        } else {
+            return .indigo
+        }
+    }
+    
+    private func relativeTime(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct NutritionSummaryView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var nutritionData: HealthKitManagerNutritionData?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nutrition Today")
+                .font(.headline)
+            
+            if let nutrition = nutritionData {
+                HStack(spacing: 16) {
+                    NutrientRing(
+                        value: "\(Int(nutrition.calories))",
+                        label: "Calories",
                         color: .orange
-                    ) {
-                        selectedTab = 1
-                    }
+                    )
                     
-                    QuickActionButton(
-                        title: "View Log",
-                        icon: "list.bullet.rectangle",
+                    NutrientRing(
+                        value: "\(Int(nutrition.carbs))g",
+                        label: "Carbs",
                         color: .green
-                    ) {
-                        selectedTab = 1
-                    }
+                    )
                     
-                    QuickActionButton(
-                        title: "Get Insights",
-                        icon: "brain.head.profile.fill",
-                        color: .purple
-                    ) {
-                        selectedTab = 2
-                    }
+                    NutrientRing(
+                        value: "\(Int(nutrition.protein))g",
+                        label: "Protein",
+                        color: .blue
+                    )
+                    
+                    NutrientRing(
+                        value: "\(Int(nutrition.fat))g",
+                        label: "Fat",
+                        color: .red
+                    )
                 }
+                .padding(.vertical, 8)
+            } else {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "fork.knife")
+                            .font(.title)
+                            .foregroundColor(.secondary)
+                        Text("No nutrition data today")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 10)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-            )
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Material.ultraThinMaterial)
+        )
+        .task {
+            await fetchNutritionData()
         }
     }
     
-    struct QuickActionButton: View {
-        let title: String
-        let icon: String
-        let color: Color
-        let action: () -> Void
-        
-        var body: some View {
-            Button(action: action) {
-                VStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.title2)
-                        .foregroundColor(.white)
-                    
-                    Text(title)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
+    private func fetchNutritionData() async {
+        guard healthKitManager.authorizationStatus == .sharingAuthorized else { return }
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            await MainActor.run {
+                self.nutritionData = data.nutrition.first
             }
-            .buttonStyle(GradientButtonStyle(colors: [color, color.opacity(0.8)]))
+        } catch {
+            // Handle error or keep nil
         }
+    }
+}
+
+struct NutrientRing: View {
+    let value: String
+    let label: String
+    let color: Color
+    
+    var body: some View {
+        VStack {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: 4)
+                    .frame(width: 64, height: 64)
+                
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 64, height: 64)
+                    .rotationEffect(.degrees(-90))
+                
+                Text(value)
+                    .font(.system(.callout, design: .rounded))
+                    .bold()
+                    .foregroundColor(color)
+            }
+            
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
     
-    struct MainTabView_Previews: PreviewProvider {
-        static var previews: some View {
-            MainTabView()
-                .environmentObject(APIManager())
-                .environmentObject(HealthKitManager())
+    
+struct QuickActionsView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @EnvironmentObject private var apiManager: APIManager
+    @Binding var selectedTab: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Actions")
+                .font(.headline)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                QuickActionButton(
+                    title: "View Logs",
+                    icon: "list.bullet.rectangle.fill",
+                    color: .blue
+                ) {
+                    selectedTab = 1
+                }
+                
+                QuickActionButton(
+                    title: "Get Insights",
+                    icon: "brain.head.profile.fill",
+                    color: .purple
+                ) {
+                    selectedTab = 2
+                }
+                
+                QuickActionButton(
+                    title: "View Graphs",
+                    icon: "chart.xyaxis.line",
+                    color: .green
+                ) {
+                    selectedTab = 3
+                }
+                
+                QuickActionButton(
+                    title: "Settings",
+                    icon: "gear",
+                    color: .gray
+                ) {
+                    selectedTab = 5
+                }
+            }
         }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Material.ultraThinMaterial)
+        )
     }
+}
+
+struct QuickActionButton: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(.white)
+                
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white)
+            }
+            .frame(maxWidth: .infinity, minHeight: 80)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(GradientButtonStyle(colors: [color, color.opacity(0.8)]))
+    }
+}
+    
+struct MainTabView_Previews: PreviewProvider {
+    static var previews: some View {
+        MainTabView()
+            .environmentObject(APIManager())
+            .environmentObject(HealthKitManager())
+    }
+}
 }
