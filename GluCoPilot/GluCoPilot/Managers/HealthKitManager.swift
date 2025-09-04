@@ -80,16 +80,9 @@ class HealthKitManager: ObservableObject {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
     }
 
-    // Helper: check if the app is authorized to read the given quantity type
-    private func isAuthorized(for quantityIdentifier: HKQuantityTypeIdentifier) -> Bool {
-        guard let type = HKQuantityType.quantityType(forIdentifier: quantityIdentifier) else { return false }
-        return healthStore.authorizationStatus(for: type) == .sharingAuthorized
-    }
-
-    // Helper: check authorization for object types (category/workout etc.)
-    private func isAuthorized(for objectType: HKObjectType) -> Bool {
-        return healthStore.authorizationStatus(for: objectType) == .sharingAuthorized
-    }
+    // Note: HealthKit does not expose a public API to determine READ authorization per type at runtime.
+    // authorizationStatus(for:) only reflects WRITE permission. Do NOT use it to gate read queries.
+    // Instead, perform queries and handle empty/no-data responses gracefully.
     
     func requestHealthKitPermissions() {
         guard isHealthKitAvailable else {
@@ -108,6 +101,8 @@ class HealthKitManager: ObservableObject {
                             self?.hasLoggedAuthorizationGranted = true
                         }
                     }
+                    // Success here means the prompt completed without error; per-type READ access is not
+                    // reflected by authorizationStatus(for:), which only measures WRITE status.
                     self?.authorizationStatus = .sharingAuthorized
                     // Update published properties after getting permissions
                     Task {
@@ -207,10 +202,7 @@ class HealthKitManager: ObservableObject {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else {
             return []
         }
-        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
-            if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
-            return []
-        }
+        // Do not gate read access by write authorization status; perform the query and handle empty results.
 
         let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
         let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
@@ -248,15 +240,16 @@ class HealthKitManager: ObservableObject {
         }
     }
 
-    /// Return authorization status for common read types (debug helper)
+    /// Return authorization status for common types (WRITE status only; READ is not exposed by HealthKit)
     func getAuthorizationStatusReport() -> [String] {
         var report: [String] = []
 
+        // Note: These values reflect WRITE authorization only.
         func readableStatus(_ status: HKAuthorizationStatus) -> String {
             switch status {
-            case .notDetermined: return "0 (notDetermined)"
-            case .sharingDenied: return "1 (sharingDenied)"
-            case .sharingAuthorized: return "2 (sharingAuthorized)"
+            case .notDetermined: return "0 (write:notDetermined)"
+            case .sharingDenied: return "1 (write:denied)"
+            case .sharingAuthorized: return "2 (write:authorized)"
             @unknown default: return "? (unknown)"
             }
         }
@@ -267,21 +260,21 @@ class HealthKitManager: ObservableObject {
         }
 
         if let t = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
-            report.append("bloodGlucose: \(statusString(for: t))")
+            report.append("bloodGlucose (WRITE): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .stepCount) {
-            report.append("stepCount: \(statusString(for: t))")
+            report.append("stepCount (WRITE): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
-            report.append("activeEnergyBurned: \(statusString(for: t))")
+            report.append("activeEnergyBurned (WRITE): \(statusString(for: t))")
         }
         if let t = HKObjectType.quantityType(forIdentifier: .heartRate) {
-            report.append("heartRate: \(statusString(for: t))")
+            report.append("heartRate (WRITE): \(statusString(for: t))")
         }
         if let t = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
-            report.append("sleepAnalysis: \(statusString(for: t))")
+            report.append("sleepAnalysis (WRITE): \(statusString(for: t))")
         }
-        report.append("workout: \(statusString(for: HKObjectType.workoutType()))")
+        report.append("workout (WRITE): \(statusString(for: HKObjectType.workoutType()))")
 
         return report
     }
@@ -311,10 +304,7 @@ class HealthKitManager: ObservableObject {
     /// Debug helper: return total count of blood glucose samples (permissive, across all time)
     func fetchGlucoseSampleCount() async throws -> Int {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return 0 }
-        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
-            if showPermissionLogs { print("No permission to read blood glucose samples. Returning 0.") }
-            return 0
-        }
+    // Do not gate by write-authorization; perform the query and handle empty results.
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: glucoseType, predicate: nil, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
@@ -347,10 +337,7 @@ class HealthKitManager: ObservableObject {
     /// Debug helper: fetch any available glucose samples (no predicate) to detect presence across all time
     func fetchAnyGlucoseSamples(limit: Int = 500) async throws -> [String] {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return [] }
-        if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
-            if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
-            return []
-        }
+    // Do not gate by write-authorization; perform the query and handle empty results.
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: glucoseType,
@@ -386,11 +373,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchStepCount(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { throw HealthKitError.invalidType }
-    // Check authorization first
-    if !isAuthorized(for: .stepCount) {
-        if showPermissionLogs { print("No permission to read step count. Returning 0.") }
-        return 0
-    }
+    // Do not gate on write-authorization; run the query and return 0 if no data.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
@@ -423,10 +406,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchActiveCalories(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let calorieType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { throw HealthKitError.invalidType }
-    if !isAuthorized(for: .activeEnergyBurned) {
-        if showPermissionLogs { print("No permission to read active calories. Returning 0.") }
-        return 0
-    }
+    // Do not gate on write-authorization; run the query and return 0 if no data.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
@@ -459,10 +439,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchHeartRate(from startDate: Date, to endDate: Date) async throws -> Int {
     guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { throw HealthKitError.invalidType }
-    if !isAuthorized(for: .heartRate) {
-        if showPermissionLogs { print("No permission to read heart rate. Returning 0") }
-        return 0
-    }
+    // Do not gate on write-authorization; run the query and return 0 if no data.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
@@ -495,10 +472,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HealthKitManagerWorkoutData] {
     let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
-    if !isAuthorized(for: HKObjectType.workoutType()) {
-        if showPermissionLogs { print("No permission to read workouts. Returning empty array.") }
-        return []
-    }
+    // Do not gate on write-authorization; perform the query and handle empty results.
         
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
@@ -538,10 +512,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchSleepData(from startDate: Date, to endDate: Date) async throws -> Double {
     guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { throw HealthKitManagerError.dataFetchFailed }
-    if !isAuthorized(for: sleepType) {
-        if showPermissionLogs { print("No permission to read sleep data. Returning 0") }
-        return 0.0
-    }
+    // Do not gate on write-authorization; perform the query and handle empty results.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
@@ -597,10 +568,7 @@ class HealthKitManager: ObservableObject {
     
     private func fetchNutritionValue(_ identifier: HKQuantityTypeIdentifier, predicate: NSPredicate, unit: HKUnit) async throws -> Double {
     guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { throw HealthKitManagerError.dataFetchFailed }
-    if healthStore.authorizationStatus(for: type) != .sharingAuthorized {
-        if showPermissionLogs { print("No permission to read nutrition for \(identifier). Returning 0.") }
-        return 0.0
-    }
+    // Do not gate on write-authorization; perform the query and handle empty results.
         
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
@@ -635,10 +603,7 @@ class HealthKitManager: ObservableObject {
             // Not available on device / simulator: return empty array
             return []
         }
-    if healthStore.authorizationStatus(for: glucoseType) != .sharingAuthorized {
-        if showPermissionLogs { print("No permission to read blood glucose samples. Returning empty array.") }
-        return []
-    }
+    // Do not gate on write-authorization; perform the query and handle empty results.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
