@@ -54,3 +54,35 @@ extension View {
         self.modifier(TopGradientModifier())
     }
 }
+
+// A global top gradient that fills the top 20% of the screen with the app's
+// primary gradient and the remainder with the system background (white/black
+// depending on color scheme). Use this on the app root so all screens inherit
+// the same visual treatment.
+struct GlobalTopGradientModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: LinearGradient.topBarColors(), startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .frame(height: max(120, geo.size.height * 0.20))
+                        .ignoresSafeArea(edges: .top)
+
+                    // Fill the rest with system background so content cards read well
+                    (colorScheme == .dark ? Color.black : Color.white)
+                        .frame(height: geo.size.height - max(120, geo.size.height * 0.20))
+                }
+
+                content
+            }
+        }
+    }
+}
+
+extension View {
+    func withGlobalTopGradient() -> some View {
+        self.modifier(GlobalTopGradientModifier())
+    }
+}

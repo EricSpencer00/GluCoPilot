@@ -96,39 +96,29 @@ struct DashboardView: View {
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text("No recent activity to show")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            HStack(spacing: 12) {
-                Button(action: {
-                    // Navigate to Log tab  caller binds Index 1
-                    // This button will be handled by QuickActionsView in practice
-                }) {
-                    Text("Open Log")
-                        .font(.caption)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary))
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 16) {
+                WelcomeBannerView()
+
+                HStack(spacing: 12) {
+                    LatestGlucoseView()
+                        .frame(maxWidth: .infinity)
+
+                    HealthKitStatsView()
+                        .frame(maxWidth: .infinity)
                 }
 
-                Button(action: {
-                    // Trigger a sync via HealthKit permissions
-                    let manager = HealthKitManager()
-                    manager.requestHealthKitPermissions()
-                }) {
-                    Text("Sync HealthKit")
-                        .font(.caption)
-                }
-                .buttonStyle(GradientButtonStyle(colors: [Color.green, Color.blue]))
+                QuickActionsView(selectedTab: $selectedTab)
+
+                HealthKitActivitiesView()
+
+                NutritionSummaryView()
+
+                RecentActivityView()
             }
+            .padding()
         }
         .withTopGradient()
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        )
 
     }
 
@@ -778,8 +768,8 @@ struct NutrientRing: View {
         }
         .frame(maxWidth: .infinity)
     }
-    
-    
+}
+
 struct QuickActionsView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
     @EnvironmentObject private var apiManager: APIManager
@@ -868,4 +858,4 @@ struct MainTabView_Previews: PreviewProvider {
             .environmentObject(HealthKitManager())
     }
 }
-}
+
