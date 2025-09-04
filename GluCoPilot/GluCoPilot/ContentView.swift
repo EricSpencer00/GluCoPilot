@@ -14,10 +14,20 @@ struct ContentView: View {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
-                // After sign-in: guide user to connect HealthKit if necessary
-                if !UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup") {
+                // After sign-in: guide user to connect HealthKit and block progression until allowed.
+                // Inject HealthKitManager into the authManager so it can trigger requests directly.
+                authManager.healthKitManager = healthKitManager
+
+                // If the auth manager flagged that HealthKit authorization is required, show setup.
+                // Otherwise, fall back to the persisted flag / normal flow.
+                let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
+                let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
+
+                if authManager.requiresHealthKitAuthorization || !completedSetup || !hkAuthorized {
                     HealthKitSetupView(onComplete: {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
+                        // When user completes setup, clear the requirement so the app can proceed
+                        authManager.requiresHealthKitAuthorization = false
                     })
                     .environmentObject(apiManager)
                     .environmentObject(healthKitManager)

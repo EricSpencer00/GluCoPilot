@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 class AuthenticationManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
+    @Published var requiresHealthKitAuthorization = false
     @Published var userDisplayName: String?
     @Published var userEmail: String?
     @Published var isRegistering = false
@@ -14,6 +15,8 @@ class AuthenticationManager: NSObject, ObservableObject {
     
     // This dependency is initialized in ContentView and passed to AuthManager
     var apiManager: APIManager?
+    // Optional reference to HealthKitManager so we can request permissions right after sign-in
+    var healthKitManager: HealthKitManager?
     
     private let keychain = KeychainHelper()
     // Continuation used when programmatically requesting a new Apple credential
@@ -125,6 +128,19 @@ class AuthenticationManager: NSObject, ObservableObject {
                 self.isLoadingAuth = false
                 if !success {
                     self.authError = "Registration with backend failed. You can continue in offline mode or retry from Settings."
+                }
+                // After a successful interactive sign-in (regardless of backend result), we should
+                // request HealthKit permissions immediately and prevent the user from proceeding
+                // until they grant permissions.
+                if let hk = self.healthKitManager {
+                    // Mark that we require HealthKit authorization flow
+                    self.requiresHealthKitAuthorization = true
+                    hk.requestHealthKitPermissions()
+                } else {
+                    // If HealthKitManager hasn't been injected yet, still mark requirement so
+                    // UI can surface the setup view. The actual request will be triggered when
+                    // HealthKitManager is attached (ContentView injects it on appear).
+                    self.requiresHealthKitAuthorization = true
                 }
             }
         }
