@@ -189,6 +189,18 @@ struct GraphingView: View {
 
     private func loadDataAsync() async {
         do {
+            // Only attempt HealthKit-backed fetches if authorization was granted
+            guard healthKitManager.authorizationStatus == .sharingAuthorized else {
+                // No permissions: clear or keep existing placeholders
+                await MainActor.run {
+                    self.glucoseReadings = []
+                    self.foodEntries = []
+                    self.workouts = []
+                    self.isLoading = false
+                }
+                return
+            }
+
             // Attempt to fetch HealthKit-backed data and populate charts
             let healthData = try await healthKitManager.fetchLast24HoursData()
 

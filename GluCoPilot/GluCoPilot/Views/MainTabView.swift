@@ -65,7 +65,7 @@ struct MainTabView: View {
 
 #if DEBUG
             // Debug Tab (only in debug builds)
-            APIRequestDebugView()
+            APIRequestDebugView(healthKitManager: healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
                     Image(systemName: selectedTab == 99 ? "ant.fill" : "ant")
@@ -132,7 +132,12 @@ struct DashboardView: View {
     
     private func refreshDashboard() async {
         // Refresh all data
-    healthKitManager.requestHealthKitPermissions()
+        // Do not request permissions automatically during a refresh. Permission requests
+        // should be initiated by explicit user action (HealthKitSetupView / Settings).
+        // Instead, update published properties if permissions already granted.
+        if healthKitManager.authorizationStatus == .sharingAuthorized {
+            await healthKitManager.updatePublishedProperties()
+        }
         // Trigger a backend sync or fetch latest aggregated glucose via APIManager
 //        try? await apiManager.fetchLatestSyncedGlucoseIfNeeded()
     }
@@ -324,6 +329,8 @@ struct LatestGlucoseView: View {
     }
 
     private func fetchLatestGlucose() async {
+        // Only attempt to fetch if HealthKit permissions were granted
+        guard healthKitManager.authorizationStatus == .sharingAuthorized else { return }
         do {
             let data = try await healthKitManager.fetchLast24HoursData()
             if let last = data.glucose.last {

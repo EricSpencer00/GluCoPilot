@@ -14,10 +14,16 @@ struct ContentView: View {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
-                // After sign-in: guide user to connect HealthKit if necessary
-                if !UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup") {
+                // If the auth manager flagged that HealthKit authorization is required, show setup.
+                // Otherwise, fall back to the persisted flag / normal flow.
+                let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
+                let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
+
+                if authManager.requiresHealthKitAuthorization || !completedSetup || !hkAuthorized {
                     HealthKitSetupView(onComplete: {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
+                        // When user completes setup, clear the requirement so the app can proceed
+                        authManager.requiresHealthKitAuthorization = false
                     })
                     .environmentObject(apiManager)
                     .environmentObject(healthKitManager)
@@ -42,18 +48,15 @@ struct ContentView: View {
                 }
             }
         }
-    .animation(.easeInOut(duration: 0.8), value: isLaunching)
-    .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
-    .animation(.easeInOut(duration: 0.5), value: showOnboarding)
+        .animation(.easeInOut(duration: 0.8), value: isLaunching)
+        .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.5), value: showOnboarding)
         .environmentObject(authManager)
         .onAppear {
             // Inject the apiManager dependency
             authManager.apiManager = apiManager
-
-                        
-            // Simulate launch time and check authentication
-            // DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            //     isLaunching = false
+            // Inject HealthKitManager dependency outside the view builder
+            authManager.healthKitManager = healthKitManager
 
             // Perform readiness checks immediately and show launch screen for a short minimum time
             Task {

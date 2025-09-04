@@ -55,11 +55,20 @@ struct HealthKitSetupView: View {
             .disabled(isRequesting)
             .padding(.horizontal)
 
-            Button(action: skip) {
-                Text("Skip for now")
+            // If the auth flow requires HealthKit, do not allow skipping.
+            if authManager.requiresHealthKitAuthorization {
+                Text("Health data permission is required to continue.")
+                    .font(.footnote)
                     .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            } else {
+                Button(action: skip) {
+                    Text("Skip for now")
+                        .foregroundColor(.secondary)
+                }
+                .padding(.bottom)
             }
-            .padding(.bottom)
 
             if let result = requestResult, result.contains("not granted") {
                 Button(action: openSettings) {
@@ -78,17 +87,25 @@ struct HealthKitSetupView: View {
 
         // Request permissions and then update result
         Task {
+            // Trigger request on the HealthKit manager
             await MainActor.run {
                 healthKitManager.requestHealthKitPermissions()
             }
 
-            // Wait briefly for authorization status to update
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            // Poll briefly for change in authorization status (HealthKit callbacks can be async)
+            var attempts = 0
+            while attempts < 6 {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                attempts += 1
+                if healthKitManager.authorizationStatus == .sharingAuthorized {
+                    break
+                }
+            }
 
             await MainActor.run {
                 isRequesting = false
                 if healthKitManager.authorizationStatus == .sharingAuthorized {
-                    requestResult = "Permissions granted — syncing data..."
+                    requestResult = "Permissions granted \u{2014} syncing data..."
                     // Fetch initial properties
                     Task {
                         await healthKitManager.updatePublishedProperties()

@@ -2,7 +2,12 @@ import SwiftUI
 
 struct APIRequestDebugView: View {
     @EnvironmentObject var apiManager: APIManager
-    @EnvironmentObject var healthKitManager: HealthKitManager
+    @ObservedObject var healthKitManager: HealthKitManager
+    
+    // Initialize ObservedObject wrapper when passing a HealthKitManager instance
+    init(healthKitManager: HealthKitManager) {
+        self._healthKitManager = ObservedObject(wrappedValue: healthKitManager)
+    }
     @State private var logs: [String] = []
     @State private var isRunning = false
     @State private var manualIdToken: String = ""
@@ -37,6 +42,16 @@ struct APIRequestDebugView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    Button(action: { Task { await runAuthorizationRequestStatus() } }) {
+                        Label("Check Auth Request Status", systemImage: "questionmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: { Task { await fetchAllSourcesReport() } }) {
+                        Label("Fetch Sources (all types)", systemImage: "tray.full")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Clear") {
                         logs.removeAll()
                     }
@@ -68,10 +83,11 @@ struct APIRequestDebugView: View {
                     }
                 }
                 #endif
-
+                
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(logs, id: \ .self) { line in
+                        // Use enumerated indices to avoid duplicate ID warnings and any dynamicMember issues
+                        ForEach(Array(logs.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.caption)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,6 +103,7 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func fetchHealthKitDebug() async {
         append("Fetching HealthKit last 24h data...")
         do {
@@ -104,6 +121,7 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func fetchGlucoseSamplesDebug() async {
         append("Dumping recent glucose samples (detailed)...")
         do {
@@ -120,14 +138,15 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func runAuthAndAnySampleChecks() async {
         append("Running authorization status report...")
         let report = healthKitManager.getAuthorizationStatusReport()
         for r in report { append(r) }
 
-    append("App identity & environment:")
-    let identity = healthKitManager.getAppIdentityReport()
-    for i in identity { append(i) }
+        append("App identity & environment:")
+        let identity = healthKitManager.getAppIdentityReport()
+        for i in identity { append(i) }
 
         append("Running permissive glucose sample query (no predicate)...")
         do {
@@ -160,16 +179,33 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func requestHealthPermissions() async {
         append("Requesting HealthKit permissions (system sheet may appear)...")
-        await MainActor.run {
-            healthKitManager.requestHealthKitPermissions()
-        }
+        healthKitManager.requestHealthKitPermissions()
         // Small delay to allow user to respond to the permissions sheet
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         append("Requested permissions; reporting new status...")
         let report = healthKitManager.getAuthorizationStatusReport()
         for r in report { append(r) }
+    }
+
+    @MainActor
+    private func runAuthorizationRequestStatus() async {
+        append("Checking authorization request status for readTypes...")
+        let status = await healthKitManager.getAuthorizationRequestStatus()
+        append("Authorization request status: \(status)")
+    }
+
+    @MainActor
+    private func fetchAllSourcesReport() async {
+        append("Fetching sources report for common types...")
+        let report = await healthKitManager.fetchSourcesReportAll()
+        if report.isEmpty {
+            append("No sources report returned")
+        } else {
+            for r in report.prefix(200) { append(r) }
+        }
     }
 
     private func append(_ text: String) {
@@ -178,9 +214,10 @@ struct APIRequestDebugView: View {
         }
     }
 
+    @MainActor
     private func runAllTests() async {
         guard !isRunning else { return }
-        await MainActor.run { isRunning = true }
+        isRunning = true
         append("Starting API smoke tests...")
 
         // 1) Test generateInsights with sample health payload
@@ -230,13 +267,13 @@ struct APIRequestDebugView: View {
         }
 
         append("API smoke tests finished")
-        await MainActor.run { isRunning = false }
+        isRunning = false
     }
 
     #if DEBUG
     private func runIdTokenExchange() async {
         append("Starting id_token exchange...")
-    let api = apiManager
+        let api = apiManager
 
         let tokenToSend = manualIdToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? KeychainHelper().getValue(for: "apple_id_token") : manualIdToken
 
@@ -256,6 +293,6 @@ struct APIRequestDebugView: View {
 }
 
 #Preview {
-    APIRequestDebugView()
+    APIRequestDebugView(healthKitManager: HealthKitManager())
         .environmentObject(APIManager())
 }
