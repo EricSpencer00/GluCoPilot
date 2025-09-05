@@ -7,6 +7,8 @@ protocol HealthStoreType {
     func execute(_ query: HKQuery)
     func requestAuthorization(toShare typesToShare: Set<HKSampleType>?, read typesToRead: Set<HKObjectType>?, completion: @escaping (Bool, Error?) -> Void)
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus
+    func enableBackgroundDelivery(for type: HKObjectType, frequency: HKUpdateFrequency, completion: @escaping (Bool, Error?) -> Void)
+    func stop(_ query: HKQuery)
     static func isHealthDataAvailable() -> Bool
 }
 
@@ -43,5 +45,13 @@ class HKHealthStoreWrapper: HealthStoreType {
     
     static func isHealthDataAvailable() -> Bool {
         return HKHealthStore.isHealthDataAvailable()
+    }
+
+    func enableBackgroundDelivery(for type: HKObjectType, frequency: HKUpdateFrequency, completion: @escaping (Bool, Error?) -> Void) {
+        healthStore.enableBackgroundDelivery(for: type, frequency: frequency, withCompletion: completion)
+    }
+
+    func stop(_ query: HKQuery) {
+        healthStore.stop(query)
     }
 }

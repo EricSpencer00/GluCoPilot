@@ -6,6 +6,7 @@ struct ContentView: View {
     @EnvironmentObject var apiManager: APIManager
     @EnvironmentObject var healthKitManager: HealthKitManager
     @EnvironmentObject var appState: AppState
+    @State private var showOnboarding: Bool = true
     
     var body: some View {
         ZStack {

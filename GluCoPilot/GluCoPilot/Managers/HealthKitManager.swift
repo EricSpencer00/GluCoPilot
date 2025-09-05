@@ -596,7 +596,7 @@ class HealthKitManager: ObservableObject {
     }
     
     private func fetchSleepData(from startDate: Date, to endDate: Date) async throws -> Double {
-    guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { throw HealthKitManagerError.dataFetchFailed }
+    guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { throw HealthKitManagerError.dataFetchFailed() }
     // Do not gate on write-authorization; perform the query and handle empty results.
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
@@ -652,7 +652,7 @@ class HealthKitManager: ObservableObject {
     }
     
     private func fetchNutritionValue(_ identifier: HKQuantityTypeIdentifier, predicate: NSPredicate, unit: HKUnit) async throws -> Double {
-    guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { throw HealthKitManagerError.dataFetchFailed }
+    guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { throw HealthKitManagerError.dataFetchFailed() }
     // Do not gate on write-authorization; perform the query and handle empty results.
         
         return try await withCheckedThrowingContinuation { continuation in
@@ -729,7 +729,7 @@ class HealthKitManager: ObservableObject {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return }
 
         // Enable background delivery so the system can wake the app when new samples arrive.
-        healthStore.enableBackgroundDelivery(for: glucoseType, frequency: .immediate) { success, error in
+    healthStore.enableBackgroundDelivery(for: glucoseType, frequency: HKUpdateFrequency.immediate) { success, error in
             if let error = error {
                 #if DEBUG
                 print("enableBackgroundDelivery error: \(error.localizedDescription)")
