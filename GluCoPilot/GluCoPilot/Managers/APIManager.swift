@@ -1,5 +1,9 @@
 import Foundation
 
+extension Notification.Name {
+    static let APIManagerUnauthorized = Notification.Name("APIManagerUnauthorized")
+}
+
 // MARK: - API Manager Models (Isolated to avoid conflicts)
 struct APIManagerGlucoseReading: Codable, Identifiable {
     var id = UUID()
@@ -163,6 +167,12 @@ class APIManager: ObservableObject {
     private let session = URLSession.shared
     private let keychain = APIManagerKeychainHelper()
 
+    // Tracks whether an auth exchange is currently in-flight so UI can disable login controls
+    @Published var isAuthInFlight: Bool = false
+
+    // Shared task to serialize Apple id_token -> backend token exchanges
+    private var exchangeTask: Task<String?, Never>? = nil
+
     // Clear any stored auth tokens
     func clearTokens() {
         keychain.removeValue(for: "auth_access_token")
@@ -246,48 +256,82 @@ class APIManager: ObservableObject {
             }
         }
 
-        // If we have an Apple id_token, attempt exchange
+        // If we have an Apple id_token, attempt exchange (serialized + backoff)
         if let appleToken = keychain.getValue(for: "apple_id_token"), isAppleIdToken(appleToken) {
-            // Build request to social-login endpoint to exchange id_token for app token
-            let url = URL(string: "\(baseURL)/api/v1/auth/social-login")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            // Include Apple id_token in Authorization header as backend expects
-            request.setValue("Bearer \(appleToken)", forHTTPHeaderField: "Authorization")
-
-            let body: [String: Any] = [
-                "provider": "apple",
-                "id_token": appleToken
-            ]
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-            let (data, response) = try await session.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIManagerError.invalidResponse
-            }
-            guard httpResponse.statusCode == 200 else {
-                // If exchange failed, propagate unauthorized
-                if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                    throw APIManagerError.unauthorized
+            // If an exchange is already in-flight, wait for it
+            if let t = exchangeTask {
+                // Await existing exchange result
+                let existing = await t.value
+                if let existing = existing {
+                    return existing
                 }
-                let err = String(data: data, encoding: .utf8) ?? ""
-                throw APIManagerError.serverError(err)
+                // Fallthrough to attempt again if previous attempt returned nil
             }
 
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String {
-                keychain.setValue(access, for: "auth_access_token")
-                if let refresh = json["refresh_token"] as? String {
-                    keychain.setValue(refresh, for: "auth_refresh_token")
+            // Create a new task to perform the exchange with retries
+            let task = Task<String?, Never> {
+                await MainActor.run { self.isAuthInFlight = true }
+                defer { Task { await MainActor.run { self.isAuthInFlight = false } } }
+
+                let maxAttempts = 3
+                var delaySeconds: Double = 0.5
+                for attempt in 1...maxAttempts {
+                    do {
+                        let url = URL(string: "\(baseURL)/api/v1/auth/social-login")!
+                        var request = URLRequest(url: url)
+                        request.httpMethod = "POST"
+                        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        request.setValue("Bearer \(appleToken)", forHTTPHeaderField: "Authorization")
+
+                        let body: [String: Any] = ["provider": "apple", "id_token": appleToken]
+                        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                        let (data, response) = try await session.data(for: request)
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            throw APIManagerError.invalidResponse
+                        }
+
+                        if httpResponse.statusCode == 200 {
+                            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String {
+                                keychain.setValue(access, for: "auth_access_token")
+                                if let refresh = json["refresh_token"] as? String {
+                                    keychain.setValue(refresh, for: "auth_refresh_token")
+                                }
+                                return access
+                            }
+                            return nil
+                        } else if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                            // Unauthorized - do not retry, surface as nil so higher layers can re-auth
+                            return nil
+                        } else {
+                            // Server error - maybe transient; throw to hit retry/backoff
+                            let err = String(data: data, encoding: .utf8) ?? ""
+                            throw APIManagerError.serverError(err)
+                        }
+                    } catch {
+                        if attempt == maxAttempts {
+                            return nil
+                        }
+                        // exponential backoff before retrying
+                        try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                        delaySeconds *= 2
+                        continue
+                    }
                 }
-                return access
+                return nil
             }
 
-            throw APIManagerError.invalidData
+            exchangeTask = task
+            let result = await task.value
+            exchangeTask = nil
+            if let r = result { return r }
+            // If exchange failed or returned nil, throw unauthorized so callers can prompt re-login
+            throw APIManagerError.unauthorized
         }
 
-        // No token available
-        throw APIManagerError.unauthorized
+    // No token available - broadcast so UI can react (prompt re-login)
+    NotificationCenter.default.post(name: .APIManagerUnauthorized, object: nil)
+    throw APIManagerError.unauthorized
     }
     
     // MARK: - Authentication

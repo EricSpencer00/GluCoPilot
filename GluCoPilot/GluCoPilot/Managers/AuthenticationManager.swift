@@ -25,6 +25,16 @@ class AuthenticationManager: NSObject, ObservableObject {
     override init() {
         super.init()
         checkAuthenticationState()
+        // Observe unauthorized events from API layer so we can prompt re-auth
+        NotificationCenter.default.addObserver(self, selector: #selector(handleUnauthorizedNotification(_:)), name: .APIManagerUnauthorized, object: nil)
+    }
+
+    @objc private func handleUnauthorizedNotification(_ note: Notification) {
+        Task { @MainActor in
+            self.authError = "Authentication required. Please sign in again."
+            // Clear local tokens to force interactive re-auth
+            self.signOut()
+        }
     }
     
     func checkAuthenticationState() {
