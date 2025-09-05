@@ -1,29 +1,25 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var authManager = AuthenticationManager()
-    @StateObject private var apiManager = APIManager()
-    @StateObject private var healthKitManager = HealthKitManager()
-    @State private var isLaunching = true
-    @State private var showOnboarding = false
-    
+    // Use environment objects instead of creating new instances
+    @EnvironmentObject var authManager: AuthenticationManager
+    @EnvironmentObject var apiManager: APIManager
+    @EnvironmentObject var healthKitManager: HealthKitManager
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         ZStack {
-            if isLaunching {
+            if appState.isLaunching {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
                 // If the auth manager flagged that HealthKit authorization is required, show setup.
                 // Otherwise, fall back to the persisted flag / normal flow.
-                let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
                 let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
 
-                if authManager.requiresHealthKitAuthorization || !completedSetup || !hkAuthorized {
+                if authManager.requiresHealthKitAuthorization || !appState.hasCompletedHealthKitSetup || !hkAuthorized {
                     HealthKitSetupView(onComplete: {
-                        UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
-                        // When user completes setup, clear the requirement so the app can proceed
-                        authManager.requiresHealthKitAuthorization = false
+                        appState.completeHealthKitSetup()
                     })
                     .environmentObject(apiManager)
                     .environmentObject(healthKitManager)
@@ -42,43 +38,24 @@ struct ContentView: View {
                     })
                     .transition(.move(edge: .trailing))
                 } else {
-                    AppleSignInView()
-                        .environmentObject(authManager)
-                        .transition(.move(edge: .leading))
-                }
-            }
-        }
-        .animation(.easeInOut(duration: 0.8), value: isLaunching)
-        .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
-        .animation(.easeInOut(duration: 0.5), value: showOnboarding)
-        .environmentObject(authManager)
-        .onAppear {
-            // Inject the apiManager dependency
-            authManager.apiManager = apiManager
-            // Inject HealthKitManager dependency outside the view builder
-            authManager.healthKitManager = healthKitManager
-
-            // Perform readiness checks immediately and show launch screen for a short minimum time
-            Task {
-                // Kick off auth check which may trigger async token refresh
-                authManager.checkAuthenticationStatus()
-
-                // Keep the launch screen visible at least briefly for polish
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                await MainActor.run {
-                    isLaunching = false
-                    // Show onboarding for new users
-                    if !authManager.isAuthenticated && !UserDefaults.standard.bool(forKey: "hasSeenOnboarding") {
-                        showOnboarding = true
+                    if !appState.hasSeenOnboarding {
+                        OnboardingView(onComplete: {
+                            appState.completeOnboarding()
+                        })
+                        .transition(.move(edge: .trailing))
+                    } else {
+                        AppleSignInView()
+                            .environmentObject(authManager)
+                            .transition(.move(edge: .leading))
                     }
                 }
             }
         }
-        .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
-            if isAuthenticated {
-                showOnboarding = false
-            }
-        }
+        .animation(.easeInOut(duration: 0.8), value: appState.isLaunching)
+        .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.5), value: appState.hasSeenOnboarding)
+        // No need to duplicate environmentObject modifiers or onAppear tasks
+        // as they're now handled in GluCoPilotApp
     }
 }
 
@@ -188,7 +165,6 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
-        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
         onComplete()
     }
 }
@@ -211,10 +187,12 @@ struct OnboardingPageView: View {
                 Circle()
                     .fill(page.color.opacity(0.2))
                     .frame(width: 120, height: 120)
+                    .accessibilityHidden(true)
                 
                 Image(systemName: page.systemImage)
                     .font(.system(size: 50))
                     .foregroundColor(page.color)
+                    .accessibilityLabel("Illustration for \(page.title)")
             }
             
             // Content
@@ -236,6 +214,7 @@ struct OnboardingPageView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
+            .accessibilityElement(children: .combine)
         }
         .padding()
     }
@@ -243,4 +222,8 @@ struct OnboardingPageView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AppState())
+        .environmentObject(AuthenticationManager())
+        .environmentObject(HealthKitManager())
+        .environmentObject(APIManager())
 }

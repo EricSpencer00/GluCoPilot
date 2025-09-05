@@ -39,14 +39,28 @@ struct HealthKitGlucoseSample: Codable {
 // MARK: - Error Types
 enum HealthKitManagerError: Error {
     case notAvailable
-    case authorizationFailed
-    case dataFetchFailed
+    case authorizationFailed(reason: String? = nil)
+    case dataFetchFailed(underlying: Error? = nil)
+    
+    var localizedDescription: String {
+        switch self {
+        case .notAvailable:
+            return "HealthKit is not available on this device"
+        case .authorizationFailed(let reason):
+            return "HealthKit authorization failed: \(reason ?? "Permission denied")"
+        case .dataFetchFailed(let error):
+            return "Failed to fetch health data: \(error?.localizedDescription ?? "Unknown error")"
+        }
+    }
 }
 
 @MainActor
 class HealthKitManager: ObservableObject {
+    // MARK: - Published Properties
     @Published var isHealthKitAvailable = false
     @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
+    @Published var permissionState: HealthKitPermissionState = .notDetermined
+    @Published var hasReadAccess: Bool = false
     
     // Published health metrics for UI
     @Published var todaySteps: Int = 0
@@ -56,7 +70,8 @@ class HealthKitManager: ObservableObject {
     // Toggle to control whether HealthKit permission/debug logs are printed
     @AppStorage("showHealthKitPermissionLogs") var showPermissionLogs: Bool = false
     
-    private let healthStore = HKHealthStore()
+    // Use the HealthStoreType protocol for dependency injection
+    private let healthStore: HealthStoreType
 
     // Track whether we've already logged a granted message to avoid duplicates
     private var hasLoggedAuthorizationGranted = false
@@ -84,37 +99,112 @@ class HealthKitManager: ObservableObject {
     // Published latest glucose sample (UI can observe this)
     @Published var latestGlucoseSample: HealthKitGlucoseSample?
     
-    init() {
-        isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
+    init(healthStore: HealthStoreType? = nil) {
+        // Use the provided health store or create a default implementation
+        self.healthStore = healthStore ?? HKHealthStoreWrapper()
+        isHealthKitAvailable = HealthStoreType.isHealthDataAvailable()
     }
 
     // Note: HealthKit does not expose a public API to determine READ authorization per type at runtime.
     // authorizationStatus(for:) only reflects WRITE permission. Do NOT use it to gate read queries.
     // Instead, perform queries and handle empty/no-data responses gracefully.
     
-    func requestHealthKitPermissions() {
+    /// Requests HealthKit permissions with proper error handling and state updates
+    /// - Returns: A Result indicating success or detailed failure
+    func requestPermissions() async -> Result<Void, HealthKitManagerError> {
         guard isHealthKitAvailable else {
-            print("HealthKit is not available on this device")
-            return
+            Logger.warning("HealthKit is not available on this device")
+            await updatePermissionState(.denied)
+            return .failure(.notAvailable)
         }
-        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
-            DispatchQueue.main.async {
-                if success {
-                    if self?.showPermissionLogs ?? false {
-                        if self?.hasLoggedAuthorizationGranted == false {
-                            print("HealthKit authorization granted")
-                            self?.hasLoggedAuthorizationGranted = true
+        
+        return await withCheckedContinuation { continuation in
+            healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { 
+                        continuation.resume(returning: .failure(.authorizationFailed()))
+                        return
+                    }
+                    
+                    if success {
+                        if self.showPermissionLogs {
+                            if !self.hasLoggedAuthorizationGranted {
+                                Logger.info("HealthKit authorization granted")
+                                self.hasLoggedAuthorizationGranted = true
+                            }
+                        }
+                        // Update all state properties
+                        self.authorizationStatus = .sharingAuthorized
+                        self.readPermissionsGranted = true
+                        self.hasReadAccess = true
+                        await self.updatePermissionState(.authorized)
+                        
+                        // Start observing glucose updates so app receives new samples
+                        self.startGlucoseObserving()
+                        
+                        // Update published properties from HealthKit
+                        Task {
+                            await self.updatePublishedProperties()
+                        }
+                        
+                        continuation.resume(returning: .success(()))
+                    } else {
+                        let message = error?.localizedDescription ?? "Unknown error"
+                        if self.showPermissionLogs {
+                            Logger.warning("HealthKit authorization denied: \(message)")
+                        }
+                        self.hasLoggedAuthorizationGranted = false
+                        self.readPermissionsGranted = false
+                        self.hasReadAccess = false
+                        
+                        if message.contains("Failed to look up source with bundle identifier") {
+                            Logger.error("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
+                            
+                            #if targetEnvironment(simulator)
+                            Logger.info("Running in simulator: HealthKit is not fully supported. Falling back to stubbed values for UI testing.")
+                            self.authorizationStatus = .sharingAuthorized
+                            self.readPermissionsGranted = true
+                            self.hasReadAccess = true
+                            await self.updatePermissionState(.authorized)
+                            
+                            Task {
+                                await self.updatePublishedProperties()
+                            }
+                            continuation.resume(returning: .success(()))
+                            #else
+                            self.authorizationStatus = .sharingDenied
+                            await self.updatePermissionState(.denied)
+                            continuation.resume(returning: .failure(.authorizationFailed(reason: "Bundle identifier mismatch")))
+                            #endif
+                        } else {
+                            self.authorizationStatus = .sharingDenied
+                            await self.updatePermissionState(.denied)
+                            continuation.resume(returning: .failure(.authorizationFailed(reason: message)))
                         }
                     }
-                    // Instead of relying on WRITE status, mark read permissions as granted
-                    self?.authorizationStatus = .sharingAuthorized
-                    self?.readPermissionsGranted = true
-                    // Start observing glucose updates so app receives new samples in foreground & background
-                    self?.startGlucoseObserving()
-                    Task {
-                        await self?.updatePublishedProperties()
-                    }
-                } else {
+                }
+            }
+        }
+    }
+    
+    /// Legacy method for backward compatibility - calls the new async version
+    /// Legacy method for backward compatibility - calls the new async version
+    func requestHealthKitPermissions() {
+        Task {
+            let result = await requestPermissions()
+            // Legacy method doesn't return a result, so just log errors
+            if case .failure(let error) = result {
+                Logger.error("HealthKit permission request failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Updates the permission state and notifies observers
+    @MainActor
+    private func updatePermissionState(_ newState: HealthKitPermissionState) async {
+        permissionState = newState
+        // Additional state update logic can be added here
+    }
                     let message = error?.localizedDescription ?? "Unknown error"
                     if self?.showPermissionLogs ?? false {
                         print("HealthKit authorization denied: \(message)")
