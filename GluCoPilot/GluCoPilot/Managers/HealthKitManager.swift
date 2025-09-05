@@ -101,8 +101,8 @@ class HealthKitManager: ObservableObject {
     
     init(healthStore: HealthStoreType? = nil) {
         // Use the provided health store or create a default implementation
-        self.healthStore = healthStore ?? HKHealthStoreWrapper()
-        isHealthKitAvailable = HealthStoreType.isHealthDataAvailable()
+    self.healthStore = healthStore ?? HKHealthStoreWrapper()
+    isHealthKitAvailable = HKHealthStoreWrapper.isHealthDataAvailable()
     }
 
     // Note: HealthKit does not expose a public API to determine READ authorization per type at runtime.
@@ -204,31 +204,6 @@ class HealthKitManager: ObservableObject {
     private func updatePermissionState(_ newState: HealthKitPermissionState) async {
         permissionState = newState
         // Additional state update logic can be added here
-    }
-                    let message = error?.localizedDescription ?? "Unknown error"
-                    if self?.showPermissionLogs ?? false {
-                        print("HealthKit authorization denied: \(message)")
-                    }
-                    self?.hasLoggedAuthorizationGranted = false
-                    self?.readPermissionsGranted = false
-                    if message.contains("Failed to look up source with bundle identifier") {
-                        print("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
-#if targetEnvironment(simulator)
-                        print("Running in simulator: HealthKit is not fully supported. Falling back to stubbed values for UI testing.")
-                        self?.authorizationStatus = .sharingAuthorized
-                        self?.readPermissionsGranted = true
-                        Task {
-                            await self?.updatePublishedProperties()
-                        }
-#else
-                        self?.authorizationStatus = .sharingDenied
-#endif
-                    } else {
-                        self?.authorizationStatus = .sharingDenied
-                    }
-                }
-            }
-        }
     }
     
     func updatePublishedProperties() async {

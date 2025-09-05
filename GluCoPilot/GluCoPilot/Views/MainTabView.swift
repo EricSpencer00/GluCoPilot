@@ -486,6 +486,8 @@ struct LatestGlucoseView: View {
 }
 
 struct RecentActivityView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Activity")
@@ -509,9 +511,8 @@ struct RecentActivityView: View {
                     }
                     
                     Button(action: {
-                        // Trigger a sync via HealthKit permissions
-                        let manager = HealthKitManager()
-                        manager.requestHealthKitPermissions()
+                        // Trigger a sync via the shared HealthKit manager
+                        healthKitManager.requestHealthKitPermissions()
                     }) {
                         Text("Sync HealthKit")
                             .font(.caption)

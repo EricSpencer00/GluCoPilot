@@ -354,27 +354,7 @@ struct HealthKitSetupView: View {
     }
 }
 
-// Maintain the existing GradientButtonStyle or create if missing
-struct GradientButtonStyle: ButtonStyle {
-    var colors: [Color]
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding()
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: colors),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .foregroundColor(.white)
-            .cornerRadius(10)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.spring(), value: configuration.isPressed)
-    }
-}
-
+// GradientButtonStyle is defined in `Utilities/UIStyles.swift`.
 #Preview {
     HealthKitSetupView()
         .environmentObject(HealthKitManager())
