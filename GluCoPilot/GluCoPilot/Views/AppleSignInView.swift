@@ -8,8 +8,8 @@ struct AppleSignInView: View {
     var body: some View {
         VStack(spacing: 40) {
             Spacer()
-            
-            // App Logo and Title
+
+            // Content card
             VStack(spacing: 20) {
                 Image(systemName: "heart.text.square.fill")
                     .font(.system(size: 80))
@@ -81,8 +81,9 @@ struct AppleSignInView: View {
             
             Spacer()
         }
-    .padding()
-    .withTopGradient()
+        .padding()
+        .cardStyle(baseColor: .purple, cornerRadius: 18)
+        .withTopGradient()
     }
 }
 

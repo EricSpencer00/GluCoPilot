@@ -32,7 +32,37 @@ struct GradientButtonStyle: ButtonStyle {
             .shadow(color: Color.black.opacity(configuration.isPressed ? 0.06 : 0.12), radius: configuration.isPressed ? 2 : 6, x: 0, y: configuration.isPressed ? 1 : 4)
             .scaleEffect(configuration.isPressed ? 0.995 : 1.0)
     }
+
+        // Card-style gradient used across the app for subtle colorful backgrounds
+        static func cardGradient(base: Color) -> LinearGradient {
+            // Create a soft layered gradient biased toward the base color
+            let c1 = base.opacity(0.18)
+            let c2 = base.opacity(0.06)
+            let c3 = Color(.systemBackground).opacity(0.02)
+            return LinearGradient(colors: [c1, c2, c3], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
 }
+
+    // Convenience modifier that applies the app card gradient with a subtle shadow
+    struct CardBackgroundModifier: ViewModifier {
+        var baseColor: Color = .accentColor
+        var cornerRadius: CGFloat = 16
+
+        func body(content: Content) -> some View {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(LinearGradient.cardGradient(base: baseColor))
+                        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 4)
+                )
+        }
+    }
+
+    extension View {
+        func cardStyle(baseColor: Color = .accentColor, cornerRadius: CGFloat = 16) -> some View {
+            self.modifier(CardBackgroundModifier(baseColor: baseColor, cornerRadius: cornerRadius))
+        }
+    }
 
 struct TopGradientModifier: ViewModifier {
     func body(content: Content) -> some View {

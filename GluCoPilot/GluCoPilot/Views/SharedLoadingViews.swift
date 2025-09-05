@@ -25,7 +25,7 @@ struct SkeletonCard: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color.gray.opacity(0.15))
+            .fill(LinearGradient.cardGradient(base: Color.gray))
             .frame(height: height)
             .overlay(Shimmer().blendMode(.overlay))
     }
@@ -40,9 +40,7 @@ struct LoadingStack: View {
                 SkeletonCard(height: 18, cornerRadius: 10)
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 3)
+    .padding()
+    .cardStyle(baseColor: Color.gray, cornerRadius: 12)
     }
 }
