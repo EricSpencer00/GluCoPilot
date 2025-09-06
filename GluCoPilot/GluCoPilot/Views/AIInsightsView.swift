@@ -451,9 +451,7 @@ struct AIInsightsView: View {
                 }
             }
             .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .cardStyle(baseColor: insight.priorityColor, cornerRadius: 12)
         }
     }
     

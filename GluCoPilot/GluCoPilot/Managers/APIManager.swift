@@ -798,7 +798,8 @@ class APIManager: ObservableObject {
     func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
         // Try to obtain a backend-issued token, but allow unauthenticated/stateless calls
         // (backend in non-production accepts missing api_key / bearer token for /generate)
-        let authToken = try? await ensureBackendToken()
+    let authToken = try? await ensureBackendToken()
+    print("[APIManager] uploadCacheAndGenerateInsights called. authTokenPresent=\(authToken != nil)")
 
         // Use the backend "generate" endpoint which supports stateless mode (health_data in body)
         let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
@@ -807,6 +808,8 @@ class APIManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            print("[APIManager] No backend token available; calling generate endpoint in stateless mode")
         }
 
         let encoder = JSONEncoder()
@@ -832,6 +835,9 @@ class APIManager: ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (data, response) = try await session.data(for: request)
+        if let httpResponse = response as? HTTPURLResponse {
+            print("[APIManager] /insights/generate responded: \(httpResponse.statusCode)")
+        }
         guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
