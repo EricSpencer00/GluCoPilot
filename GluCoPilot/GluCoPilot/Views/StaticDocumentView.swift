@@ -25,7 +25,22 @@ struct StaticDocumentView: View {
 }
 
 extension StaticDocumentView {
-    static let privacyPlaceholder = "\nGluCoPilot Privacy Policy\n\nThis is a placeholder privacy policy. Replace with your app's full privacy policy text.\n\n• What data we collect\n• How we use it\n• How users can request deletion or export of their data\n\n" 
+    static let privacyPlaceholder = """
+    GluCoPilot Privacy Policy
+
+    This is a placeholder privacy policy. Replace with your app's full privacy policy text.
+
+    • What data we collect
+    • How we use it
+    • How users can request deletion or export of their data
+
+    We use Hugging Face's open-source AI models (OSS 20B and OSS 120B) to generate insights. All health data used with these models is anonymized and never stored in any database owned by the developer.
+
+    All data transformation is stateless, meaning data is processed transiently for each request and is not persisted by the app outside of HealthKit-managed storage.
+
+    Keep in mind the accuracy of AI: do not fully trust any information given by the AI. This app is intended to provide general guidance for diabetes care and is not a replacement for an endocrinologist or medical professional.
+
+    """
 
     static let termsPlaceholder = "\nTerms of Service\n\nThis is a placeholder Terms of Service. Replace with your full terms.\n\n• User responsibilities\n• Limitations of liability\n• Governing law\n\n"
 
