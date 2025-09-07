@@ -63,10 +63,10 @@ struct GraphingView: View {
                     // Timeframe fixed to last 24 hours
                     
                     // Data Toggle Options
-                    HStack {
-                        DataToggle(isEnabled: $showGlucose, label: "Glucose", color: .red)
-                        DataToggle(isEnabled: $showFood, label: "Food", color: .green)
-                        DataToggle(isEnabled: $showWorkouts, label: "Activity", color: .orange)
+                    HStack(spacing: 12) {
+                        DataToggle(isEnabled: $showGlucose, systemImage: "drop.fill", color: .red)
+                        DataToggle(isEnabled: $showFood, systemImage: "fork.knife", color: .green)
+                        DataToggle(isEnabled: $showWorkouts, systemImage: "figure.walk", color: .orange)
                     }
                     .padding(.horizontal)
                     
@@ -346,24 +346,48 @@ struct CombinedDataChart: View {
     }
 }
 
-struct DataToggle: View {
-    @Binding var isEnabled: Bool
-    let label: String
-    let color: Color
-    
-    var body: some View {
-        Toggle(isOn: $isEnabled) {
-            HStack {
-                Circle()
-                    .fill(color)
-                    .frame(width: 12, height: 12)
-                Text(label)
-                    .font(.subheadline)
-            }
+struct CompactSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.label
+            Spacer()
+            Rectangle()
+                .fill(configuration.isOn ? Color.accentColor : Color.secondary.opacity(0.2))
+                .frame(width: 36, height: 20)
+                .cornerRadius(10)
+                .overlay(
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(radius: 1)
+                        .padding(2)
+                        .offset(x: configuration.isOn ? 8 : -8)
+                        .animation(.easeInOut(duration: 0.12), value: configuration.isOn)
+                )
+                .onTapGesture { configuration.isOn.toggle() }
         }
-        .toggleStyle(.switch)
+        .frame(minWidth: 0)
     }
 }
+
+struct DataToggle: View {
+    @Binding var isEnabled: Bool
+    let systemImage: String
+    let color: Color
+
+    var body: some View {
+        Toggle(isOn: $isEnabled) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16))
+                    .foregroundColor(color)
+                    .frame(width: 20, height: 20)
+            }
+        }
+        .toggleStyle(CompactSwitchStyle())
+        .frame(maxWidth: 80)
+    }
+}
+
 
 struct LegendItem: View {
     let color: Color
