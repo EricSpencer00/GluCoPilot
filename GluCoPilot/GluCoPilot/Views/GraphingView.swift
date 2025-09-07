@@ -4,7 +4,8 @@ import Charts
 struct GraphingView: View {
     @EnvironmentObject private var apiManager: APIManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
-    @State private var selectedTimeframe: Timeframe = .day
+    // Graphs should only show the last 24 hours
+    private let selectedTimeframe: Timeframe = .day
     @State private var showGlucose: Bool = true
     @State private var showFood: Bool = true
     @State private var showWorkouts: Bool = true
@@ -59,17 +60,7 @@ struct GraphingView: View {
                             .padding(.horizontal)
                     }
                     
-                    // Timeframe Selector
-                    Picker("Timeframe", selection: $selectedTimeframe) {
-                        ForEach(Timeframe.allCases) { timeframe in
-                            Text(timeframe.title).tag(timeframe)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .onChange(of: selectedTimeframe) { _, _ in
-                        loadData()
-                    }
+                    // Timeframe fixed to last 24 hours
                     
                     // Data Toggle Options
                     HStack {
@@ -318,20 +309,16 @@ struct CombinedDataChart: View {
             }
         }
         .chartYScale(domain: 40...300)
-        .chartXAxis {
+                .chartXAxis {
             AxisMarks(values: .automatic) { value in
                 if let date = value.as(Date.self) {
                     let hour = Calendar.current.component(.hour, from: date)
-                    let isAxisLabelHour = timeframe == .day ? hour % 4 == 0 : hour == 0
-                    
+                    let isAxisLabelHour = hour % 4 == 0
+
                     if isAxisLabelHour {
                         AxisGridLine()
                         AxisValueLabel {
-                            if timeframe == .day {
-                                Text(date, format: .dateTime.hour())
-                            } else {
-                                Text(date, format: .dateTime.month().day())
-                            }
+                            Text(date, format: .dateTime.hour())
                         }
                     }
                 }

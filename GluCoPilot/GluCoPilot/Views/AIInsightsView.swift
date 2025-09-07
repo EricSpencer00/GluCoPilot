@@ -10,7 +10,6 @@ struct AIInsightsView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var selectedInsight: AIInsight?
-    @State private var showDetailView = false
     @State private var userPrompt: String = ""
     
     var body: some View {
@@ -76,7 +75,6 @@ struct AIInsightsView: View {
                         InsightCard(insight: insight)
                             .onTapGesture {
                                 selectedInsight = insight
-                                showDetailView = true
                             }
                     }
                 }
@@ -116,10 +114,8 @@ struct AIInsightsView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $showDetailView) {
-            if let insight = selectedInsight {
-                InsightDetailView(insight: insight)
-            }
+        .sheet(item: $selectedInsight) { insight in
+            InsightDetailView(insight: insight)
         }
         .onAppear {
             if insights.isEmpty {

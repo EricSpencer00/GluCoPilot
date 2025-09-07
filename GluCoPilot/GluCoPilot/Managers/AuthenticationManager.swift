@@ -42,8 +42,9 @@ class AuthenticationManager: NSObject, ObservableObject {
         // Check credential state with Apple — if not authorized, require re-auth
         let provider = ASAuthorizationAppleIDProvider()
         let state: ASAuthorizationAppleIDProvider.CredentialState = await withCheckedContinuation { cont in
-            provider.getCredentialState(forUserID: userID) { s in
-                cont.resume(returning: s)
+            provider.getCredentialState(forUserID: userID) { state, error in
+                // If provider returns a state, resume with it; otherwise default to .revoked
+                cont.resume(returning: state)
             }
         }
 

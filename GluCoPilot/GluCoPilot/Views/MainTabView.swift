@@ -100,7 +100,7 @@ struct DashboardView: View {
             VStack(spacing: 16) {
                 WelcomeBannerView()
 
-                HStack(spacing: 12) {
+                VStack(spacing: 12) {
                     LatestGlucoseView()
                         .frame(maxWidth: .infinity)
 
