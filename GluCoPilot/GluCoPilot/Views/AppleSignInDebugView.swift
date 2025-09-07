@@ -10,7 +10,61 @@ struct AppleSignInDebugView: View {
     @State private var tokenClaims: String = ""
     @State private var manualToken: String = ""
     @State private var backendExchangeResult: String = ""
-    @State private var showClaims: Bool = false
+    @State pr                            backendExchangeResult = "✅ AI Insights access OK: \(insights.count) insights retrieved"
+                        } catch {
+                            backendExchangeResult = "❌ AI Insights error: \(error.localizedDescription)"
+                        }
+                        #else
+                        backendExchangeResult = "Debug-only: compile with DEBUG to enable"
+                        #endif
+                        
+                        isLoading = false
+                    }
+                }
+                
+                Button("Test Generate Insights Endpoint") {
+                    isLoading = true
+                    Task {
+                        #if DEBUG
+                        guard let api = authManager.apiManager else {
+                            backendExchangeResult = "APIManager not available"
+                            isLoading = false
+                            return
+                        }
+                        
+                        do {
+                            // Create minimal test data
+                            let sampleReading = APIManagerGlucoseReading(
+                                value: 120, 
+                                trend: "Flat", 
+                                timestamp: Date(), 
+                                unit: "mg/dL"
+                            )
+                            
+                            let healthData = APIManagerHealthData(
+                                glucose: [sampleReading],
+                                workouts: nil,
+                                nutrition: nil,
+                                timestamp: Date()
+                            )
+                            
+                            // Try direct endpoint test with empty cache
+                            let insights = try await api.uploadCacheAndGenerateInsights(
+                                healthData: healthData, 
+                                cachedItems: []
+                            )
+                            
+                            backendExchangeResult = "✅ Generate Insights endpoint OK: \(insights.count) insights retrieved"
+                        } catch {
+                            backendExchangeResult = "❌ Generate Insights error: \(error.localizedDescription)"
+                        }
+                        #else
+                        backendExchangeResult = "Debug-only: compile with DEBUG to enable"
+                        #endif
+                        
+                        isLoading = false
+                    }
+                }howClaims: Bool = false
     
     var body: some View {
         List {
@@ -431,6 +485,49 @@ struct AppleSignInDebugView: View {
                         #endif
                         
                         isLoading = false
+                    }
+                }
+                
+                Button("Force Refresh Token") {
+                    isLoading = true
+                    Task {
+                        #if DEBUG
+                        guard let api = authManager.apiManager else {
+                            backendExchangeResult = "APIManager not available"
+                            isLoading = false
+                            return
+                        }
+                        
+                        // First clear existing tokens to force fresh exchange
+                        KeychainHelper().removeValue(for: "auth_access_token")
+                        KeychainHelper().removeValue(for: "auth_refresh_token")
+                        
+                        // Verify we still have Apple token
+                        guard let appleToken = KeychainHelper().getValue(for: "apple_id_token") else {
+                            backendExchangeResult = "❌ No Apple ID token found. Please sign in with Apple first."
+                            isLoading = false
+                            return
+                        }
+                        
+                        do {
+                            // Force new token exchange
+                            if let newToken = await api.debugExchangeAppleIdTokenForBackendToken() {
+                                backendExchangeResult = "✅ Successfully exchanged Apple token for new backend token"
+                                currentToken = newToken
+                                let (h, c) = decodeJWTParts(newToken)
+                                tokenHeader = h
+                                tokenClaims = c
+                            } else {
+                                backendExchangeResult = "❌ Token exchange failed"
+                            }
+                        } catch {
+                            backendExchangeResult = "❌ Error during token exchange: \(error.localizedDescription)"
+                        }
+                        isLoading = false
+                        #else
+                        backendExchangeResult = "Debug-only feature"
+                        isLoading = false
+                        #endif
                     }
                 }
                 

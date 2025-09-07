@@ -867,10 +867,27 @@ class APIManager: ObservableObject {
             throw APIManagerError.decodingError(error)
         }
     }
+    
+    // Debug wrapper to expose token exchange for debug UIs
+    func debugExchangeAppleIdTokenForBackendToken() async -> String? {
+        return await exchangeAppleIdTokenForBackendToken()
+    }
+    
     // Attempt to exchange a stored Apple id_token for a backend-issued access token.
     // Returns the new access token or nil on failure.
     private func exchangeAppleIdTokenForBackendToken() async -> String? {
-        guard let appleToken = keychain.getValue(for: "apple_id_token") else { return nil }
+        guard let appleToken = keychain.getValue(for: "apple_id_token") else { 
+            print("[APIManager] No Apple id_token found in keychain")
+            return nil 
+        }
+        
+        // Check if Apple token is expired
+        if tokenIsExpired(appleToken) {
+            print("[APIManager] Apple id_token is expired, cannot exchange")
+            return nil
+        }
+        
+        print("[APIManager] Exchanging Apple id_token for backend token")
         let url = URL(string: "\(baseURL)/api/v1/auth/social-login")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -880,7 +897,17 @@ class APIManager: ObservableObject {
         
         do {
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            guard let http = response as? HTTPURLResponse else {
+                print("[APIManager] Token exchange failed: invalid response")
+                return nil
+            }
+            
+            if http.statusCode != 200 {
+                let errorBody = String(data: data, encoding: .utf8) ?? "<no error body>"
+                print("[APIManager] Token exchange failed with status \(http.statusCode): \(errorBody)")
+                return nil
+            }
+            
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let access = json["access_token"] as? String {
                 keychain.setValue(access, for: "auth_access_token")
                 if let refresh = json["refresh_token"] as? String { keychain.setValue(refresh, for: "auth_refresh_token") }
@@ -920,21 +947,33 @@ class APIManager: ObservableObject {
     
     // Upload local cache (logs) plus HealthKit context (24h) and ask backend to generate insights
     func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
-        // Try to obtain a backend-issued token, but allow unauthenticated/stateless calls
-        // (backend in non-production accepts missing api_key / bearer token for /generate)
-        let authToken = try? await ensureBackendToken()
-        print("[APIManager] uploadCacheAndGenerateInsights called. authTokenPresent=\(authToken != nil)")
+        // Be more aggressive about token acquisition - don't accept nil and catch the error
+        let authToken: String
+        do {
+            // First try the normal token acquisition flow
+            authToken = try await ensureBackendToken()
+            print("[APIManager] uploadCacheAndGenerateInsights: Successfully obtained auth token")
+        } catch {
+            print("[APIManager] uploadCacheAndGenerateInsights: Error getting token: \(error.localizedDescription)")
+            
+            // As a fallback, try direct exchange of Apple token
+            if let exchangedToken = await debugExchangeAppleIdTokenForBackendToken() {
+                print("[APIManager] uploadCacheAndGenerateInsights: Successfully exchanged Apple token")
+                authToken = exchangedToken
+            } else {
+                print("[APIManager] uploadCacheAndGenerateInsights: No auth token available, cannot proceed")
+                throw APIManagerError.unauthorized
+            }
+        }
+        
+        print("[APIManager] uploadCacheAndGenerateInsights: Proceeding with auth token")
         
         // Use the backend "generate" endpoint which supports stateless mode (health_data in body)
         let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        } else {
-            print("[APIManager] No backend token available; calling generate endpoint in stateless mode")
-        }
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -965,8 +1004,10 @@ class APIManager: ObservableObject {
         guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                print("[APIManager] Authentication error \(httpResponse.statusCode). Attempting token refresh...")
                 // Try exchanging Apple id_token for app token and retry once
-                if let newToken = await exchangeAppleIdTokenForBackendToken() {
+                if let newToken = await debugExchangeAppleIdTokenForBackendToken() {
+                    print("[APIManager] Successfully obtained new token, retrying request")
                     var retryRequest = URLRequest(url: url)
                     retryRequest.httpMethod = "POST"
                     retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1020,7 +1061,15 @@ class APIManager: ObservableObject {
                         
                         if insights.isEmpty { insights = getDefaultInsights() }
                         return insights
+                    } else if let retryHttp = retryResponse as? HTTPURLResponse {
+                        // More detailed error on retry failure
+                        let errMsg = String(data: retryData, encoding: .utf8) ?? "<no body>"
+                        print("[APIManager] Retry request failed with status \(retryHttp.statusCode): \(errMsg)")
+                        throw APIManagerError.serverError("Retry failed with status \(retryHttp.statusCode): \(errMsg)")
                     }
+                } else {
+                    print("[APIManager] Could not obtain new token for retry")
+                    throw APIManagerError.unauthorized
                 }
                 throw APIManagerError.unauthorized
             }
