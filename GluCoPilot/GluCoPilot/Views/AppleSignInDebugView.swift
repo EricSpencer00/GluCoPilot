@@ -10,61 +10,7 @@ struct AppleSignInDebugView: View {
     @State private var tokenClaims: String = ""
     @State private var manualToken: String = ""
     @State private var backendExchangeResult: String = ""
-    @State pr                            backendExchangeResult = "✅ AI Insights access OK: \(insights.count) insights retrieved"
-                        } catch {
-                            backendExchangeResult = "❌ AI Insights error: \(error.localizedDescription)"
-                        }
-                        #else
-                        backendExchangeResult = "Debug-only: compile with DEBUG to enable"
-                        #endif
-                        
-                        isLoading = false
-                    }
-                }
-                
-                Button("Test Generate Insights Endpoint") {
-                    isLoading = true
-                    Task {
-                        #if DEBUG
-                        guard let api = authManager.apiManager else {
-                            backendExchangeResult = "APIManager not available"
-                            isLoading = false
-                            return
-                        }
-                        
-                        do {
-                            // Create minimal test data
-                            let sampleReading = APIManagerGlucoseReading(
-                                value: 120, 
-                                trend: "Flat", 
-                                timestamp: Date(), 
-                                unit: "mg/dL"
-                            )
-                            
-                            let healthData = APIManagerHealthData(
-                                glucose: [sampleReading],
-                                workouts: nil,
-                                nutrition: nil,
-                                timestamp: Date()
-                            )
-                            
-                            // Try direct endpoint test with empty cache
-                            let insights = try await api.uploadCacheAndGenerateInsights(
-                                healthData: healthData, 
-                                cachedItems: []
-                            )
-                            
-                            backendExchangeResult = "✅ Generate Insights endpoint OK: \(insights.count) insights retrieved"
-                        } catch {
-                            backendExchangeResult = "❌ Generate Insights error: \(error.localizedDescription)"
-                        }
-                        #else
-                        backendExchangeResult = "Debug-only: compile with DEBUG to enable"
-                        #endif
-                        
-                        isLoading = false
-                    }
-                }howClaims: Bool = false
+    @State private var showClaims: Bool = false
     
     var body: some View {
         List {
