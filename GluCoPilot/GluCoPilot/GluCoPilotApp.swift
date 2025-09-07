@@ -28,6 +28,8 @@ struct GluCoPilotApp: App {
                     if refreshed {
                         print("[App] Apple id_token refreshed on becoming active")
                     }
+                    // Ensure HealthKit observation is running and proactively refresh recent glucose samples
+                    healthManager.startObservingAndRefresh()
                 }
             }
         }
