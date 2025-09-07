@@ -1137,6 +1137,44 @@ class APIManager: ObservableObject {
         if insights.isEmpty { insights = getDefaultInsights() }
         return insights
     }
+
+    // Build the exact payload that will be sent to the AI insights endpoint.
+    // This mirrors the payload constructed in `uploadCacheAndGenerateInsights` and
+    // is intended for debugging / payload preview purposes.
+    func buildAIInsightsPayload(healthData: APIManagerHealthData?, cachedItems: [CacheManager.LoggedItem], prompt: String? = nil) -> [String: Any] {
+        var payload: [String: Any] = ["timeframe": "24h", "include_recommendations": true]
+        if let p = prompt, !p.isEmpty { payload["prompt"] = p }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        if let hd = healthData {
+            if let encoded = try? encoder.encode(hd), let healthJson = (try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any] {
+                var mutable = healthJson
+                // Ensure glucose is not included by client
+                if mutable["glucose"] != nil {
+                    mutable["glucose"] = []
+                }
+                payload["health_data"] = mutable
+            } else {
+                payload["health_data"] = ["glucose": [], "activity": [], "food": []]
+            }
+        } else {
+            payload["health_data"] = ["glucose": [], "activity": [], "food": []]
+        }
+
+        let cached: [[String: Any]] = cachedItems.map { item in
+            return [
+                "id": item.id.uuidString,
+                "type": item.type,
+                "payload": item.payload,
+                "timestamp": ISO8601DateFormatter().string(from: item.timestamp)
+            ]
+        }
+        payload["cached_items"] = cached
+
+        return payload
+    }
     
     private func getDefaultInsights() -> [AIInsight] {
         return [

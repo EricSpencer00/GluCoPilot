@@ -11,6 +11,8 @@ struct AIInsightsView: View {
     @State private var errorMessage = ""
     @State private var selectedInsight: AIInsight?
     @State private var userPrompt: String = ""
+    @State private var showPayloadSheet = false
+    @State private var builtPayload: [String: Any] = [:]
     
     var body: some View {
         ScrollView {
@@ -99,6 +101,39 @@ struct AIInsightsView: View {
                     }
                     .padding(.vertical, 40)
                 }
+                // Payload viewer button
+                Button(action: {
+                    Task {
+                        do {
+                            let hk = try await healthKitManager.fetchLast24HoursData()
+                            let apiHealth = APIManagerHealthData(
+                                glucose: hk.glucose.map { g in
+                                    APIManagerGlucoseReading(value: Int(g.value), trend: "", timestamp: g.timestamp, unit: g.unit)
+                                },
+                                workouts: hk.workouts.map { w in
+                                    APIManagerWorkoutData(type: w.name, duration: w.duration, calories: w.calories, startDate: w.startDate, endDate: w.endDate)
+                                },
+                                nutrition: hk.nutrition.map { n in
+                                    APIManagerNutritionData(name: n.name, calories: n.calories, carbs: n.carbs, protein: n.protein, fat: n.fat, timestamp: n.timestamp)
+                                },
+                                timestamp: Date()
+                            )
+                            let since = Calendar.current.date(byAdding: .hour, value: -24, to: Date())!
+                            let cached = CacheManager.shared.getItems(since: since)
+                            builtPayload = apiManager.buildAIInsightsPayload(healthData: apiHealth, cachedItems: cached, prompt: userPrompt)
+                            showPayloadSheet = true
+                        } catch {
+                            print("Failed to build payload: \(error.localizedDescription)")
+                        }
+                    }
+                }) {
+                    Text("View AI Payload")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding(.horizontal)
             }
             .padding(.vertical)
         }
@@ -116,6 +151,9 @@ struct AIInsightsView: View {
         }
         .sheet(item: $selectedInsight) { insight in
             InsightDetailView(insight: insight)
+        }
+        .sheet(isPresented: $showPayloadSheet) {
+            PayloadViewerView(payload: builtPayload, title: "AI Insights Payload")
         }
         .onAppear {
             if insights.isEmpty {
