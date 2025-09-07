@@ -77,6 +77,8 @@ class HealthKitManager: ObservableObject {
     ]
     
     // Add a new property to track read permissions
+    // Persist read permission across instances so we don't re-prompt unnecessarily
+    @AppStorage("hk_read_permissions_granted") private var readPermissionsGrantedStored: Bool = false
     private var readPermissionsGranted: Bool = false
     // Anchor persistence key for incremental glucose sync
     private let glucoseAnchorKey = "hk_glucose_anchor_v1"
@@ -88,6 +90,8 @@ class HealthKitManager: ObservableObject {
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
+    // Initialize read-permissions flag from persisted storage
+    self.readPermissionsGranted = readPermissionsGrantedStored
     }
 
     // Note: HealthKit does not expose a public API to determine READ authorization per type at runtime.
@@ -111,6 +115,7 @@ class HealthKitManager: ObservableObject {
                     // Instead of relying on WRITE status, mark read permissions as granted
                     self?.authorizationStatus = .sharingAuthorized
                     self?.readPermissionsGranted = true
+                    self?.readPermissionsGrantedStored = true
                     // Start observing glucose updates so app receives new samples in foreground & background
                     self?.startGlucoseObserving()
                     Task {
@@ -137,6 +142,8 @@ class HealthKitManager: ObservableObject {
 #endif
                     } else {
                         self?.authorizationStatus = .sharingDenied
+                        self?.readPermissionsGranted = false
+                        self?.readPermissionsGrantedStored = false
                     }
                 }
             }
