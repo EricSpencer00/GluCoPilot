@@ -86,6 +86,7 @@ enum APIManagerError: Error, LocalizedError {
     case maintenanceMode
     case invalidResponse
     case invalidData
+    case reauthenticationRequired
     
     var errorDescription: String? {
         switch self {
@@ -109,6 +110,8 @@ enum APIManagerError: Error, LocalizedError {
             return "Invalid response from server"
         case .invalidData:
             return "Invalid data format"
+    case .reauthenticationRequired:
+        return "Authentication expired — please sign in with Apple again"
         }
     }
 }
@@ -955,6 +958,14 @@ class APIManager: ObservableObject {
             print("[APIManager] uploadCacheAndGenerateInsights: Successfully obtained auth token")
         } catch {
             print("[APIManager] uploadCacheAndGenerateInsights: Error getting token: \(error.localizedDescription)")
+            // If Apple id_token exists but is expired, require re-authentication
+            if let appleToken = keychain.getValue(for: "apple_id_token") {
+                if tokenIsExpired(appleToken) {
+                    print("[APIManager] Apple id_token is expired, user must re-authenticate")
+                    throw APIManagerError.reauthenticationRequired
+                }
+            }
+
             // Try a direct exchange of Apple id_token as a best-effort attempt
             if let exchanged = await debugExchangeAppleIdTokenForBackendToken() {
                 authToken = exchanged
