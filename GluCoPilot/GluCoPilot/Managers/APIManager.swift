@@ -947,33 +947,33 @@ class APIManager: ObservableObject {
     
     // Upload local cache (logs) plus HealthKit context (24h) and ask backend to generate insights
     func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
-        // Be more aggressive about token acquisition - don't accept nil and catch the error
-        let authToken: String
+        // Try to obtain a backend-issued token, but allow unauthenticated/stateless calls
+        // (backend in non-production accepts missing api_key / bearer token for /generate)
+        var authToken: String? = nil
         do {
-            // First try the normal token acquisition flow
             authToken = try await ensureBackendToken()
             print("[APIManager] uploadCacheAndGenerateInsights: Successfully obtained auth token")
         } catch {
             print("[APIManager] uploadCacheAndGenerateInsights: Error getting token: \(error.localizedDescription)")
-            
-            // As a fallback, try direct exchange of Apple token
-            if let exchangedToken = await debugExchangeAppleIdTokenForBackendToken() {
-                print("[APIManager] uploadCacheAndGenerateInsights: Successfully exchanged Apple token")
-                authToken = exchangedToken
+            // Try a direct exchange of Apple id_token as a best-effort attempt
+            if let exchanged = await debugExchangeAppleIdTokenForBackendToken() {
+                authToken = exchanged
+                print("[APIManager] uploadCacheAndGenerateInsights: Obtained token via exchange")
             } else {
-                print("[APIManager] uploadCacheAndGenerateInsights: No auth token available, cannot proceed")
-                throw APIManagerError.unauthorized
+                // No token available; fall back to stateless mode and let the server decide
+                print("[APIManager] uploadCacheAndGenerateInsights: No auth token available; calling generate endpoint in stateless mode")
+                authToken = nil
             }
         }
-        
-        print("[APIManager] uploadCacheAndGenerateInsights: Proceeding with auth token")
-        
+
         // Use the backend "generate" endpoint which supports stateless mode (health_data in body)
         let url = URL(string: "\(baseURL)/api/v1/insights/generate")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
