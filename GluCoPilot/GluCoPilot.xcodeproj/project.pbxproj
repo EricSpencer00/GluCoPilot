@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		97B88BD72E6DF0C300826C6F /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97B88BD62E6DF0C300826C6F /* Launch Screen.storyboard */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		97C4CB2D2E65244A00D4F5BF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		97B88BD62E6DF0C300826C6F /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
 		97C4CB1F2E65244500D4F5BF /* GluCoPilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GluCoPilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C4CB2C2E65244A00D4F5BF /* GluCoPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,6 +80,7 @@
 		97C4CB162E65244500D4F5BF = {
 			isa = PBXGroup;
 			children = (
+				97B88BD62E6DF0C300826C6F /* Launch Screen.storyboard */,
 				97C4CB212E65244500D4F5BF /* GluCoPilot */,
 				97C4CB2F2E65244A00D4F5BF /* GluCoPilotTests */,
 				97C4CB392E65244A00D4F5BF /* GluCoPilotUITests */,
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				97B88BD72E6DF0C300826C6F /* Launch Screen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
