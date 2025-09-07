@@ -97,6 +97,10 @@ GluCoPilot/
 - No cloud dependencies
 - Open source and auditable
 
+Note on AI and data processing:
+
+- The app may use Hugging Face open-source AI models (OSS 20B and OSS 120B) to generate insights. Any health data sent for AI processing is anonymized and processed transiently; the developer does not persist raw health data in external databases by default. See `docs/PRIVACY_POLICY.md` for details.
+
 
 ## 🤝 Contributing
 

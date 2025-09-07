@@ -44,3 +44,21 @@ It is NOT intended for medical diagnosis, treatment, or to replace professional 
 
 This software has not been evaluated by the FDA or other regulatory bodies for medical use.
 It is provided as a personal health management tool under the MIT License terms above.
+
+### AI Models & Data Processing
+
+- GluCoPilot may use open-source AI models to generate insights and recommendations. Specifically, Hugging Face's open-source models (e.g., OSS 20B and OSS 120B) are used when AI-generated insights are produced.
+- All health data used with these AI models is anonymized before it is sent for transient processing. No personal identifiers are included in the data sent to the models.
+- The app's data transformations for AI are stateless and transient: input data is processed for the immediate request and is not persisted by the AI processing pipeline in any database owned by the developer.
+- If you enable any optional cloud features or cloud backups, those services are described separately and require explicit consent.
+
+### Accuracy and Medical Disclaimer
+
+- AI-generated insights are probabilistic and may be inaccurate or incomplete. Do not make clinical or medication decisions based solely on AI output.
+- This software is intended to provide general guidance to support diabetes self-management and is not a substitute for professional medical advice, diagnosis, or treatment.
+- Always consult with a qualified healthcare professional (endocrinologist, diabetes educator, or primary care physician) for medical decisions.
+
+### Data Storage & Ownership
+
+- Health data collected and used by the app is stored locally on the user's device (HealthKit or app-managed encrypted storage) unless the user explicitly enables cloud sync or exports data.
+- The developer does not store or own users' raw health data in an external database by default. Any exception to this will be clearly disclosed and require explicit user consent.
