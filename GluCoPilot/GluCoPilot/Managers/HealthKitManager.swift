@@ -83,6 +83,8 @@ class HealthKitManager: ObservableObject {
 
     // Published latest glucose sample (UI can observe this)
     @Published var latestGlucoseSample: HealthKitGlucoseSample?
+    // Debug: last time we explicitly refreshed from HealthKit
+    @Published var lastHealthKitRefresh: Date?
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -764,6 +766,65 @@ class HealthKitManager: ObservableObject {
         // Store reference so we can stop it if needed
         glucoseAnchoredQuery = anchored
         healthStore.execute(anchored)
+    }
+
+    /// Public: force a refresh of recent glucose data from HealthKit and update published values.
+    /// This will fetch recent samples (default last 6 hours), update `latestGlucoseSample`,
+    /// and run the anchored query path to persist anchors so future observer callbacks behave correctly.
+    func refreshFromHealthKit(lastHours: Int = 6) async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+
+        // If we don't have read permission recorded, do not silently attempt a query; request permissions.
+        if !readPermissionsGranted {
+            // Requesting permissions may present system UI; caller should control when to call this.
+            requestHealthKitPermissions()
+            return
+        }
+
+        let endDate = Date()
+        let startDate = Calendar.current.date(byAdding: .hour, value: -lastHours, to: endDate) ?? Calendar.current.startOfDay(for: endDate)
+
+        do {
+            let samples = try await fetchGlucoseSamples(from: startDate, to: endDate)
+            if let latest = samples.max(by: { $0.timestamp < $1.timestamp }) {
+                self.latestGlucoseSample = latest
+            }
+
+            // Update debug timestamp
+            let now = Date()
+            self.lastHealthKitRefresh = now
+
+            // Debug log summary
+            #if DEBUG
+            let count = samples.count
+            if let latest = samples.max(by: { $0.timestamp < $1.timestamp }) {
+                print("[HealthKitManager] refreshFromHealthKit: fetched \(count) samples, newest=\(latest.timestamp)")
+            } else {
+                print("[HealthKitManager] refreshFromHealthKit: fetched 0 samples")
+            }
+            if let anchorData = UserDefaults.standard.data(forKey: glucoseAnchorKey) {
+                print("[HealthKitManager] anchor present (\(anchorData.count) bytes)")
+            } else {
+                print("[HealthKitManager] anchor: none")
+            }
+            #endif
+
+            // Also run anchored query path to pick up any missed samples and persist anchor
+            await fetchNewGlucoseSamplesViaAnchor()
+        } catch {
+            #if DEBUG
+            print("[HealthKitManager] refreshFromHealthKit failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    /// Convenience helper to start observing glucose samples and immediately trigger a refresh.
+    /// Safe to call repeatedly.
+    func startObservingAndRefresh(lastHours: Int = 6) {
+        startGlucoseObserving()
+        Task {
+            await refreshFromHealthKit(lastHours: lastHours)
+        }
     }
 
 }
