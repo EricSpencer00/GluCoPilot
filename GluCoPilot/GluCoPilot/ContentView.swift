@@ -19,7 +19,7 @@ struct ContentView: View {
                 let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
                 let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
 
-                if authManager.requiresHealthKitAuthorization || !completedSetup || !hkAuthorized {
+                if authManager.requiresHealthKitAuthorization || (!completedSetup && !hkAuthorized) {
                     HealthKitSetupView(onComplete: {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
                         // When user completes setup, clear the requirement so the app can proceed

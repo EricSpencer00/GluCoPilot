@@ -93,7 +93,13 @@ class HealthKitManager: ObservableObject {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
     // Initialize read-permissions flag from persisted storage
     self.readPermissionsGranted = readPermissionsGrantedStored
+        // Reflect persisted read-permission in authorizationStatus so UI can observe it
+        if self.readPermissionsGranted {
+            self.authorizationStatus = .sharingAuthorized
+            self.hasLoggedAuthorizationGranted = true
+        }
     }
+
 
     // Note: HealthKit does not expose a public API to determine READ authorization per type at runtime.
     // authorizationStatus(for:) only reflects WRITE permission. Do NOT use it to gate read queries.
