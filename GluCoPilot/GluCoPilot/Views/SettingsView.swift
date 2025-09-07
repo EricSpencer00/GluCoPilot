@@ -101,34 +101,42 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 
-                HStack {
-                    Image(systemName: "shield.checkered")
-                        .foregroundStyle(.green)
-                        .frame(width: 25)
-                    
-                    Text("Privacy Policy")
-                        .font(.subheadline)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                NavigationLink {
+                    StaticDocumentView(title: "Privacy Policy", content: StaticDocumentView.privacyPlaceholder)
+                } label: {
+                    HStack {
+                        Image(systemName: "shield.checkered")
+                            .foregroundStyle(.green)
+                            .frame(width: 25)
+
+                        Text("Privacy Policy")
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
                 
-                HStack {
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(.blue)
-                        .frame(width: 25)
-                    
-                    Text("Terms of Service")
-                        .font(.subheadline)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                NavigationLink {
+                    StaticDocumentView(title: "Terms of Service", content: StaticDocumentView.termsPlaceholder)
+                } label: {
+                    HStack {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(.blue)
+                            .frame(width: 25)
+
+                        Text("Terms of Service")
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
 
@@ -143,34 +151,42 @@ struct SettingsView: View {
             
             // Support Section
             Section("Support") {
-                HStack {
-                    Image(systemName: "questionmark.circle")
-                        .foregroundStyle(.blue)
-                        .frame(width: 25)
-                    
-                    Text("Help & Support")
-                        .font(.subheadline)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                NavigationLink {
+                    StaticDocumentView(title: "Help & Support", content: StaticDocumentView.helpPlaceholder)
+                } label: {
+                    HStack {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(.blue)
+                            .frame(width: 25)
+
+                        Text("Help & Support")
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
-                
-                HStack {
-                    Image(systemName: "envelope")
-                        .foregroundStyle(.blue)
-                        .frame(width: 25)
-                    
-                    Text("Contact Us")
-                        .font(.subheadline)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+
+                NavigationLink {
+                    StaticDocumentView(title: "Contact Us", content: StaticDocumentView.contactPlaceholder)
+                } label: {
+                    HStack {
+                        Image(systemName: "envelope")
+                            .foregroundStyle(.blue)
+                            .frame(width: 25)
+
+                        Text("Contact Us")
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
             
