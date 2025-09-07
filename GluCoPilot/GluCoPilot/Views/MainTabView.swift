@@ -100,7 +100,7 @@ struct DashboardView: View {
             VStack(spacing: 16) {
                 WelcomeBannerView()
 
-                HStack(spacing: 12) {
+                VStack(spacing: 12) {
                     LatestGlucoseView()
                         .frame(maxWidth: .infinity)
 
@@ -164,10 +164,7 @@ struct WelcomeBannerView: View {
                 .foregroundColor(.secondary)
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Material.ultraThinMaterial)
-        )
+    .cardStyle(baseColor: Color.blue, cornerRadius: 16)
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
             currentTime = Date()
         }
@@ -260,11 +257,8 @@ struct HealthKitStatsView: View {
                 )
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Material.ultraThinMaterial)
-        )
+    .padding()
+    .cardStyle(baseColor: Color.mint, cornerRadius: 16)
     }
 }
 
@@ -303,11 +297,8 @@ struct HealthStatCard: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Material.ultraThinMaterial)
-        )
+    .padding()
+    .cardStyle(baseColor: color.opacity(0.9), cornerRadius: 12)
     }
 }
 
@@ -389,11 +380,8 @@ struct LatestGlucoseView: View {
                 }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Material.ultraThinMaterial)
-        )
+    .padding()
+    .cardStyle(baseColor: Color.pink, cornerRadius: 16)
         .task {
             await fetchLatestGlucose()
         }
@@ -520,11 +508,8 @@ struct RecentActivityView: View {
                 }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Material.ultraThinMaterial)
-        )
+    .padding()
+    .cardStyle(baseColor: Color.green, cornerRadius: 16)
     }
 }
 
@@ -563,11 +548,8 @@ struct HealthKitActivitiesView: View {
                 }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Material.ultraThinMaterial)
-        )
+    .padding()
+    .cardStyle(baseColor: Color.cyan, cornerRadius: 16)
         .task {
             await fetchWorkouts()
         }

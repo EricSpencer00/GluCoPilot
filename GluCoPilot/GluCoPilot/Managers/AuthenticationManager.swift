@@ -26,6 +26,61 @@ class AuthenticationManager: NSObject, ObservableObject {
         super.init()
         checkAuthenticationState()
     }
+
+    // Attempt to refresh Apple id_token if it's missing or expired.
+    // Returns true when a valid token is present after the call.
+    func refreshAppleIDTokenIfNeeded() async -> Bool {
+        // If we already have a valid token, nothing to do
+        if let token = keychain.getValue(for: "apple_id_token"), !self.tokenIsExpired(token) {
+            return true
+        }
+
+        guard let userID = keychain.getValue(for: "apple_user_id") else {
+            return false
+        }
+
+        // Check credential state with Apple — if not authorized, require re-auth
+        let provider = ASAuthorizationAppleIDProvider()
+        let state: ASAuthorizationAppleIDProvider.CredentialState = await withCheckedContinuation { cont in
+            provider.getCredentialState(forUserID: userID) { state, error in
+                // If provider returns a state, resume with it; otherwise default to .revoked
+                cont.resume(returning: state)
+            }
+        }
+
+        if state != .authorized {
+            print("[AuthManager] Apple credential state not authorized: \(state.rawValue)")
+            return false
+        }
+
+        // Try to request a fresh credential; this may be silent depending on system state,
+        // but could present UI if the system requires it.
+        if let credential = await requestAppleIDCredential() {
+            if let identityToken = credential.identityToken,
+               let idTokenString = String(data: identityToken, encoding: .utf8) {
+                keychain.setValue(idTokenString, for: "apple_id_token")
+                print("[AuthManager] Silently refreshed apple_id_token and saved to keychain")
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // Local helper to check JWT expiry
+    private func tokenIsExpired(_ token: String, leeway: TimeInterval = 60) -> Bool {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return true }
+        var payload = String(parts[1])
+        let remainder = payload.count % 4
+        if remainder > 0 { payload += String(repeating: "=", count: 4 - remainder) }
+        payload = payload.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: payload),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = obj["exp"] as? TimeInterval else { return true }
+        let expDate = Date(timeIntervalSince1970: exp)
+        return Date() > expDate.addingTimeInterval(-leeway)
+    }
     
     func checkAuthenticationState() {
         // Check if we have stored credentials

@@ -6,6 +6,7 @@ struct LogView: View {
     @State private var valueField: String = ""
     @State private var noteField: String = ""
     @State private var carbsField: String = ""
+    @State private var logDate: Date = Date()
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,9 @@ struct LogView: View {
                                 .textFieldStyle(.roundedBorder)
                         }
                         .padding(.horizontal)
+                        DatePicker("Time", selection: $logDate, displayedComponents: [.date, .hourAndMinute])
+                            .datePickerStyle(.compact)
+                            .padding(.horizontal)
                     } else if selectedType == "insulin" {
                         VStack(spacing: 8) {
                             TextField("Insulin dose (units)", text: $valueField)
@@ -41,9 +45,15 @@ struct LogView: View {
                                 .textFieldStyle(.roundedBorder)
                         }
                         .padding(.horizontal)
+                        DatePicker("Time", selection: $logDate, displayedComponents: [.date, .hourAndMinute])
+                            .datePickerStyle(.compact)
+                            .padding(.horizontal)
                     } else {
                         TextField("Note", text: $noteField)
                             .textFieldStyle(.roundedBorder)
+                            .padding(.horizontal)
+                        DatePicker("Time", selection: $logDate, displayedComponents: [.date, .hourAndMinute])
+                            .datePickerStyle(.compact)
                             .padding(.horizontal)
                     }
 
@@ -104,7 +114,7 @@ struct LogView: View {
     }
 
     private func addLog() {
-        let now = Date()
+    let now = logDate
         switch selectedType {
         case "food":
             let payload: [String: String] = ["description": valueField, "carbs": carbsField]

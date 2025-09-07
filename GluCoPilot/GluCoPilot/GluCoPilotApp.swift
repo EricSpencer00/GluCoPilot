@@ -7,6 +7,7 @@ struct GluCoPilotApp: App {
     @StateObject private var authManager = AuthenticationManager()
     @StateObject private var healthManager = HealthKitManager()
     @StateObject private var apiManager = APIManager()
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some Scene {
         WindowGroup {
@@ -19,6 +20,16 @@ struct GluCoPilotApp: App {
                 // (for example, `HealthKitSetupView`) and should not be triggered unconditionally
                 // on app launch. Requesting too early can cause sandbox/service entitlement errors
                 // or unexpected system logs when running in simulator/device environments.
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                Task {
+                    let refreshed = await authManager.refreshAppleIDTokenIfNeeded()
+                    if refreshed {
+                        print("[App] Apple id_token refreshed on becoming active")
+                    }
+                }
+            }
         }
     }
 }

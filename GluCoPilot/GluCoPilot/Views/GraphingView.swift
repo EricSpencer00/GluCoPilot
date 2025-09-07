@@ -4,7 +4,8 @@ import Charts
 struct GraphingView: View {
     @EnvironmentObject private var apiManager: APIManager
     @EnvironmentObject private var healthKitManager: HealthKitManager
-    @State private var selectedTimeframe: Timeframe = .day
+    // Graphs should only show the last 24 hours
+    private let selectedTimeframe: Timeframe = .day
     @State private var showGlucose: Bool = true
     @State private var showFood: Bool = true
     @State private var showWorkouts: Bool = true
@@ -59,23 +60,13 @@ struct GraphingView: View {
                             .padding(.horizontal)
                     }
                     
-                    // Timeframe Selector
-                    Picker("Timeframe", selection: $selectedTimeframe) {
-                        ForEach(Timeframe.allCases) { timeframe in
-                            Text(timeframe.title).tag(timeframe)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .onChange(of: selectedTimeframe) { _, _ in
-                        loadData()
-                    }
+                    // Timeframe fixed to last 24 hours
                     
                     // Data Toggle Options
-                    HStack {
-                        DataToggle(isEnabled: $showGlucose, label: "Glucose", color: .red)
-                        DataToggle(isEnabled: $showFood, label: "Food", color: .green)
-                        DataToggle(isEnabled: $showWorkouts, label: "Activity", color: .orange)
+                    HStack(spacing: 12) {
+                        DataToggle(isEnabled: $showGlucose, systemImage: "drop.fill", color: .red)
+                        DataToggle(isEnabled: $showFood, systemImage: "fork.knife", color: .green)
+                        DataToggle(isEnabled: $showWorkouts, systemImage: "figure.walk", color: .orange)
                     }
                     .padding(.horizontal)
                     
@@ -318,20 +309,16 @@ struct CombinedDataChart: View {
             }
         }
         .chartYScale(domain: 40...300)
-        .chartXAxis {
+                .chartXAxis {
             AxisMarks(values: .automatic) { value in
                 if let date = value.as(Date.self) {
                     let hour = Calendar.current.component(.hour, from: date)
-                    let isAxisLabelHour = timeframe == .day ? hour % 4 == 0 : hour == 0
-                    
+                    let isAxisLabelHour = hour % 4 == 0
+
                     if isAxisLabelHour {
                         AxisGridLine()
                         AxisValueLabel {
-                            if timeframe == .day {
-                                Text(date, format: .dateTime.hour())
-                            } else {
-                                Text(date, format: .dateTime.month().day())
-                            }
+                            Text(date, format: .dateTime.hour())
                         }
                     }
                 }
@@ -359,24 +346,48 @@ struct CombinedDataChart: View {
     }
 }
 
-struct DataToggle: View {
-    @Binding var isEnabled: Bool
-    let label: String
-    let color: Color
-    
-    var body: some View {
-        Toggle(isOn: $isEnabled) {
-            HStack {
-                Circle()
-                    .fill(color)
-                    .frame(width: 12, height: 12)
-                Text(label)
-                    .font(.subheadline)
-            }
+struct CompactSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.label
+            Spacer()
+            Rectangle()
+                .fill(configuration.isOn ? Color.accentColor : Color.secondary.opacity(0.2))
+                .frame(width: 36, height: 20)
+                .cornerRadius(10)
+                .overlay(
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(radius: 1)
+                        .padding(2)
+                        .offset(x: configuration.isOn ? 8 : -8)
+                        .animation(.easeInOut(duration: 0.12), value: configuration.isOn)
+                )
+                .onTapGesture { configuration.isOn.toggle() }
         }
-        .toggleStyle(.switch)
+        .frame(minWidth: 0)
     }
 }
+
+struct DataToggle: View {
+    @Binding var isEnabled: Bool
+    let systemImage: String
+    let color: Color
+
+    var body: some View {
+        Toggle(isOn: $isEnabled) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16))
+                    .foregroundColor(color)
+                    .frame(width: 20, height: 20)
+            }
+        }
+        .toggleStyle(CompactSwitchStyle())
+        .frame(maxWidth: 80)
+    }
+}
+
 
 struct LegendItem: View {
     let color: Color

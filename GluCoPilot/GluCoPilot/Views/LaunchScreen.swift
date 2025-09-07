@@ -8,11 +8,16 @@ struct LaunchScreen: View {
         ZStack {
             // Background gradient
             LinearGradient(
-                colors: [.blue.opacity(0.8), .purple.opacity(0.6)],
+                colors: [.blue.opacity(0.9), .purple.opacity(0.7), .pink.opacity(0.4)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
+
+            // Subtle glossy overlay to add depth
+            LinearGradient(colors: [Color.white.opacity(0.06), Color.white.opacity(0.0)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .blendMode(.overlay)
             
             VStack(spacing: 30) {
                 // App icon animation
