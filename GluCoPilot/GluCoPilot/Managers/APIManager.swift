@@ -740,14 +740,52 @@ class APIManager: ObservableObject {
         var payload: [String: Any] = ["timeframe": "24h", "include_recommendations": true]
         if let prompt = prompt { payload["prompt"] = prompt }
         if let healthData = healthData {
-            // Build backend-expected structure and include full health details (glucose, activity, food)
-            let glucose = (healthData.glucose).map { g in
-                return [
-                    "value": g.value,
-                    "trend": g.trend,
-                    "unit": g.unit,
-                    "timestamp": ISO8601DateFormatter().string(from: g.timestamp)
-                ] as [String: Any]
+            // Build backend-expected structure but prefer a compact glucose representation
+            // when readings appear to come from a CGM (roughly 5 minutes apart).
+            let iso = ISO8601DateFormatter()
+
+            // Prepare glucose raw tuples
+            let glucoseTuples = (healthData.glucose).map { g in
+                return (value: g.value, timestamp: g.timestamp)
+            }
+
+            var glucosePayload: Any
+            if !glucoseTuples.isEmpty {
+                // Extract values and timestamps
+                var values: [Int] = []
+                var timestamps: [Date] = []
+                for t in glucoseTuples { values.append(t.value); timestamps.append(t.timestamp) }
+
+                // Detect ~5-minute cadence (allow small tolerance)
+                var isFiveMin = true
+                if timestamps.count > 1 {
+                    for i in 1..<timestamps.count {
+                        let delta = timestamps[i].timeIntervalSince(timestamps[i-1])
+                        if abs(delta - 300.0) > 30.0 { isFiveMin = false; break }
+                    }
+                }
+
+                if isFiveMin {
+                    // Compact form: start timestamp + interval + raw values
+                    glucosePayload = [
+                        "values": values,
+                        "interval_minutes": 5,
+                        "start_timestamp": iso.string(from: timestamps.first!)
+                    ]
+                } else {
+                    // Fallback compact form: just values + simple time labels for readability
+                    let df = DateFormatter()
+                    df.dateFormat = "h:mma"
+                    var labels: [String] = []
+                    for d in timestamps {
+                        var lbl = df.string(from: d).lowercased()
+                        lbl = lbl.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
+                        labels.append(lbl)
+                    }
+                    glucosePayload = ["values": values, "time_labels": labels]
+                }
+            } else {
+                glucosePayload = []
             }
 
             let activity = (healthData.workouts ?? []).map { w in
@@ -772,7 +810,7 @@ class APIManager: ObservableObject {
             }
 
             payload["health_data"] = [
-                "glucose": glucose,
+                "glucose": glucosePayload,
                 "activity": activity,
                 "food": food
             ]
@@ -998,16 +1036,52 @@ class APIManager: ObservableObject {
         var healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
         // Preserve glucose and ensure timestamps are ISO8601 strings where possible
         if let glucoseArr = healthJson["glucose"] as? [[String: Any]] {
-            let converted = glucoseArr.map { g -> [String: Any] in
-                var out = g
-                if let ts = g["timestamp"] as? String {
-                    out["timestamp"] = ts
-                } else if let tsDate = g["timestamp"] as? Date {
-                    out["timestamp"] = ISO8601DateFormatter().string(from: tsDate)
+            // Convert to compact representation if possible
+            var tuples: [(Int, Date)] = []
+            let iso = ISO8601DateFormatter()
+            for g in glucoseArr {
+                if let v = g["value"] as? Int {
+                    if let tsStr = g["timestamp"] as? String, let ts = iso.date(from: tsStr) {
+                        tuples.append((v, ts))
+                    } else if let ts = g["timestamp"] as? Date {
+                        tuples.append((v, ts))
+                    }
                 }
-                return out
             }
-            healthJson["glucose"] = converted
+
+            if tuples.isEmpty {
+                healthJson["glucose"] = []
+            } else {
+                // Detect 5-minute cadence
+                var isFiveMin = true
+                if tuples.count > 1 {
+                    for i in 1..<tuples.count {
+                        let delta = tuples[i].1.timeIntervalSince(tuples[i-1].1)
+                        if abs(delta - 300.0) > 30.0 { isFiveMin = false; break }
+                    }
+                }
+
+                if isFiveMin {
+                    let values = tuples.map { $0.0 }
+                    healthJson["glucose"] = [
+                        "values": values,
+                        "interval_minutes": 5,
+                        "start_timestamp": iso.string(from: tuples.first!.1)
+                    ]
+                } else {
+                    let df = DateFormatter()
+                    df.dateFormat = "h:mma"
+                    var labels: [String] = []
+                    var values: [Int] = []
+                    for t in tuples {
+                        var lbl = df.string(from: t.1).lowercased()
+                        lbl = lbl.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
+                        labels.append(lbl)
+                        values.append(t.0)
+                    }
+                    healthJson["glucose"] = ["values": values, "time_labels": labels]
+                }
+            }
         }
         payload["health_data"] = healthJson
         
@@ -1169,16 +1243,51 @@ class APIManager: ObservableObject {
                 var mutable = healthJson
                 // Ensure glucose timestamps are serialized as ISO8601 strings
                 if let glucoseArr = mutable["glucose"] as? [[String: Any]] {
-                    let converted = glucoseArr.map { g -> [String: Any] in
-                        var out = g
-                        if let ts = g["timestamp"] as? String {
-                            out["timestamp"] = ts
-                        } else if let tsDate = g["timestamp"] as? Date {
-                            out["timestamp"] = ISO8601DateFormatter().string(from: tsDate)
+                    // Convert to compact representation for preview
+                    var tuples: [(Int, Date)] = []
+                    let iso = ISO8601DateFormatter()
+                    for g in glucoseArr {
+                        if let v = g["value"] as? Int {
+                            if let tsStr = g["timestamp"] as? String, let ts = iso.date(from: tsStr) {
+                                tuples.append((v, ts))
+                            } else if let ts = g["timestamp"] as? Date {
+                                tuples.append((v, ts))
+                            }
                         }
-                        return out
                     }
-                    mutable["glucose"] = converted
+
+                    if tuples.isEmpty {
+                        mutable["glucose"] = []
+                    } else {
+                        var isFiveMin = true
+                        if tuples.count > 1 {
+                            for i in 1..<tuples.count {
+                                let delta = tuples[i].1.timeIntervalSince(tuples[i-1].1)
+                                if abs(delta - 300.0) > 30.0 { isFiveMin = false; break }
+                            }
+                        }
+
+                        if isFiveMin {
+                            let values = tuples.map { $0.0 }
+                            mutable["glucose"] = [
+                                "values": values,
+                                "interval_minutes": 5,
+                                "start_timestamp": iso.string(from: tuples.first!.1)
+                            ]
+                        } else {
+                            let df = DateFormatter()
+                            df.dateFormat = "h:mma"
+                            var labels: [String] = []
+                            var values: [Int] = []
+                            for t in tuples {
+                                var lbl = df.string(from: t.1).lowercased()
+                                lbl = lbl.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
+                                labels.append(lbl)
+                                values.append(t.0)
+                            }
+                            mutable["glucose"] = ["values": values, "time_labels": labels]
+                        }
+                    }
                 }
                 payload["health_data"] = mutable
             } else {
