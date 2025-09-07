@@ -577,7 +577,6 @@ struct WorkoutRow: View {
                 .font(.title3)
                 .foregroundColor(workoutColor(for: workout.name))
                 .frame(width: 40, height: 40)
-                @EnvironmentObject private var healthKitManager: HealthKitManager
                 .background(
                     Circle()
                         .fill(workoutColor(for: workout.name).opacity(0.2))
@@ -601,10 +600,11 @@ struct WorkoutRow: View {
         }
     }
     
-                                Button(action: {
-                                    // Trigger a sync via HealthKit permissions using the shared manager
-                                    healthKitManager.requestHealthKitPermissions()
-                                }) {
+    private func workoutIcon(for name: String) -> String {
+        let lowercasedName = name.lowercased()
+        if lowercasedName.contains("run") {
+            return "figure.run"
+        } else if lowercasedName.contains("walk") {
             return "figure.walk"
         } else if lowercasedName.contains("cycle") || lowercasedName.contains("bike") {
             return "figure.outdoor.cycle"
