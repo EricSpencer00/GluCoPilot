@@ -740,11 +740,16 @@ class APIManager: ObservableObject {
         var payload: [String: Any] = ["timeframe": "24h", "include_recommendations": true]
         if let prompt = prompt { payload["prompt"] = prompt }
         if let healthData = healthData {
-            // Build backend-expected structure
-            // NOTE: glucose is intentionally omitted from outgoing payloads. HealthKit is the canonical
-            // source and glucose is no longer sent to the backend except when the backend explicitly
-            // requests it for AI-only operations. To avoid accidental sharing, send an empty array here.
-            let glucose: [[String: Any]] = []
+            // Build backend-expected structure and include full health details (glucose, activity, food)
+            let glucose = (healthData.glucose).map { g in
+                return [
+                    "value": g.value,
+                    "trend": g.trend,
+                    "unit": g.unit,
+                    "timestamp": ISO8601DateFormatter().string(from: g.timestamp)
+                ] as [String: Any]
+            }
+
             let activity = (healthData.workouts ?? []).map { w in
                 return [
                     "type": w.type,
@@ -754,6 +759,7 @@ class APIManager: ObservableObject {
                     "end": ISO8601DateFormatter().string(from: w.endDate)
                 ] as [String: Any]
             }
+
             let food = (healthData.nutrition ?? []).map { n in
                 return [
                     "name": n.name,
@@ -764,6 +770,7 @@ class APIManager: ObservableObject {
                     "timestamp": ISO8601DateFormatter().string(from: n.timestamp)
                 ] as [String: Any]
             }
+
             payload["health_data"] = [
                 "glucose": glucose,
                 "activity": activity,
@@ -989,9 +996,18 @@ class APIManager: ObservableObject {
         var payload: [String: Any] = [:]
         let healthDataEncoded = try encoder.encode(healthData)
         var healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
-        // Ensure glucose is never included in outgoing payloads from the client.
-        if healthJson["glucose"] != nil {
-            healthJson["glucose"] = []
+        // Preserve glucose and ensure timestamps are ISO8601 strings where possible
+        if let glucoseArr = healthJson["glucose"] as? [[String: Any]] {
+            let converted = glucoseArr.map { g -> [String: Any] in
+                var out = g
+                if let ts = g["timestamp"] as? String {
+                    out["timestamp"] = ts
+                } else if let tsDate = g["timestamp"] as? Date {
+                    out["timestamp"] = ISO8601DateFormatter().string(from: tsDate)
+                }
+                return out
+            }
+            healthJson["glucose"] = converted
         }
         payload["health_data"] = healthJson
         
@@ -1151,9 +1167,18 @@ class APIManager: ObservableObject {
         if let hd = healthData {
             if let encoded = try? encoder.encode(hd), let healthJson = (try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any] {
                 var mutable = healthJson
-                // Ensure glucose is not included by client
-                if mutable["glucose"] != nil {
-                    mutable["glucose"] = []
+                // Ensure glucose timestamps are serialized as ISO8601 strings
+                if let glucoseArr = mutable["glucose"] as? [[String: Any]] {
+                    let converted = glucoseArr.map { g -> [String: Any] in
+                        var out = g
+                        if let ts = g["timestamp"] as? String {
+                            out["timestamp"] = ts
+                        } else if let tsDate = g["timestamp"] as? Date {
+                            out["timestamp"] = ISO8601DateFormatter().string(from: tsDate)
+                        }
+                        return out
+                    }
+                    mutable["glucose"] = converted
                 }
                 payload["health_data"] = mutable
             } else {
