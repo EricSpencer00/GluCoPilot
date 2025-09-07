@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import SwiftUI
+import WidgetKit
 
 // MARK: - HealthKit Models
 struct HealthKitManagerHealthData: Codable {
@@ -818,6 +819,14 @@ class HealthKitManager: ObservableObject {
 
             // Also run anchored query path to pick up any missed samples and persist anchor
             await fetchNewGlucoseSamplesViaAnchor()
+
+            // Notify WidgetKit timelines to reload so widgets can pick up the new data.
+            if #available(iOS 14.0, *) {
+                WidgetCenter.shared.reloadAllTimelines()
+                #if DEBUG
+                print("[HealthKitManager] requested WidgetCenter.reloadAllTimelines()")
+                #endif
+            }
         } catch {
             #if DEBUG
             print("[HealthKitManager] refreshFromHealthKit failed: \(error.localizedDescription)")
