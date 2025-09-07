@@ -741,14 +741,10 @@ class APIManager: ObservableObject {
         if let prompt = prompt { payload["prompt"] = prompt }
         if let healthData = healthData {
             // Build backend-expected structure
-            let glucose = healthData.glucose.map { g in
-                return [
-                    "value": g.value,
-                    "trend": g.trend,
-                    "timestamp": ISO8601DateFormatter().string(from: g.timestamp),
-                    "unit": g.unit
-                ] as [String: Any]
-            }
+            // NOTE: glucose is intentionally omitted from outgoing payloads. HealthKit is the canonical
+            // source and glucose is no longer sent to the backend except when the backend explicitly
+            // requests it for AI-only operations. To avoid accidental sharing, send an empty array here.
+            let glucose: [[String: Any]] = []
             let activity = (healthData.workouts ?? []).map { w in
                 return [
                     "type": w.type,
@@ -992,7 +988,11 @@ class APIManager: ObservableObject {
         // Build payload
         var payload: [String: Any] = [:]
         let healthDataEncoded = try encoder.encode(healthData)
-        let healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
+        var healthJson = (try? JSONSerialization.jsonObject(with: healthDataEncoded)) as? [String: Any] ?? [:]
+        // Ensure glucose is never included in outgoing payloads from the client.
+        if healthJson["glucose"] != nil {
+            healthJson["glucose"] = []
+        }
         payload["health_data"] = healthJson
         
         // Convert cached items
