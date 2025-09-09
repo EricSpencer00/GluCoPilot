@@ -47,6 +47,20 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(healthManager.isHealthKitAvailable ? .green : .secondary)
                     }
+                    
+                    Spacer()
+                    
+                    if healthManager.authorizationStatus == .sharingAuthorized {
+                        NavigationLink(destination: HealthDataAccessView()) {
+                            Text("Manage")
+                        }
+                    } else {
+                        Button("Connect") {
+                            healthManager.requestHealthKitPermissions()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.blue)
+                    }
 
                     Spacer()
 

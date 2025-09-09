@@ -57,6 +57,9 @@ class HealthKitManager: ObservableObject {
     // Toggle to control whether HealthKit permission/debug logs are printed
     @AppStorage("showHealthKitPermissionLogs") var showPermissionLogs: Bool = false
     
+    // Flag to prevent any automatic initialization on app start
+    @AppStorage("shouldInitializeHealthKit") var shouldInitializeHealthKit: Bool = false
+    
     private let healthStore = HKHealthStore()
     // Track active queries for proper cleanup
     private var activeQueries: [HKQuery] = []
@@ -95,6 +98,7 @@ class HealthKitManager: ObservableObject {
     private var shouldRequestPermissionsAutomatically = false
     
     init() {
+        // Only check if HealthKit is available, but don't request permissions or start observations
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
         // Initialize read-permissions flag from persisted storage
         self.readPermissionsGranted = readPermissionsGrantedStored
@@ -115,6 +119,10 @@ class HealthKitManager: ObservableObject {
             print("HealthKit is not available on this device")
             return
         }
+        
+        // Mark that we've explicitly initialized HealthKit
+        shouldInitializeHealthKit = true
+        
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
@@ -681,6 +689,11 @@ class HealthKitManager: ObservableObject {
     /// Start observing glucose samples and enable background delivery.
     /// Safe to call multiple times; will not register duplicates.
     func startGlucoseObserving() {
+        // Skip if we shouldn't initialize HealthKit
+        guard shouldInitializeHealthKit else {
+            return
+        }
+        
         guard HKHealthStore.isHealthDataAvailable(), readPermissionsGranted else {
 #if DEBUG
             print("[HealthKitManager] Cannot start glucose observing: HealthKit not available or permissions not granted")
@@ -813,6 +826,11 @@ class HealthKitManager: ObservableObject {
     /// This will fetch recent samples (default last 6 hours), update `latestGlucoseSample`,
     /// and run the anchored query path to persist anchors so future observer callbacks behave correctly.
     func refreshFromHealthKit(lastHours: Int = 6) async {
+        // Skip if we shouldn't initialize HealthKit
+        guard shouldInitializeHealthKit else {
+            return
+        }
+        
         guard HKHealthStore.isHealthDataAvailable() else { return }
         
         // If we don't have read permission recorded, do not silently attempt a query; request permissions.
@@ -870,6 +888,11 @@ class HealthKitManager: ObservableObject {
     /// Convenience helper to start observing glucose samples and immediately trigger a refresh.
     /// Safe to call repeatedly.
     func startObservingAndRefresh(lastHours: Int = 6) {
+        // Skip if we shouldn't initialize HealthKit
+        guard shouldInitializeHealthKit else {
+            return
+        }
+        
         startGlucoseObserving()
         Task {
             await refreshFromHealthKit(lastHours: lastHours)

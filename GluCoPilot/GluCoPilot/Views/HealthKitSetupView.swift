@@ -107,6 +107,10 @@ struct HealthKitSetupView: View {
                 isRequesting = false
                 if healthKitManager.authorizationStatus == .sharingAuthorized {
                     requestResult = "Permissions granted \u{2014} syncing data..."
+                    // Mark that user has completed setup
+                    UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
+                    UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
+                    healthKitManager.shouldInitializeHealthKit = true
                     // Fetch initial properties
                     Task {
                         await healthKitManager.updatePublishedProperties()
@@ -120,6 +124,8 @@ struct HealthKitSetupView: View {
     }
 
     private func skip() {
+        // Pass back to ContentView that user skipped HealthKit
+        UserDefaults.standard.set(true, forKey: "hasSkippedHealthKitSetup")
         onComplete?()
     }
 

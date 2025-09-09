@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var isLaunching = true
     @State private var showOnboarding = false
     @State private var showMedicalDisclaimer = false
+    @State private var showSkippedWarning = false
     
     
     var body: some View {
@@ -44,6 +45,13 @@ struct ContentView: View {
                         .environmentObject(apiManager)
                         .environmentObject(healthKitManager)
                         .transition(.move(edge: .bottom))
+                        .onAppear {
+                            // Check if user skipped HealthKit setup
+                            if UserDefaults.standard.bool(forKey: "hasSkippedHealthKitSetup") && 
+                               !UserDefaults.standard.bool(forKey: "hasAcknowledgedLimitedFunctionality") {
+                                showSkippedWarning = true
+                            }
+                        }
                 }
             } else {
                 if showOnboarding {
@@ -88,6 +96,22 @@ struct ContentView: View {
             if isAuthenticated {
                 showOnboarding = false
             }
+        }
+        .alert("Limited Functionality", isPresented: $showSkippedWarning) {
+            Button("Connect HealthKit") {
+                // Reset the skipped flag
+                UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
+                // Force show the HealthKit setup again
+                authManager.requiresHealthKitAuthorization = true
+                showSkippedWarning = false
+            }
+            Button("Continue Limited") {
+                // Mark that user has acknowledged the limited functionality
+                UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
+                showSkippedWarning = false
+            }
+        } message: {
+            Text("Without HealthKit access, GluCoPilot will have limited functionality. You won't be able to see glucose trends, health metrics, or get personalized insights.")
         }
     }
 }
