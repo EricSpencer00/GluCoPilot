@@ -163,8 +163,19 @@ class APIManagerKeychainHelper {
 @MainActor
 class APIManager: ObservableObject {
     private let baseURL = "https://glucopilot-8ed6389c53c8.herokuapp.com"
-    private let session = URLSession.shared
+    private let session: URLSession
     private let keychain = APIManagerKeychainHelper()
+    
+    init() {
+        // Configure URLSession with enhanced security
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 30 // 30 seconds timeout
+        configuration.timeoutIntervalForResource = 60 // 60 seconds resource timeout
+        
+        // Set proper TLS settings
+        let urlSessionDelegate = APIManagerURLSessionDelegate()
+        self.session = URLSession(configuration: configuration, delegate: urlSessionDelegate, delegateQueue: nil)
+    }
     
     // Clear any stored auth tokens
     func clearTokens() {

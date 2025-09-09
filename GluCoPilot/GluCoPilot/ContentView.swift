@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var healthKitManager = HealthKitManager()
     @State private var isLaunching = true
     @State private var showOnboarding = false
+    @State private var showMedicalDisclaimer = false
     
     
     var body: some View {
@@ -18,8 +19,15 @@ struct ContentView: View {
                 // Otherwise, fall back to the persisted flag / normal flow.
                 let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
                 let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
+                let hasAcceptedMedicalDisclaimer = UserDefaults.standard.bool(forKey: "hasAcceptedMedicalDisclaimer")
 
-                if authManager.requiresHealthKitAuthorization || (!completedSetup && !hkAuthorized) {
+                if showMedicalDisclaimer || !hasAcceptedMedicalDisclaimer {
+                    MedicalDisclaimerView(onAccept: {
+                        UserDefaults.standard.set(true, forKey: "hasAcceptedMedicalDisclaimer")
+                        showMedicalDisclaimer = false
+                    })
+                    .transition(.move(edge: .bottom))
+                } else if authManager.requiresHealthKitAuthorization || (!completedSetup && !hkAuthorized) {
                     HealthKitSetupView(onComplete: {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
                         // When user completes setup, clear the requirement so the app can proceed
@@ -87,6 +95,8 @@ struct ContentView: View {
 struct OnboardingView: View {
     let onComplete: () -> Void
     @State private var currentPage = 0
+    @State private var showConsentView = false
+    @State private var userConsented = false
     
     private let onboardingPages = [
         OnboardingPage(
@@ -118,6 +128,7 @@ struct OnboardingView: View {
             color: .green
         )
     ]
+    
     
     var body: some View {
         ZStack {
@@ -174,7 +185,7 @@ struct OnboardingView: View {
                             .controlSize(.large)
                         } else {
                             Button("Get Started") {
-                                completeOnboarding()
+                                showConsentView = true
                             }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
@@ -185,10 +196,23 @@ struct OnboardingView: View {
                 .padding(.bottom, 30)
             }
         }
+        .fullScreenCover(isPresented: $showConsentView) {
+            ConsentView(
+                onAccept: {
+                    userConsented = true
+                    completeOnboarding()
+                },
+                onDecline: {
+                    showConsentView = false
+                    // Optionally handle decline action (e.g., show additional information)
+                }
+            )
+        }
     }
     
     private func completeOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+        UserDefaults.standard.set(userConsented, forKey: "hasConsentedToDataCollection")
         onComplete()
     }
 }

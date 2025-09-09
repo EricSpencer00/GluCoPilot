@@ -101,15 +101,17 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 
+                
                 NavigationLink {
-                    StaticDocumentView(title: "Privacy Policy", content: StaticDocumentView.privacyPlaceholder)
+                    DataPrivacyView()
+                        .environmentObject(healthManager)
                 } label: {
                     HStack {
                         Image(systemName: "shield.checkered")
                             .foregroundStyle(.green)
                             .frame(width: 25)
 
-                        Text("Privacy Policy")
+                        Text("Data & Privacy")
                             .font(.subheadline)
 
                         Spacer()
