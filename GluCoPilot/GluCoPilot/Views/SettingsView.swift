@@ -61,13 +61,7 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                         .tint(.blue)
                     }
-
-                    Spacer()
-
-                    Button("Manage") {
-                        healthManager.requestHealthKitPermissions()
-                    }
-                    .font(.caption)
+                }
                     .foregroundStyle(.blue)
                 }
                 

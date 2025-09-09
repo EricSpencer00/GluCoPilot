@@ -88,36 +88,20 @@ struct HealthKitSetupView: View {
 
         // Request permissions and then update result
         Task {
-            // First validate current permission status (might already be authorized)
-            let isAlreadyAuthorized = healthKitManager.validatePermissionStatus()
-            
-            if isAlreadyAuthorized {
-                await MainActor.run {
-                    isRequesting = false
-                    requestResult = "Permissions already granted \u{2014} syncing data..."
-                    // Fetch initial properties
-                    Task {
-                        await healthKitManager.updatePublishedProperties()
-                        onComplete?()
-                    }
-                }
-                return
-            }
-            
-            // Trigger request on the HealthKit manager
+            // Directly request permissions - don't try to validate first
+            // This ensures the iOS permission dialog will always show
             await MainActor.run {
                 healthKitManager.requestHealthKitPermissions()
             }
 
             // Poll briefly for change in authorization status (HealthKit callbacks can be async)
             var attempts = 0
-            while attempts < 6 {
+            while attempts < 8 { // Increase poll attempts
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 attempts += 1
                 
-                // Use validatePermissionStatus to check current state accurately
-                let isAuthorized = healthKitManager.validatePermissionStatus()
-                if isAuthorized {
+                // Check authorizationStatus directly (don't use validatePermissionStatus here)
+                if healthKitManager.authorizationStatus == .sharingAuthorized {
                     break
                 }
             }

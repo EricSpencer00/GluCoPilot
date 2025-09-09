@@ -114,43 +114,41 @@ class HealthKitManager: ObservableObject {
             return
         }
         
-        // First check current authorization status directly from HealthKit
-        if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
-            let status = healthStore.authorizationStatus(for: glucoseType)
-            if status == .sharingAuthorized {
-                if showPermissionLogs {
-                    print("HealthKit permissions are already authorized (direct check)")
-                }
-                self.authorizationStatus = .sharingAuthorized
-                self.readPermissionsGranted = true
-                self.readPermissionsGrantedStored = true
-                self.hasLoggedAuthorizationGranted = true
-                
-                // Start observing glucose data since permissions are already granted
-                Task {
-                    self.startObservingAndRefresh()
-                    await self.updatePublishedProperties()
-                }
-                return
-            }
+        // Define types to read/share - ensure all required types are included
+        let readTypes = Set([
+            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
+            HKObjectType.quantityType(forIdentifier: .stepCount)!,
+            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
+            HKObjectType.quantityType(forIdentifier: .heartRate)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!,
+            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
+            HKObjectType.workoutType()
+        ])
+        
+        // Request all permissions at once
+        if showPermissionLogs {
+            print("Requesting HealthKit read permissions...")
         }
         
+        // IMPORTANT: Always request authorization to ensure the iOS permission dialog shows
+        // Do not check authorization status beforehand for READ permissions
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
                     if self?.showPermissionLogs ?? false {
-                        if self?.hasLoggedAuthorizationGranted == false {
-                            print("HealthKit authorization granted")
-                            self?.hasLoggedAuthorizationGranted = true
-                        }
+                        print("HealthKit authorization granted successfully!")
                     }
-                    // Instead of relying on WRITE status, mark read permissions as granted
-                    self?.authorizationStatus = .sharingAuthorized
+                    self?.hasLoggedAuthorizationGranted = true
                     self?.readPermissionsGranted = true
                     self?.readPermissionsGrantedStored = true
+                    self?.authorizationStatus = .sharingAuthorized
+                    
                     // Start observing glucose updates so app receives new samples in foreground & background
                     self?.startGlucoseObserving()
-                    _Concurrency.Task {
+                    Task {
                         await self?.updatePublishedProperties()
                     }
                 } else {
@@ -181,6 +179,7 @@ class HealthKitManager: ObservableObject {
             }
         }
     }
+    }
     
     /// Validates the current permission status directly from HealthKit and updates internal flags
     /// Returns true if permissions are authorized
@@ -190,14 +189,29 @@ class HealthKitManager: ObservableObject {
             return false
         }
         
+        // Try to get authorization status for one of our required types
         if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
             let status = healthStore.authorizationStatus(for: glucoseType)
-            let isAuthorized = status == .sharingAuthorized
             
-            // Update internal state if it doesn't match HealthKit's state
+            // For READ permissions, we need to also check our stored flag because 
+            // HealthKit doesn't expose a direct way to check READ permissions
+            let isAuthorized = status == .sharingAuthorized || readPermissionsGrantedStored
+            
+            // If status is .notDetermined, we definitely need to request permissions
+            if status == .notDetermined {
+                if showPermissionLogs {
+                    print("HealthKit authorization status is not determined yet")
+                }
+                readPermissionsGranted = false
+                readPermissionsGrantedStored = false
+                authorizationStatus = .notDetermined
+                return false
+            }
+            
+            // Update internal state if needed
             if isAuthorized != readPermissionsGranted {
                 if showPermissionLogs {
-                    print("Correcting permission state mismatch: HealthKit=\(isAuthorized), internal=\(readPermissionsGranted)")
+                    print("Updating permission state: HealthKit=\(status), internal=\(readPermissionsGranted) to isAuthorized=\(isAuthorized)")
                 }
                 readPermissionsGranted = isAuthorized
                 readPermissionsGrantedStored = isAuthorized
