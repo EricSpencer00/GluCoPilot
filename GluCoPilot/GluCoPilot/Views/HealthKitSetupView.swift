@@ -79,7 +79,8 @@ struct HealthKitSetupView: View {
                             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                             self.healthKitManager.shouldInitializeHealthKit = true
                             self.healthKitManager.authorizationStatus = .sharingAuthorized
-                            self.onComplete?()
+                            // Use the helper method to call onComplete correctly
+                            self.updateProperties()
                         }
                     }
                 }
@@ -146,59 +147,36 @@ struct HealthKitSetupView: View {
         print("HealthKitSetupView: Starting permission request")
         
         // Use the direct request method
-        healthKitManager.directRequestPermission { [weak self] success in
-            guard let self = self else { return }
-            
-            self.isRequesting = false
-            
-            if success {
-                self.requestResult = "Permissions granted \u{2014} syncing data..."
-                // Mark that user has completed setup
-                UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
-                UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
-                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+        healthKitManager.directRequestPermission { success in
+            DispatchQueue.main.async {
+                self.isRequesting = false
                 
-                // Set the manager state
-                self.healthKitManager.shouldInitializeHealthKit = true
-                self.healthKitManager.authorizationStatus = .sharingAuthorized
-                
-                // Fetch initial properties
-                Task {
-                    await self.healthKitManager.updatePublishedProperties()
-                    self.onComplete?()
-                }
-            } else {
-                self.requestResult = "Permissions not granted. You can enable them in Settings to access full features."
-            }
-        }
-
-            // Poll briefly for change in authorization status (HealthKit callbacks can be async)
-            var attempts = 0
-            while attempts < 6 {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                attempts += 1
-                if healthKitManager.authorizationStatus == .sharingAuthorized {
-                    break
-                }
-            }
-
-            await MainActor.run {
-                isRequesting = false
-                if healthKitManager.authorizationStatus == .sharingAuthorized {
-                    requestResult = "Permissions granted \u{2014} syncing data..."
+                if success {
+                    self.requestResult = "Permissions granted \u{2014} syncing data..."
                     // Mark that user has completed setup
                     UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
                     UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                    healthKitManager.shouldInitializeHealthKit = true
-                    // Fetch initial properties
-                    Task {
-                        await healthKitManager.updatePublishedProperties()
-                        onComplete?()
-                    }
+                    
+                    // Set the manager state
+                    self.healthKitManager.shouldInitializeHealthKit = true
+                    self.healthKitManager.authorizationStatus = .sharingAuthorized
+                    
+                    // Fetch initial properties using a Task wrapped in a function that doesn't use async/await
+                    self.updateProperties()
                 } else {
-                    requestResult = "Permissions not granted. You can enable them in Settings to access full features."
+                    self.requestResult = "Permissions not granted. You can enable them in Settings to access full features."
                 }
+            }
+        }
+    }
+    
+    private func updateProperties() {
+        // Create a task to handle the async work
+        Task { 
+            await healthKitManager.updatePublishedProperties()
+            DispatchQueue.main.async {
+                self.onComplete?()
             }
         }
     }
@@ -217,6 +195,8 @@ struct HealthKitSetupView: View {
             UIApplication.shared.open(url)
         }
     }
+
+}
 
 
 #Preview {
