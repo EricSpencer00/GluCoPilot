@@ -242,9 +242,9 @@ class HealthKitManager: ObservableObject {
             return
         }
 
-        print("[HealthKitManager] Minimal requestAuthorization called for bloodGlucose only")
-        HKHealthStore().requestAuthorization(toShare: nil, read: [glucoseType]) { success, error in
-            print("[HealthKitManager] Minimal requestAuthorization completion. success=\(success) error=\(String(describing: error))")
+        print("[HealthKitManager] Minimal requestAuthorization called for bloodGlucose only. mainThread=\(Thread.isMainThread) applicationState=\(UIApplication.shared.applicationState.rawValue)")
+        healthStore.requestAuthorization(toShare: nil, read: [glucoseType]) { success, error in
+            print("[HealthKitManager] Minimal requestAuthorization completion. success=\(success) error=\(String(describing: error)) mainThread=\(Thread.isMainThread) applicationState=\(UIApplication.shared.applicationState.rawValue)")
             DispatchQueue.main.async {
                 if success {
                     self.authorizationStatus = .sharingAuthorized
