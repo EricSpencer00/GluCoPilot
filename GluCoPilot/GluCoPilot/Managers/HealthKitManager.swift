@@ -57,16 +57,7 @@ class HealthKitManager: ObservableObject {
     // Toggle to control whether HealthKit permission/debug logs are printed
     @AppStorage("showHealthKitPermissionLogs") var showPermissionLogs: Bool = false
     
-    // Flag to prevent any automatic initialization on app start
-    @AppStorage("shouldInitializeHealthKit") var shouldInitializeHealthKit: Bool = false
-    
-    // Use lazy initialization to ensure healthStore is properly created when needed
-    private lazy var healthStore: HKHealthStore = {
-        let store = HKHealthStore()
-        print("HealthStore initialized")
-        return store
-    }()
-    
+    private let healthStore = HKHealthStore()
     // Track active queries for proper cleanup
     private var activeQueries: [HKQuery] = []
     
@@ -100,11 +91,7 @@ class HealthKitManager: ObservableObject {
     // Debug: last time we explicitly refreshed from HealthKit
     @Published var lastHealthKitRefresh: Date?
     
-    // Flag to prevent automatic permission requests during initialization
-    private var shouldRequestPermissionsAutomatically = false
-    
     init() {
-        // Only check if HealthKit is available, but don't request permissions or start observations
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
         // Initialize read-permissions flag from persisted storage
         self.readPermissionsGranted = readPermissionsGrantedStored
@@ -125,17 +112,9 @@ class HealthKitManager: ObservableObject {
             print("HealthKit is not available on this device")
             return
         }
-        
-        // Always enable HealthKit initialization when explicitly requesting permissions
-        shouldInitializeHealthKit = true
-        
-        // Force log permissions for debugging
-        print("Requesting HealthKit permissions for types: \(readTypes)")
-        
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
-                    print("HealthKit authorization was successful")
                     if self?.showPermissionLogs ?? false {
                         if self?.hasLoggedAuthorizationGranted == false {
                             print("HealthKit authorization granted")
@@ -699,11 +678,6 @@ class HealthKitManager: ObservableObject {
     /// Start observing glucose samples and enable background delivery.
     /// Safe to call multiple times; will not register duplicates.
     func startGlucoseObserving() {
-        // Skip if we shouldn't initialize HealthKit
-        guard shouldInitializeHealthKit else {
-            return
-        }
-        
         guard HKHealthStore.isHealthDataAvailable(), readPermissionsGranted else {
 #if DEBUG
             print("[HealthKitManager] Cannot start glucose observing: HealthKit not available or permissions not granted")
@@ -836,17 +810,11 @@ class HealthKitManager: ObservableObject {
     /// This will fetch recent samples (default last 6 hours), update `latestGlucoseSample`,
     /// and run the anchored query path to persist anchors so future observer callbacks behave correctly.
     func refreshFromHealthKit(lastHours: Int = 6) async {
-        // Skip if we shouldn't initialize HealthKit
-        guard shouldInitializeHealthKit else {
-            return
-        }
-        
         guard HKHealthStore.isHealthDataAvailable() else { return }
         
         // If we don't have read permission recorded, do not silently attempt a query; request permissions.
         if !readPermissionsGranted {
-            // Requesting permissions may present system UI; caller should control when to call this.
-            requestHealthKitPermissions()
+            // Do not request permissions here; the UI (HealthKitSetupView/Settings) should initiate it.
             return
         }
         
@@ -898,11 +866,6 @@ class HealthKitManager: ObservableObject {
     /// Convenience helper to start observing glucose samples and immediately trigger a refresh.
     /// Safe to call repeatedly.
     func startObservingAndRefresh(lastHours: Int = 6) {
-        // Skip if we shouldn't initialize HealthKit
-        guard shouldInitializeHealthKit else {
-            return
-        }
-        
         startGlucoseObserving()
         Task {
             await refreshFromHealthKit(lastHours: lastHours)
@@ -925,6 +888,46 @@ class HealthKitManager: ObservableObject {
         print("[HealthKitManager] Stopped all health data observations")
 #endif
     }
+
+    /// Reset all HealthKit-related state for this app instance.
+    /// - Note: This does not revoke system permissions (users manage that in the Health app),
+    ///         but it clears local flags, anchors, observers, and published values.
+    func resetAllHealthKitState() {
+        // Stop any ongoing observations/queries
+        stopObservingHealthData()
+
+        // Attempt to disable background delivery entirely (best-effort)
+        healthStore.disableAllBackgroundDelivery { success, error in
+            #if DEBUG
+            if let error = error {
+                print("[HealthKitManager] disableAllBackgroundDelivery error: \(error.localizedDescription)")
+            } else {
+                print("[HealthKitManager] disableAllBackgroundDelivery success=\(success)")
+            }
+            #endif
+        }
+
+        // Clear saved anchors so next observe starts fresh
+        UserDefaults.standard.removeObject(forKey: glucoseAnchorKey)
+
+        // Reset internal authorization/read flags (local only)
+        hasLoggedAuthorizationGranted = false
+        readPermissionsGranted = false
+        readPermissionsGrantedStored = false
+        authorizationStatus = .notDetermined
+
+        // Clear published values used by UI
+        todaySteps = 0
+        activeMinutes = 0
+        sleepHours = 0
+        averageHeartRate = 0
+        latestGlucoseSample = nil
+        lastHealthKitRefresh = nil
+
+        #if DEBUG
+        print("[HealthKitManager] resetAllHealthKitState: local state cleared")
+        #endif
+    }
 }
 
 // MARK: - Extensions
@@ -940,167 +943,5 @@ extension HKWorkoutActivityType {
         case .other: return "Other"
         default: return "Workout"
         }
-    }
-}
-
-// MARK: - Direct Permission Methods
-extension HealthKitManager {
-    /// Forces a direct permission request using a completely separate approach
-    func directRequestPermission(completion: @escaping (Bool) -> Void) {
-        print("Attempting direct HealthKit permission request")
-        
-        // Force reset status to ensure iOS shows the prompt
-        authorizationStatus = .notDetermined
-        readPermissionsGranted = false
-        readPermissionsGrantedStored = false
-        
-        // Create a completely new minimal type set
-        let singleType: Set<HKObjectType> = [
-            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
-        ]
-        
-        // Create a brand new store instance to avoid any iOS caching
-        let freshStore = HKHealthStore()
-        
-        // Set a timeout to ensure the completion is called eventually
-        let timeoutWorkItem = DispatchWorkItem {
-            print("HealthKit permission request timed out")
-            completion(false)
-        }
-        
-        print("Requesting SINGLE type authorization to force prompt")
-        
-        // Request authorization with minimal configuration
-        freshStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
-            // Cancel timeout since we got a response
-            timeoutWorkItem.cancel()
-            
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("Direct HealthKit request error: \(error.localizedDescription)")
-                    completion(false)
-                    return
-                }
-                
-                print("Direct HealthKit SINGLE type request result: \(success)")
-                
-                // Even if the first request fails, try the second one
-                // Create yet another fresh store for the second request
-                let secondStore = HKHealthStore()
-                let allTypesForSecondRequest: Set<HKObjectType> = [
-                    HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
-                    HKObjectType.quantityType(forIdentifier: .stepCount)!,
-                    HKObjectType.quantityType(forIdentifier: .heartRate)!
-                ]
-                
-                print("Requesting MULTIPLE types authorization as backup")
-                
-                // Try a second request with more types
-                secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: allTypesForSecondRequest) { secondSuccess, secondError in
-                    DispatchQueue.main.async {
-                        if let secondError = secondError {
-                            print("Second HealthKit request error: \(secondError.localizedDescription)")
-                        }
-                        
-                        print("Second HealthKit request result: \(secondSuccess)")
-                        
-                        // Return the best result we got
-                        let finalResult = success || secondSuccess
-                        completion(finalResult)
-                    }
-                }
-            }
-        }
-        
-        // Set a timeout of 15 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeoutWorkItem)
-    }
-    
-    /// Reset all HealthKit-related caches to force a fresh authorization prompt
-    func resetAllHealthKitState() {
-        print("Resetting all HealthKit state")
-        
-        // Reset our internal tracking
-        readPermissionsGranted = false
-        readPermissionsGrantedStored = false
-        hasLoggedAuthorizationGranted = false
-        authorizationStatus = .notDetermined
-        shouldInitializeHealthKit = false
-        
-        // Clear UserDefaults values
-        UserDefaults.standard.removeObject(forKey: "hk_read_permissions_granted")
-        UserDefaults.standard.removeObject(forKey: "hasSkippedHealthKitSetup")
-        
-        // Force a new HealthStore to be created next time
-        activeQueries.forEach { query in
-            healthStore.stop(query)
-        }
-        activeQueries.removeAll()
-    }
-    
-    /// Forces a new permission request by resetting internal state
-    func forceRequestHealthKitPermissions() {
-        // Reset internal state
-        readPermissionsGranted = false
-        readPermissionsGrantedStored = false
-        hasLoggedAuthorizationGranted = false
-        authorizationStatus = .notDetermined
-        shouldInitializeHealthKit = true
-        
-        print("Force requesting HealthKit permissions with reset state")
-        
-        // Create a brand new instance of HKHealthStore to avoid any caching
-        let freshHealthStore = HKHealthStore()
-        
-        // Set a timeout to ensure we don't hang indefinitely
-        let timeoutWorkItem = DispatchWorkItem {
-            print("HealthKit permission request timed out")
-            DispatchQueue.main.async {
-                self.authorizationStatus = .sharingDenied
-            }
-        }
-        
-        // Try with a minimal set first to increase chances of prompt
-        let singleType: Set<HKObjectType> = [
-            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
-        ]
-        
-        // Request permissions with fresh state and store
-        freshHealthStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
-            print("First force permission request result: \(success), error: \(String(describing: error))")
-            
-            // Create a second fresh store
-            let secondStore = HKHealthStore()
-            
-            // Try with more types if first attempt didn't work
-            secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: self.readTypes) { [weak self] secondSuccess, secondError in
-                // Cancel timeout since we have a response
-                timeoutWorkItem.cancel()
-                
-                guard let self = self else { return }
-                
-                print("Second force permission request result: \(secondSuccess), error: \(String(describing: secondError))")
-                
-                // Use the best result
-                let finalSuccess = success || secondSuccess
-                
-                DispatchQueue.main.async {
-                    if finalSuccess {
-                        self.authorizationStatus = .sharingAuthorized
-                        self.readPermissionsGranted = true
-                        self.readPermissionsGrantedStored = true
-                        self.startGlucoseObserving()
-                        Task {
-                            await self.updatePublishedProperties()
-                        }
-                    } else {
-                        self.authorizationStatus = .sharingDenied
-                    }
-                }
-            }
-        }
-        
-        // Set a timeout of 15 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeoutWorkItem)
     }
 }

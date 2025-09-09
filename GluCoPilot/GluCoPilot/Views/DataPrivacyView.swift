@@ -152,7 +152,7 @@ struct HealthDataAccessView: View {
                     print("Direct HealthKit permission request from DataPrivacyView")
                     
                     // Reset all HealthKit state to ensure a fresh prompt
-                    healthKitManager.resetAllHealthKitState()
+                    $healthKitManager.resetAllHealthKitState
                     
                     // Create a local tracking variable instead of using @State
                     var isRequestingLocal = true

@@ -498,8 +498,7 @@ struct RecentActivityView: View {
                     
                     Button(action: {
                         // Trigger a sync via HealthKit permissions
-                        let manager = HealthKitManager()
-                        manager.requestHealthKitPermissions()
+                        healthKitManager.requestHealthKitPermissions()
                     }) {
                         Text("Sync HealthKit")
                             .font(.caption)

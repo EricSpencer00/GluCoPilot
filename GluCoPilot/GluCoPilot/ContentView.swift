@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var authManager = AuthenticationManager()
-    @StateObject private var apiManager = APIManager()
-    @StateObject private var healthKitManager = HealthKitManager()
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var apiManager: APIManager
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     @State private var isLaunching = true
     @State private var onboardingState: OnboardingState = .none
     @State private var showSkippedWarning = false
@@ -121,9 +121,6 @@ struct ContentView: View {
             // Inject HealthKitManager dependency outside the view builder
             authManager.healthKitManager = healthKitManager
             
-            // Explicitly set shouldInitializeHealthKit to false on app start
-            healthKitManager.shouldInitializeHealthKit = false
-
             // Perform readiness checks immediately and show launch screen for a short minimum time
             Task {
                 // Kick off auth check which may trigger async token refresh
