@@ -64,6 +64,8 @@ class HealthKitManager: ObservableObject {
     
     // Track whether we've already logged a granted message to avoid duplicates
     private var hasLoggedAuthorizationGranted = false
+    // Observer token used to defer permission requests until app becomes active
+    private var pendingAuthorizationObserver: Any?
     
     // Health data types we want to read
     private let readTypes: Set<HKObjectType> = [
@@ -131,6 +133,23 @@ class HealthKitManager: ObservableObject {
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             print("[HealthKitManager] active window scene state=\(scene.activationState.rawValue)")
         }
+        // If app is not active, defer the request to avoid system UI suppression.
+        if UIApplication.shared.applicationState != .active {
+            print("[HealthKitManager] App not active; deferring HealthKit permission request until app becomes active")
+            // Remove any existing observer to avoid duplicates
+            if let token = pendingAuthorizationObserver {
+                NotificationCenter.default.removeObserver(token)
+                pendingAuthorizationObserver = nil
+            }
+            // Observe didBecomeActive and re-attempt once
+            pendingAuthorizationObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.pendingAuthorizationObserver = nil
+                print("[HealthKitManager] didBecomeActive observed — retrying HealthKit permission request")
+                self?.requestHealthKitPermissions()
+            }
+            return
+        }
+
         // Detailed logging: print the exact sets we're passing to HealthKit
         do {
             let readNames = readTypes.compactMap { type -> String? in
