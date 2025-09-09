@@ -114,20 +114,6 @@ class HealthKitManager: ObservableObject {
             return
         }
         
-        // Define types to read/share - ensure all required types are included
-        let readTypes = Set([
-            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
-            HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
-            HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
-            HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!,
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.workoutType()
-        ])
-        
         // Request all permissions at once
         if showPermissionLogs {
             print("Requesting HealthKit read permissions...")
@@ -178,7 +164,6 @@ class HealthKitManager: ObservableObject {
                 }
             }
         }
-    }
     }
     
     /// Validates the current permission status directly from HealthKit and updates internal flags
