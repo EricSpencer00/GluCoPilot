@@ -88,6 +88,22 @@ struct HealthKitSetupView: View {
 
         // Request permissions and then update result
         Task {
+            // First validate current permission status (might already be authorized)
+            let isAlreadyAuthorized = healthKitManager.validatePermissionStatus()
+            
+            if isAlreadyAuthorized {
+                await MainActor.run {
+                    isRequesting = false
+                    requestResult = "Permissions already granted \u{2014} syncing data..."
+                    // Fetch initial properties
+                    Task {
+                        await healthKitManager.updatePublishedProperties()
+                        onComplete?()
+                    }
+                }
+                return
+            }
+            
             // Trigger request on the HealthKit manager
             await MainActor.run {
                 healthKitManager.requestHealthKitPermissions()
@@ -98,7 +114,10 @@ struct HealthKitSetupView: View {
             while attempts < 6 {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 attempts += 1
-                if healthKitManager.authorizationStatus == .sharingAuthorized {
+                
+                // Use validatePermissionStatus to check current state accurately
+                let isAuthorized = healthKitManager.validatePermissionStatus()
+                if isAuthorized {
                     break
                 }
             }
@@ -109,6 +128,7 @@ struct HealthKitSetupView: View {
                     requestResult = "Permissions granted \u{2014} syncing data..."
                     // Fetch initial properties
                     Task {
+                        healthKitManager.startObservingAndRefresh()
                         await healthKitManager.updatePublishedProperties()
                         onComplete?()
                     }

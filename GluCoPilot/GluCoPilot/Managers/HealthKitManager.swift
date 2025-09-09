@@ -110,8 +110,31 @@ class HealthKitManager: ObservableObject {
     func requestHealthKitPermissions() {
         guard isHealthKitAvailable else {
             print("HealthKit is not available on this device")
+            authorizationStatus = .notDetermined
             return
         }
+        
+        // First check current authorization status directly from HealthKit
+        if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+            let status = healthStore.authorizationStatus(for: glucoseType)
+            if status == .sharingAuthorized {
+                if showPermissionLogs {
+                    print("HealthKit permissions are already authorized (direct check)")
+                }
+                self.authorizationStatus = .sharingAuthorized
+                self.readPermissionsGranted = true
+                self.readPermissionsGrantedStored = true
+                self.hasLoggedAuthorizationGranted = true
+                
+                // Start observing glucose data since permissions are already granted
+                Task {
+                    self.startObservingAndRefresh()
+                    await self.updatePublishedProperties()
+                }
+                return
+            }
+        }
+        
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
@@ -159,6 +182,34 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    /// Validates the current permission status directly from HealthKit and updates internal flags
+    /// Returns true if permissions are authorized
+    func validatePermissionStatus() -> Bool {
+        guard isHealthKitAvailable else {
+            authorizationStatus = .notDetermined
+            return false
+        }
+        
+        if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+            let status = healthStore.authorizationStatus(for: glucoseType)
+            let isAuthorized = status == .sharingAuthorized
+            
+            // Update internal state if it doesn't match HealthKit's state
+            if isAuthorized != readPermissionsGranted {
+                if showPermissionLogs {
+                    print("Correcting permission state mismatch: HealthKit=\(isAuthorized), internal=\(readPermissionsGranted)")
+                }
+                readPermissionsGranted = isAuthorized
+                readPermissionsGrantedStored = isAuthorized
+                authorizationStatus = isAuthorized ? .sharingAuthorized : .sharingDenied
+            }
+            
+            return isAuthorized
+        }
+        
+        return false
+    }
+    
     func updatePublishedProperties() async {
         do {
             let startOfDay = Calendar.current.startOfDay(for: Date())
@@ -195,6 +246,12 @@ class HealthKitManager: ObservableObject {
     func fetchLast24HoursData() async throws -> HealthKitManagerHealthData {
         guard isHealthKitAvailable else {
             throw HealthKitManagerError.notAvailable
+        }
+        
+        // Validate permission status
+        let isAuthorized = validatePermissionStatus()
+        if !isAuthorized {
+            throw HealthKitManagerError.authorizationFailed
         }
         
         let endDate = Date()
@@ -641,7 +698,15 @@ class HealthKitManager: ObservableObject {
             // Not available on device / simulator: return empty array
             return []
         }
-        // Do not gate on write-authorization; perform the query and handle empty results.
+        
+        // Validate permission status
+        let isAuthorized = validatePermissionStatus()
+        if !isAuthorized {
+#if DEBUG
+            print("[HealthKitManager] Cannot fetch glucose samples: HealthKit permissions not granted")
+#endif
+            return []
+        }
         
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate)
         
@@ -678,9 +743,18 @@ class HealthKitManager: ObservableObject {
     /// Start observing glucose samples and enable background delivery.
     /// Safe to call multiple times; will not register duplicates.
     func startGlucoseObserving() {
-        guard HKHealthStore.isHealthDataAvailable(), readPermissionsGranted else {
+        guard HKHealthStore.isHealthDataAvailable() else {
 #if DEBUG
-            print("[HealthKitManager] Cannot start glucose observing: HealthKit not available or permissions not granted")
+            print("[HealthKitManager] Cannot start glucose observing: HealthKit not available")
+#endif
+            return
+        }
+        
+        // Validate permission status first
+        let isAuthorized = validatePermissionStatus()
+        if !isAuthorized {
+#if DEBUG
+            print("[HealthKitManager] Cannot start glucose observing: HealthKit permissions not granted")
 #endif
             return
         }
@@ -812,9 +886,14 @@ class HealthKitManager: ObservableObject {
     func refreshFromHealthKit(lastHours: Int = 6) async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         
-        // If we don't have read permission recorded, do not silently attempt a query; request permissions.
-        if !readPermissionsGranted {
-            // Do not request permissions here; the UI (HealthKitSetupView/Settings) should initiate it.
+        // Validate permission status first to ensure we have the correct state
+        let isAuthorized = validatePermissionStatus()
+        
+        // If we don't have read permission, do not attempt queries
+        if !isAuthorized {
+            if showPermissionLogs {
+                print("[HealthKitManager] Cannot refresh: HealthKit permissions not granted")
+            }
             return
         }
         
