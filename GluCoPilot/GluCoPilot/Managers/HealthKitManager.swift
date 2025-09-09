@@ -92,6 +92,8 @@ class HealthKitManager: ObservableObject {
     @Published var lastHealthKitRefresh: Date?
     // Publish the most recent authorization error message (if any) for UI/diagnostics
     @Published var lastAuthorizationErrorMessage: String?
+    // Diagnostics output for debugging HealthKit behavior
+    @Published var debugReport: String? = nil
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -170,6 +172,94 @@ class HealthKitManager: ObservableObject {
                         self?.readPermissionsGrantedStored = false
                     }
                 }
+            }
+        }
+    }
+
+    /// Run a compact diagnostics report that prints authorization/read state and recent glucose/source counts.
+    func runDiagnostics() async {
+        var out: [String] = []
+        out.append("Diagnostics run at: \(Date())")
+        out.append("Bundle: \(Bundle.main.bundleIdentifier ?? "-")")
+        out.append("HealthKit available: \(HKHealthStore.isHealthDataAvailable())")
+
+        // Authorization status per-type (note: authorizationStatus(for:) reflects write status)
+        let typesToCheck: [(String, HKSampleType?)] = [
+            ("bloodGlucose", HKObjectType.quantityType(forIdentifier: .bloodGlucose)),
+            ("stepCount", HKObjectType.quantityType(forIdentifier: .stepCount)),
+            ("activeEnergyBurned", HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)),
+            ("heartRate", HKObjectType.quantityType(forIdentifier: .heartRate)),
+            ("sleepAnalysis", HKObjectType.categoryType(forIdentifier: .sleepAnalysis))
+        ]
+
+        for (name, sampleType) in typesToCheck {
+            if let t = sampleType {
+                let status = healthStore.authorizationStatus(for: t)
+                out.append("authStatus(\(name)): \(status)")
+            } else {
+                out.append("authStatus(\(name)): <type unavailable>")
+            }
+        }
+
+        // getRequestStatusForAuthorization
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            healthStore.getRequestStatusForAuthorization(toShare: nil, read: readTypes) { status, error in
+                if let err = error {
+                    out.append("getRequestStatusForAuthorization error: \(err.localizedDescription)")
+                } else if let s = status {
+                    out.append("requestStatus: \(s.rawValue) (\(s))")
+                } else {
+                    out.append("requestStatus: <nil>")
+                }
+                continuation.resume()
+            }
+        }
+
+        // Fetch some glucose diagnostics
+        if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+            // source list
+            let sources = await withCheckedContinuation { (continuation: CheckedContinuation<[String], Never>) in
+                let query = HKSourceQuery(sampleType: glucoseType, samplePredicate: nil) { _, sourcesOrNil, error in
+                    if let error = error {
+                        continuation.resume(returning: ["source query error: \(error.localizedDescription)"])
+                        return
+                    }
+                    let list = (sourcesOrNil ?? []).map { s in
+                        return "name:\(s.name) bundle:\(s.bundleIdentifier ?? "-")"
+                    }
+                    continuation.resume(returning: list)
+                }
+                self.healthStore.execute(query)
+            }
+            out.append("glucose sources: \(sources.count) entries")
+            out.append(contentsOf: sources.prefix(20))
+
+            // sample count
+            do {
+                let count = try await fetchGlucoseSampleCount()
+                out.append("glucose sample count: \(count)")
+            } catch {
+                out.append("glucose sample count error: \(error.localizedDescription)")
+            }
+
+            // recent samples (limit 10)
+            let recent = try? await fetchRecentGlucoseSamples(limit: 10)
+            if let recent = recent {
+                out.append("recent glucose sample lines: \(recent.count)")
+                out.append(contentsOf: recent.prefix(20))
+            } else {
+                out.append("recent glucose sample fetch: failed or empty")
+            }
+        } else {
+            out.append("bloodGlucose type missing on device")
+        }
+
+        // Publish final report
+        let report = out.joined(separator: "\n")
+        await MainActor.run {
+            self.debugReport = report
+            if self.showPermissionLogs {
+                print(report)
             }
         }
     }

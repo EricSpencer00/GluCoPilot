@@ -64,6 +64,15 @@ struct HealthKitSetupView: View {
             .disabled(isRequesting)
             .padding(.horizontal)
 
+            // Developer-friendly safe request button to avoid system-gesture timing issues.
+            Button(action: requestPermissionsSafe) {
+                Text("Request now (safe)")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
             // If the auth flow requires HealthKit, do not allow skipping.
             if authManager.requiresHealthKitAuthorization {
                 Text("Health data permission is required to continue.")
@@ -77,6 +86,27 @@ struct HealthKitSetupView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.bottom)
+            }
+
+            // Diagnostic controls
+            Button(action: runDiagnostics) {
+                Text("Run Diagnostics")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            if let report = healthKitManager.debugReport {
+                ScrollView {
+                    Text(report)
+                        .font(.caption)
+                        .padding()
+                }
+                .frame(maxHeight: 240)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(8)
+                .padding(.horizontal)
             }
 
             if let result = requestResult, result.contains("not granted") {
@@ -128,6 +158,59 @@ struct HealthKitSetupView: View {
                 } else {
                     requestResult = "Permissions not granted. You can enable them in Settings to access full features."
                 }
+            }
+        }
+    }
+
+    /// A safe permission request triggered by user tap that waits briefly before calling
+    /// HealthKit authorization to avoid system UI/gesture suppression. Polls status like
+    /// the main requestPermissions flow and updates `requestResult`.
+    private func requestPermissionsSafe() {
+        isRequesting = true
+        requestResult = nil
+
+        Task {
+            // Small delay to avoid system gesture UI interference
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+
+            await MainActor.run {
+                healthKitManager.requestHealthKitPermissions()
+            }
+
+            // Poll briefly for change in authorization status
+            var attempts = 0
+            while attempts < 10 {
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                attempts += 1
+                if healthKitManager.authorizationStatus == .sharingAuthorized {
+                    break
+                }
+            }
+
+            await MainActor.run {
+                isRequesting = false
+                if healthKitManager.authorizationStatus == .sharingAuthorized {
+                    requestResult = "Permissions granted syncing data"
+                    Task {
+                        healthKitManager.startObservingAndRefresh()
+                        await healthKitManager.updatePublishedProperties()
+                        onComplete?()
+                    }
+                } else if let authErr = healthKitManager.lastAuthorizationErrorMessage {
+                    requestResult = "Permissions not granted: \(authErr)"
+                } else {
+                    requestResult = "Permissions not granted. You can enable them in Settings to access full features."
+                }
+            }
+        }
+    }
+
+    private func runDiagnostics() {
+        requestResult = "Running diagnostics..."
+        Task {
+            await healthKitManager.runDiagnostics()
+            await MainActor.run {
+                requestResult = "Diagnostics complete"
             }
         }
     }
