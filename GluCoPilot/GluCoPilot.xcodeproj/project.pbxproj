@@ -400,7 +400,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_KEY_CFBundleDisplayName = GluCoPilot;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GluCoPilot needs access to your health data to track glucose levels, heart rate, and other health metrics to provide personalized insights and glucose management recommendations.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GluCoPilot needs to write health data to your Health app to sync your glucose readings, exercise data, and other health metrics for comprehensive health tracking.";
@@ -432,7 +432,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GluCoPilot/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = GluCoPilot;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GluCoPilot needs access to your health data to track glucose levels, heart rate, and other health metrics to provide personalized insights and glucose management recommendations.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GluCoPilot needs to write health data to your Health app to sync your glucose readings, exercise data, and other health metrics for comprehensive health tracking.";
