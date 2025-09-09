@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
 // MARK: - HealthKit Models
@@ -125,6 +126,11 @@ class HealthKitManager: ObservableObject {
         
         // IMPORTANT: Always request authorization to ensure the iOS permission dialog shows
         // Do not check authorization status beforehand for READ permissions
+        // Runtime check: print whether we're on the main thread and the app state
+        print("[HealthKitManager] requestHealthKitPermissions called. mainThread=\(Thread.isMainThread) applicationState=\(UIApplication.shared.applicationState.rawValue)")
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            print("[HealthKitManager] active window scene state=\(scene.activationState.rawValue)")
+        }
         // Detailed logging: print the exact sets we're passing to HealthKit
         do {
             let readNames = readTypes.compactMap { type -> String? in
