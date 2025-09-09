@@ -148,7 +148,7 @@ struct HealthDataAccessView: View {
                 }
                 
                 Button(action: {
-                    healthKitManager.requestAuthorization()
+                    healthKitManager.requestHealthKitPermissions()
                 }) {
                     Text("Review Permissions")
                         .foregroundColor(.blue)
