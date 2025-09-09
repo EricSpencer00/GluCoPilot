@@ -28,7 +28,15 @@ struct GluCoPilotApp: App {
                     if refreshed {
                         print("[App] Apple id_token refreshed on becoming active")
                     }
-                    // Ensure HealthKit observation is running and proactively refresh recent glucose samples
+                    // Ensure HealthKit permissions are requested (if not determined) and start observation/refresh.
+                    // Requesting permissions before starting observations avoids the "permissions not granted" race.
+                    if healthManager.authorizationStatus == .notDetermined {
+                        healthManager.requestHealthKitPermissions()
+                    }
+
+                    // Start observing and proactively refresh recent glucose samples. If permissions are
+                    // not yet granted this call will be a no-op; when/if the user grants permissions the
+                    // `requestHealthKitPermissions` completion path will call `startGlucoseObserving()`.
                     healthManager.startObservingAndRefresh()
                 }
             }

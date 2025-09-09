@@ -749,7 +749,17 @@ class HealthKitManager: ObservableObject {
             return
         }
         
-        // Validate permission status first
+        // If authorization hasn't been requested yet, proactively request it so the system shows the prompt.
+        if authorizationStatus == .notDetermined {
+            if showPermissionLogs {
+                print("[HealthKitManager] Authorization not determined; requesting HealthKit permissions before observing")
+            }
+            requestHealthKitPermissions()
+            // Do not proceed until the async permission callback runs — caller can call startObservingAndRefresh
+            return
+        }
+
+        // Validate permission status first; if not authorized we won't start observing.
         let isAuthorized = validatePermissionStatus()
         if !isAuthorized {
 #if DEBUG
