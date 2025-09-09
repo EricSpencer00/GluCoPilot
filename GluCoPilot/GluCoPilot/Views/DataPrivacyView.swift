@@ -1,5 +1,4 @@
 import SwiftUI
-import HealthKit
 
 struct DataPrivacyView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
@@ -149,122 +148,10 @@ struct HealthDataAccessView: View {
                 }
                 
                 Button(action: {
-                    print("Direct HealthKit permission request from DataPrivacyView")
-                    
-                    // Reset all HealthKit state to ensure a fresh prompt
-                    $healthKitManager.resetAllHealthKitState
-                    
-                    // Create a local tracking variable instead of using @State
-                    var isRequestingLocal = true
-                    
-                    // Set a timeout
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-                        if isRequestingLocal {
-                            isRequestingLocal = false
-                            print("HealthKit permission request timed out in DataPrivacyView")
-                        }
-                    }
-                    
-                    // Try a direct approach first with our own HKHealthStore
-                    let directStore = HKHealthStore()
-                    let singleType = Set([HKObjectType.quantityType(forIdentifier: .bloodGlucose)!])
-                    
-                    print("DataPrivacyView: Trying direct single-type request")
-                    
-                    directStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { firstSuccess, firstError in
-                        print("DataPrivacyView: Direct request result: \(firstSuccess), error: \(String(describing: firstError))")
-                        
-                        if firstSuccess {
-                            DispatchQueue.main.async {
-                                isRequestingLocal = false
-                                print("Permission granted from DataPrivacyView direct request")
-                                healthKitManager.authorizationStatus = .sharingAuthorized
-                                healthKitManager.shouldInitializeHealthKit = true
-                            }
-                        } else {
-                            // Try the manager's method as a fallback
-                            healthKitManager.directRequestPermission { success in
-                                DispatchQueue.main.async {
-                                    isRequestingLocal = false
-                                    if success {
-                                        print("Permission granted from DataPrivacyView manager request")
-                                        healthKitManager.authorizationStatus = .sharingAuthorized
-                                        healthKitManager.shouldInitializeHealthKit = true
-                                    } else {
-                                        print("Permission denied from DataPrivacyView")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    healthKitManager.requestHealthKitPermissions()
                 }) {
-                    Text("Request HealthKit Permissions")
+                    Text("Review Permissions")
                         .foregroundColor(.blue)
-                }
-                
-                // Add a direct inline request button as a fallback
-                Button(action: {
-                    // Create a completely new HKHealthStore instance
-                    let healthStore = HKHealthStore()
-                    
-                    // Create a local tracking variable
-                    var isRequestingLocal = true
-                    
-                    // Start with a single type for maximum prompt likelihood
-                    let singleType = Set([
-                        HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
-                    ])
-                    
-                    print("Requesting SINGLE type direct inline permission")
-                    
-                    // Set a timeout
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-                        if isRequestingLocal {
-                            isRequestingLocal = false
-                            print("Direct inline HealthKit SINGLE permission request timed out")
-                        }
-                    }
-                    
-                    // First try with just one type
-                    healthStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
-                        print("Direct inline SINGLE type permission result: \(success), error: \(String(describing: error))")
-                        
-                        if success {
-                            DispatchQueue.main.async {
-                                isRequestingLocal = false
-                                healthKitManager.shouldInitializeHealthKit = true
-                                healthKitManager.authorizationStatus = .sharingAuthorized
-                            }
-                        } else {
-                            // If that didn't work, try with multiple types
-                            let allTypes = Set([
-                                HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
-                                HKObjectType.quantityType(forIdentifier: .stepCount)!,
-                                HKObjectType.quantityType(forIdentifier: .heartRate)!
-                            ])
-                            
-                            // Create a fresh store for the second attempt
-                            let secondStore = HKHealthStore()
-                            
-                            print("Trying MULTIPLE types direct inline permission")
-                            
-                            secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: allTypes) { secondSuccess, secondError in
-                                DispatchQueue.main.async {
-                                    isRequestingLocal = false
-                                    
-                                    print("Direct inline MULTIPLE types result: \(secondSuccess), error: \(String(describing: secondError))")
-                                    
-                                    if secondSuccess {
-                                        healthKitManager.shouldInitializeHealthKit = true
-                                        healthKitManager.authorizationStatus = .sharingAuthorized
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }) {
-                    Text("Try Direct Permission Request")
-                        .foregroundColor(.red)
                 }
             }
         }

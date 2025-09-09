@@ -474,6 +474,7 @@ struct LatestGlucoseView: View {
 }
 
 struct RecentActivityView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Activity")
