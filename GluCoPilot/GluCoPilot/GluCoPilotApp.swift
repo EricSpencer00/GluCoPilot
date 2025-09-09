@@ -20,10 +20,40 @@ struct GluCoPilotApp: App {
                     // For now, request HealthKit permissions immediately on first UI appearance.
                     // This is a temporary measure to ensure the permission prompt is shown reliably
                     // before we start observation. We may move this into an onboarding flow later.
-                    // Debug: print app identity so we can match device logs to App ID issues
-                    print("[App] bundleIdentifier: \(Bundle.main.bundleIdentifier ?? "<none>")")
+
+                    // Detailed runtime diagnostics to help debug HealthKit permission problems
+                    let bundle = Bundle.main
+                    print("[App] bundleIdentifier: \(bundle.bundleIdentifier ?? "<none>")")
+                    print("[App] bundleExecutable: \(bundle.executableURL?.lastPathComponent ?? "<none>")")
+                    print("[App] CFBundleDisplayName: \(bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "<none>")")
+                    print("[App] CFBundleShortVersionString: \(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "<none>")")
+                    print("[App] CFBundleVersion: \(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "<none>")")
+
                     print("[App] healthKitAvailable: \(HKHealthStore.isHealthDataAvailable())")
-                    healthManager.requestHealthKitPermissions()
+
+                    if let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+                        let status = HKHealthStore().authorizationStatus(for: glucoseType)
+                        print("[App] HK authStatus(bloodGlucose) = \(status.rawValue) (\(status))")
+                    } else {
+                        print("[App] HK bloodGlucose type unavailable")
+                    }
+
+                    // Check for embedded provisioning profile in the app bundle (useful for diagnosing signing/profile issues)
+                    if let provPath = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") {
+                        if let attrs = try? FileManager.default.attributesOfItem(atPath: provPath),
+                           let size = attrs[.size] as? NSNumber {
+                            print("[App] embedded.mobileprovision found at: \(provPath) size: \(size.intValue) bytes")
+                        } else {
+                            print("[App] embedded.mobileprovision found at: \(provPath)")
+                        }
+                    } else {
+                        print("[App] No embedded.mobileprovision in bundle (normal for App Store / TestFlight builds)")
+                    }
+
+                    // Trigger the in-app permission request asynchronously on the main queue to avoid UI timing issues
+                    DispatchQueue.main.async {
+                        healthManager.requestHealthKitPermissions()
+                    }
                 }
         }
         .onChange(of: scenePhase) { newPhase in
