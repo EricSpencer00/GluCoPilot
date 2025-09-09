@@ -889,22 +889,20 @@ class HealthKitManager: ObservableObject {
         print("[HealthKitManager] Stopped all health data observations")
 #endif
     }
-    
-    
-    
-    // MARK: - Extensions
-    extension HKWorkoutActivityType {
-        var name: String {
-            switch self {
-            case .running: return "Running"
-            case .walking: return "Walking"
-            case .cycling: return "Cycling"
-            case .swimming: return "Swimming"
-            case .yoga: return "Yoga"
-            case .functionalStrengthTraining: return "Strength Training"
-            case .other: return "Other"
-            default: return "Workout"
-            }
+}
+
+// MARK: - Extensions
+extension HKWorkoutActivityType {
+    var name: String {
+        switch self {
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .cycling: return "Cycling"
+        case .swimming: return "Swimming"
+        case .yoga: return "Yoga"
+        case .functionalStrengthTraining: return "Strength Training"
+        case .other: return "Other"
+        default: return "Workout"
         }
     }
 }
