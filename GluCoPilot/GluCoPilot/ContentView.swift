@@ -5,9 +5,57 @@ struct ContentView: View {
     @StateObject private var apiManager = APIManager()
     @StateObject private var healthKitManager = HealthKitManager()
     @State private var isLaunching = true
-    @State private var showOnboarding = false
-    @State private var showMedicalDisclaimer = false
+    @State private var onboardingState: OnboardingState = .none
     @State private var showSkippedWarning = false
+    
+    enum OnboardingState {
+        case none
+        case welcome
+        case medicalDisclaimer
+        case healthKitSetup
+    }
+    
+    init() {
+        // Migrate old UserDefaults keys to new consolidated flow
+        migrateUserDefaultsIfNeeded()
+    }
+    
+    // Function to migrate existing UserDefaults to new consolidated flow
+    private func migrateUserDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+        
+        // Check if we've already migrated
+        if defaults.bool(forKey: "hasMigratedOnboardingKeys") {
+            return
+        }
+        
+        // Migrate old keys to new keys
+        let hasAcceptedMedicalDisclaimer = defaults.bool(forKey: "hasAcceptedMedicalDisclaimer")
+        let hasCompletedHealthKitSetup = defaults.bool(forKey: "hasCompletedHealthKitSetup")
+        let hasSeenOnboarding = defaults.bool(forKey: "hasSeenOnboarding")
+        
+        // Set new consolidated keys
+        if hasAcceptedMedicalDisclaimer {
+            defaults.set(true, forKey: "hasCompletedMedicalDisclaimer")
+        }
+        
+        if hasCompletedHealthKitSetup {
+            defaults.set(true, forKey: "hasCompletedOnboarding")
+        }
+        
+        if hasSeenOnboarding {
+            defaults.set(true, forKey: "hasCompletedWelcomeOnboarding")
+        }
+        
+        // If user completed HealthKit setup and accepted medical disclaimer, 
+        // they've completed onboarding
+        if hasAcceptedMedicalDisclaimer && hasCompletedHealthKitSetup {
+            defaults.set(true, forKey: "hasCompletedOnboarding")
+        }
+        
+        // Mark migration as complete
+        defaults.set(true, forKey: "hasMigratedOnboardingKeys")
+    }
     
     
     var body: some View {
@@ -16,25 +64,21 @@ struct ContentView: View {
                 LaunchScreen()
                     .transition(.opacity)
             } else if authManager.isAuthenticated {
-                // If the auth manager flagged that HealthKit authorization is required, show setup.
-                // Otherwise, fall back to the persisted flag / normal flow.
-                let completedSetup = UserDefaults.standard.bool(forKey: "hasCompletedHealthKitSetup")
-                let hkAuthorized = healthKitManager.authorizationStatus == .sharingAuthorized
-                let hasAcceptedMedicalDisclaimer = UserDefaults.standard.bool(forKey: "hasAcceptedMedicalDisclaimer")
-
-                if showMedicalDisclaimer || !hasAcceptedMedicalDisclaimer {
+                // Check onboarding completion status
+                if onboardingState == .medicalDisclaimer {
                     MedicalDisclaimerView(onAccept: {
-                        UserDefaults.standard.set(true, forKey: "hasAcceptedMedicalDisclaimer")
-                        showMedicalDisclaimer = false
+                        UserDefaults.standard.set(true, forKey: "hasCompletedMedicalDisclaimer")
+                        // Move to HealthKit setup after medical disclaimer
+                        onboardingState = .healthKitSetup
                     })
                     .transition(.move(edge: .bottom))
-                } else if authManager.requiresHealthKitAuthorization || (!completedSetup && !hkAuthorized) {
+                } else if onboardingState == .healthKitSetup {
                     HealthKitSetupView(onComplete: {
-                        UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
-                        // When user completes setup, clear the requirement so the app can proceed
+                        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                        // Complete the onboarding
+                        onboardingState = .none
+                        // Clear the requirement so the app can proceed
                         authManager.requiresHealthKitAuthorization = false
-                        // Request HealthKit permissions only after explicit user action
-                        healthKitManager.requestHealthKitPermissions()
                     })
                     .environmentObject(apiManager)
                     .environmentObject(healthKitManager)
@@ -54,9 +98,10 @@ struct ContentView: View {
                         }
                 }
             } else {
-                if showOnboarding {
+                if onboardingState == .welcome {
                     OnboardingView(onComplete: {
-                        showOnboarding = false
+                        UserDefaults.standard.set(true, forKey: "hasCompletedWelcomeOnboarding")
+                        onboardingState = .none
                     })
                     .transition(.move(edge: .trailing))
                 } else {
@@ -68,7 +113,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.8), value: isLaunching)
         .animation(.easeInOut(duration: 0.6), value: authManager.isAuthenticated)
-        .animation(.easeInOut(duration: 0.5), value: showOnboarding)
+        .animation(.easeInOut(duration: 0.5), value: onboardingState)
         .environmentObject(authManager)
         .onAppear {
             // Inject the apiManager dependency
@@ -85,24 +130,44 @@ struct ContentView: View {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 await MainActor.run {
                     isLaunching = false
-                    // Show onboarding for new users
-                    if !authManager.isAuthenticated && !UserDefaults.standard.bool(forKey: "hasSeenOnboarding") {
-                        showOnboarding = true
+                    
+                    // Determine the onboarding state
+                    if authManager.isAuthenticated {
+                        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+                        let hasCompletedMedicalDisclaimer = UserDefaults.standard.bool(forKey: "hasCompletedMedicalDisclaimer")
+                        
+                        if !hasCompletedOnboarding {
+                            if !hasCompletedMedicalDisclaimer {
+                                onboardingState = .medicalDisclaimer
+                            } else {
+                                onboardingState = .healthKitSetup
+                            }
+                        }
+                    } else {
+                        // Show welcome onboarding for new users who aren't authenticated
+                        if !UserDefaults.standard.bool(forKey: "hasCompletedWelcomeOnboarding") {
+                            onboardingState = .welcome
+                        }
                     }
                 }
             }
         }
         .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
             if isAuthenticated {
-                showOnboarding = false
+                // When user authenticates, check if they need to see the medical disclaimer
+                if !UserDefaults.standard.bool(forKey: "hasCompletedMedicalDisclaimer") {
+                    onboardingState = .medicalDisclaimer
+                } else if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                    onboardingState = .healthKitSetup
+                }
             }
         }
         .alert("Limited Functionality", isPresented: $showSkippedWarning) {
             Button("Connect HealthKit") {
                 // Reset the skipped flag
                 UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
-                // Force show the HealthKit setup again
-                authManager.requiresHealthKitAuthorization = true
+                // Show the HealthKit setup again
+                onboardingState = .healthKitSetup
                 showSkippedWarning = false
             }
             Button("Continue Limited") {
@@ -237,7 +302,7 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
-        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+        UserDefaults.standard.set(true, forKey: "hasCompletedWelcomeOnboarding")
         UserDefaults.standard.set(userConsented, forKey: "hasConsentedToDataCollection")
         onComplete()
     }

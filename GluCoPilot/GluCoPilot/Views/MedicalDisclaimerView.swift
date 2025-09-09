@@ -65,22 +65,22 @@ struct MedicalDisclaimerView: View {
                     }
                     .padding(.top, 20)
                     
-                    Button(action: {
-                        if hasAcknowledged {
-                            onAccept()
+                    // Button
+                        Button(action: {
+                            if hasAcknowledged {
+                                UserDefaults.standard.set(true, forKey: "hasCompletedMedicalDisclaimer")
+                                onAccept()
+                            }
+                        }) {
+                            Text("I Understand and Accept")
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(hasAcknowledged ? Color.blue : Color.gray)
+                                .cornerRadius(10)
                         }
-                    }) {
-                        Text("I Understand and Accept")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(hasAcknowledged ? Color.blue : Color.gray)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!hasAcknowledged)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)  // Add extra padding at bottom for scrolling
+                        .disabled(!hasAcknowledged)
                 }
                 .padding()
             }

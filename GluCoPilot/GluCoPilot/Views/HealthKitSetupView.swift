@@ -110,6 +110,7 @@ struct HealthKitSetupView: View {
                     // Mark that user has completed setup
                     UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
                     UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     healthKitManager.shouldInitializeHealthKit = true
                     // Fetch initial properties
                     Task {
@@ -126,6 +127,8 @@ struct HealthKitSetupView: View {
     private func skip() {
         // Pass back to ContentView that user skipped HealthKit
         UserDefaults.standard.set(true, forKey: "hasSkippedHealthKitSetup")
+        // Mark onboarding as completed
+        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         onComplete?()
     }
 
