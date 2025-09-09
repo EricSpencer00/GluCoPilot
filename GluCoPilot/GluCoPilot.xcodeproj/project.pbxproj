@@ -27,12 +27,24 @@
 		97C4CB1F2E65244500D4F5BF /* GluCoPilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GluCoPilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C4CB2C2E65244A00D4F5BF /* GluCoPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-	/* Info.plist file references intentionally removed to avoid duplicate-copy build issues; INFOPLIST_FILE build settings still point to the files on disk. */
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		97C184F12E70B5C70088CC30 /* Exceptions for "GluCoPilot" folder in "GluCoPilot" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 97C4CB1E2E65244500D4F5BF /* GluCoPilot */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		97C4CB212E65244500D4F5BF /* GluCoPilot */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				97C184F12E70B5C70088CC30 /* Exceptions for "GluCoPilot" folder in "GluCoPilot" target */,
+			);
 			path = GluCoPilot;
 			sourceTree = "<group>";
 		};
