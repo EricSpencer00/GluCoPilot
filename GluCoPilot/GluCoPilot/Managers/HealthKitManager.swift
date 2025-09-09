@@ -203,13 +203,14 @@ class HealthKitManager: ObservableObject {
 
         // getRequestStatusForAuthorization
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            healthStore.getRequestStatusForAuthorization(toShare: nil, read: readTypes) { status, error in
+            // Some SDK variants expect non-optional Sets; pass empty typed sets when needed.
+            let emptyShare: Set<HKSampleType> = []
+            let readSet: Set<HKObjectType> = readTypes
+            healthStore.getRequestStatusForAuthorization(toShare: emptyShare, read: readSet) { status, error in
                 if let err = error {
                     out.append("getRequestStatusForAuthorization error: \(err.localizedDescription)")
-                } else if let s = status {
-                    out.append("requestStatus: \(s.rawValue) (\(s))")
                 } else {
-                    out.append("requestStatus: <nil>")
+                    out.append("requestStatus: \(status.rawValue) (\(status))")
                 }
                 continuation.resume()
             }
