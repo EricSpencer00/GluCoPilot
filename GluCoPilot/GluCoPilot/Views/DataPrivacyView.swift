@@ -150,14 +150,12 @@ struct HealthDataAccessView: View {
                 
                 Button(action: {
                     print("Direct HealthKit permission request from DataPrivacyView")
-                    healthKitManager.directRequestPermission { [weak self] success in
-                        guard let self = self else { return }
-                        
+                    healthKitManager.directRequestPermission { success in
                         DispatchQueue.main.async {
                             if success {
                                 print("Permission granted from DataPrivacyView")
-                                self.healthKitManager.authorizationStatus = .sharingAuthorized
-                                self.healthKitManager.shouldInitializeHealthKit = true
+                                healthKitManager.authorizationStatus = .sharingAuthorized
+                                healthKitManager.shouldInitializeHealthKit = true
                             } else {
                                 print("Permission denied from DataPrivacyView")
                             }
@@ -179,9 +177,7 @@ struct HealthDataAccessView: View {
                     
                     print("Requesting direct inline permission with minimal types")
                     
-                    healthStore.requestAuthorization(toShare: nil, read: allTypes) { [weak self] success, error in
-                        guard let self = self else { return }
-                        
+                    healthStore.requestAuthorization(toShare: nil, read: allTypes) { success, error in
                         DispatchQueue.main.async {
                             if let error = error {
                                 print("Direct inline permission error: \(error)")
@@ -189,8 +185,8 @@ struct HealthDataAccessView: View {
                             print("Direct inline permission result: \(success)")
                             
                             if success {
-                                self.healthKitManager.shouldInitializeHealthKit = true
-                                self.healthKitManager.authorizationStatus = .sharingAuthorized
+                                healthKitManager.shouldInitializeHealthKit = true
+                                healthKitManager.authorizationStatus = .sharingAuthorized
                             }
                         }
                     }
