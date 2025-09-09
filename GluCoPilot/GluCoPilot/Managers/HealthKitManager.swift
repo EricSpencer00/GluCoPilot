@@ -125,9 +125,20 @@ class HealthKitManager: ObservableObject {
         
         // IMPORTANT: Always request authorization to ensure the iOS permission dialog shows
         // Do not check authorization status beforehand for READ permissions
+        // Detailed logging: print the exact sets we're passing to HealthKit
+        do {
+            let readNames = readTypes.compactMap { type -> String? in
+                if let q = type as? HKQuantityType { return q.identifier }
+                if let c = type as? HKCategoryType { return c.identifier }
+                return String(describing: type)
+            }
+            print("[HealthKitManager] requestAuthorization called. readTypes: \(readNames)")
+        }
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+            print("[HealthKitManager] requestAuthorization completion invoked. success=\(success) error=\(String(describing: error))")
             DispatchQueue.main.async {
                 if success {
+                    print("[HealthKitManager] Authorization success path")
                     if self?.showPermissionLogs ?? false {
                         print("HealthKit authorization granted successfully!")
                     }
@@ -145,6 +156,7 @@ class HealthKitManager: ObservableObject {
                     }
                 } else {
                     let message = error?.localizedDescription ?? "Unknown error"
+                    print("[HealthKitManager] Authorization failed message: \(message)")
                     self?.lastAuthorizationErrorMessage = message
                     if self?.showPermissionLogs ?? false {
                         print("HealthKit authorization denied: \(message)")
