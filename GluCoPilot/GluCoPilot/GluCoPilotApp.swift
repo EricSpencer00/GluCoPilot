@@ -20,6 +20,9 @@ struct GluCoPilotApp: App {
                     // For now, request HealthKit permissions immediately on first UI appearance.
                     // This is a temporary measure to ensure the permission prompt is shown reliably
                     // before we start observation. We may move this into an onboarding flow later.
+                    // Debug: print app identity so we can match device logs to App ID issues
+                    print("[App] bundleIdentifier: \(Bundle.main.bundleIdentifier ?? "<none>")")
+                    print("[App] healthKitAvailable: \(HKHealthStore.isHealthDataAvailable())")
                     healthManager.requestHealthKitPermissions()
                 }
         }

@@ -90,6 +90,8 @@ class HealthKitManager: ObservableObject {
     @Published var latestGlucoseSample: HealthKitGlucoseSample?
     // Debug: last time we explicitly refreshed from HealthKit
     @Published var lastHealthKitRefresh: Date?
+    // Publish the most recent authorization error message (if any) for UI/diagnostics
+    @Published var lastAuthorizationErrorMessage: String?
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -131,6 +133,8 @@ class HealthKitManager: ObservableObject {
                     self?.readPermissionsGranted = true
                     self?.readPermissionsGrantedStored = true
                     self?.authorizationStatus = .sharingAuthorized
+                    // Clear any previous auth error
+                    self?.lastAuthorizationErrorMessage = nil
                     
                     // Start observing glucose updates so app receives new samples in foreground & background
                     self?.startGlucoseObserving()
@@ -139,6 +143,7 @@ class HealthKitManager: ObservableObject {
                     }
                 } else {
                     let message = error?.localizedDescription ?? "Unknown error"
+                    self?.lastAuthorizationErrorMessage = message
                     if self?.showPermissionLogs ?? false {
                         print("HealthKit authorization denied: \(message)")
                     }
@@ -146,6 +151,9 @@ class HealthKitManager: ObservableObject {
                     self?.readPermissionsGranted = false
                     if message.contains("Failed to look up source with bundle identifier") {
                         print("HealthKit error indicates the app's bundle identifier doesn't match a registered source.\nPlease ensure the app's Product Bundle Identifier (in Xcode) and the installed app's bundle id match.\nAlso confirm HealthKit entitlements and Info.plist usage descriptions are present.")
+#if DEBUG
+                        print("[HealthKitManager] saved authorization error for UI: \(message)")
+#endif
 #if targetEnvironment(simulator)
                         print("Running in simulator: HealthKit is not fully supported. Falling back to stubbed values for UI testing.")
                         self?.authorizationStatus = .sharingAuthorized

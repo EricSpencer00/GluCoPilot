@@ -40,6 +40,15 @@ struct HealthKitSetupView: View {
                     .padding(.horizontal)
             }
 
+            // Show any HealthKit authorization error messages for diagnostics
+            if let authErr = healthKitManager.lastAuthorizationErrorMessage {
+                Text("Debug: \(authErr)")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+
             Button(action: requestPermissions) {
                 HStack {
                     if isRequesting {
