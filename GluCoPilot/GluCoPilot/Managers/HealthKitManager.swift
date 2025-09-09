@@ -60,7 +60,13 @@ class HealthKitManager: ObservableObject {
     // Flag to prevent any automatic initialization on app start
     @AppStorage("shouldInitializeHealthKit") var shouldInitializeHealthKit: Bool = false
     
-    private let healthStore = HKHealthStore()
+    // Use lazy initialization to ensure healthStore is properly created when needed
+    private lazy var healthStore: HKHealthStore = {
+        let store = HKHealthStore()
+        print("HealthStore initialized")
+        return store
+    }()
+    
     // Track active queries for proper cleanup
     private var activeQueries: [HKQuery] = []
     
@@ -120,12 +126,16 @@ class HealthKitManager: ObservableObject {
             return
         }
         
-        // Mark that we've explicitly initialized HealthKit
+        // Always enable HealthKit initialization when explicitly requesting permissions
         shouldInitializeHealthKit = true
+        
+        // Force log permissions for debugging
+        print("Requesting HealthKit permissions for types: \(readTypes)")
         
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
+                    print("HealthKit authorization was successful")
                     if self?.showPermissionLogs ?? false {
                         if self?.hasLoggedAuthorizationGranted == false {
                             print("HealthKit authorization granted")
@@ -929,6 +939,44 @@ extension HKWorkoutActivityType {
         case .functionalStrengthTraining: return "Strength Training"
         case .other: return "Other"
         default: return "Workout"
+        }
+    }
+}
+
+// MARK: - Force Permission Methods
+extension HealthKitManager {
+    /// Forces a new permission request by resetting internal state
+    func forceRequestHealthKitPermissions() {
+        // Reset internal state
+        readPermissionsGranted = false
+        readPermissionsGrantedStored = false
+        hasLoggedAuthorizationGranted = false
+        authorizationStatus = .notDetermined
+        shouldInitializeHealthKit = true
+        
+        print("Force requesting HealthKit permissions with reset state")
+        
+        // Request permissions with fresh state
+        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("HealthKit permission error: \(error.localizedDescription)")
+                }
+                
+                print("HealthKit permission result: \(success)")
+                
+                if success {
+                    self?.authorizationStatus = .sharingAuthorized
+                    self?.readPermissionsGranted = true
+                    self?.readPermissionsGrantedStored = true
+                    self?.startGlucoseObserving()
+                    _Concurrency.Task {
+                        await self?.updatePublishedProperties()
+                    }
+                } else {
+                    self?.authorizationStatus = .sharingDenied
+                }
+            }
         }
     }
 }

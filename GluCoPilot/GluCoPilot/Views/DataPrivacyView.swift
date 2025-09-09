@@ -148,9 +148,11 @@ struct HealthDataAccessView: View {
                 }
                 
                 Button(action: {
-                    healthKitManager.requestHealthKitPermissions()
+                    print("Requesting HealthKit permissions from HealthDataAccessView")
+                    // Force request permissions with fresh state
+                    healthKitManager.forceRequestHealthKitPermissions()
                 }) {
-                    Text("Review Permissions")
+                    Text("Request HealthKit Permissions")
                         .foregroundColor(.blue)
                 }
             }

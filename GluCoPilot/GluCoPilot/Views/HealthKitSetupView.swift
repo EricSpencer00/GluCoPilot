@@ -90,7 +90,9 @@ struct HealthKitSetupView: View {
         Task {
             // Trigger request on the HealthKit manager
             await MainActor.run {
-                healthKitManager.requestHealthKitPermissions()
+                print("Requesting HealthKit permissions from HealthKitSetupView")
+                // Force request permissions with fresh state
+                healthKitManager.forceRequestHealthKitPermissions()
             }
 
             // Poll briefly for change in authorization status (HealthKit callbacks can be async)
