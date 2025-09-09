@@ -120,6 +120,9 @@ struct ContentView: View {
             authManager.apiManager = apiManager
             // Inject HealthKitManager dependency outside the view builder
             authManager.healthKitManager = healthKitManager
+            
+            // Explicitly set shouldInitializeHealthKit to false on app start
+            healthKitManager.shouldInitializeHealthKit = false
 
             // Perform readiness checks immediately and show launch screen for a short minimum time
             Task {

@@ -943,8 +943,50 @@ extension HKWorkoutActivityType {
     }
 }
 
-// MARK: - Force Permission Methods
+// MARK: - Direct Permission Methods
 extension HealthKitManager {
+    /// Forces a direct permission request using a completely separate approach
+    func directRequestPermission(completion: @escaping (Bool) -> Void) {
+        print("Attempting direct HealthKit permission request")
+        
+        // Define a minimal set of types to increase chances of prompt showing
+        let minimalTypes: Set<HKObjectType> = [
+            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
+        ]
+        
+        // Create a new store explicitly for this request
+        let store = HKHealthStore()
+        
+        // Request authorization directly with minimal types
+        store.requestAuthorization(toShare: nil, read: minimalTypes) { [weak self] success, error in
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    completion(false)
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("Direct HealthKit request error: \(error.localizedDescription)")
+                }
+                
+                print("Direct HealthKit request result: \(success)")
+                
+                if success {
+                    // If minimal permission was granted, request the full set
+                    self.healthStore.requestAuthorization(toShare: nil, read: self.readTypes) { fullSuccess, fullError in
+                        DispatchQueue.main.async {
+                            completion(fullSuccess)
+                        }
+                    }
+                } else {
+                    completion(success)
+                }
+            }
+        }
+    }
+    
     /// Forces a new permission request by resetting internal state
     func forceRequestHealthKitPermissions() {
         // Reset internal state
@@ -956,8 +998,13 @@ extension HealthKitManager {
         
         print("Force requesting HealthKit permissions with reset state")
         
-        // Request permissions with fresh state
-        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+        // Create a brand new instance of HKHealthStore to avoid any caching
+        let freshHealthStore = HKHealthStore()
+        
+        // Request permissions with fresh state and store
+        freshHealthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+            guard let self = self else { return }
+            
             DispatchQueue.main.async {
                 if let error = error {
                     print("HealthKit permission error: \(error.localizedDescription)")
@@ -966,15 +1013,15 @@ extension HealthKitManager {
                 print("HealthKit permission result: \(success)")
                 
                 if success {
-                    self?.authorizationStatus = .sharingAuthorized
-                    self?.readPermissionsGranted = true
-                    self?.readPermissionsGrantedStored = true
-                    self?.startGlucoseObserving()
-                    _Concurrency.Task {
-                        await self?.updatePublishedProperties()
+                    self.authorizationStatus = .sharingAuthorized
+                    self.readPermissionsGranted = true
+                    self.readPermissionsGrantedStored = true
+                    self.startGlucoseObserving()
+                    Task {
+                        await self.updatePublishedProperties()
                     }
                 } else {
-                    self?.authorizationStatus = .sharingDenied
+                    self.authorizationStatus = .sharingDenied
                 }
             }
         }

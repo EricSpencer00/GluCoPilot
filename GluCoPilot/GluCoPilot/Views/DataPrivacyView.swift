@@ -1,4 +1,5 @@
 import SwiftUI
+import HealthKit
 
 struct DataPrivacyView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
@@ -148,12 +149,54 @@ struct HealthDataAccessView: View {
                 }
                 
                 Button(action: {
-                    print("Requesting HealthKit permissions from HealthDataAccessView")
-                    // Force request permissions with fresh state
-                    healthKitManager.forceRequestHealthKitPermissions()
+                    print("Direct HealthKit permission request from DataPrivacyView")
+                    healthKitManager.directRequestPermission { [weak self] success in
+                        guard let self = self else { return }
+                        
+                        DispatchQueue.main.async {
+                            if success {
+                                print("Permission granted from DataPrivacyView")
+                                self.healthKitManager.authorizationStatus = .sharingAuthorized
+                                self.healthKitManager.shouldInitializeHealthKit = true
+                            } else {
+                                print("Permission denied from DataPrivacyView")
+                            }
+                        }
+                    }
                 }) {
                     Text("Request HealthKit Permissions")
                         .foregroundColor(.blue)
+                }
+                
+                // Add a direct inline request button as a fallback
+                Button(action: {
+                    let healthStore = HKHealthStore()
+                    let allTypes = Set([
+                        HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
+                        HKObjectType.quantityType(forIdentifier: .stepCount)!,
+                        HKObjectType.quantityType(forIdentifier: .heartRate)!
+                    ])
+                    
+                    print("Requesting direct inline permission with minimal types")
+                    
+                    healthStore.requestAuthorization(toShare: nil, read: allTypes) { [weak self] success, error in
+                        guard let self = self else { return }
+                        
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                print("Direct inline permission error: \(error)")
+                            }
+                            print("Direct inline permission result: \(success)")
+                            
+                            if success {
+                                self.healthKitManager.shouldInitializeHealthKit = true
+                                self.healthKitManager.authorizationStatus = .sharingAuthorized
+                            }
+                        }
+                    }
+                }) {
+                    Text("Try Direct Permission Request")
+                        .foregroundColor(.red)
                 }
             }
         }
