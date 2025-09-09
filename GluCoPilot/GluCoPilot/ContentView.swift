@@ -32,6 +32,8 @@ struct ContentView: View {
                         UserDefaults.standard.set(true, forKey: "hasCompletedHealthKitSetup")
                         // When user completes setup, clear the requirement so the app can proceed
                         authManager.requiresHealthKitAuthorization = false
+                        // Request HealthKit permissions only after explicit user action
+                        healthKitManager.requestHealthKitPermissions()
                     })
                     .environmentObject(apiManager)
                     .environmentObject(healthKitManager)

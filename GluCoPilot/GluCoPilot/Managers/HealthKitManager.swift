@@ -91,6 +91,9 @@ class HealthKitManager: ObservableObject {
     // Debug: last time we explicitly refreshed from HealthKit
     @Published var lastHealthKitRefresh: Date?
     
+    // Flag to prevent automatic permission requests during initialization
+    private var shouldRequestPermissionsAutomatically = false
+    
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
         // Initialize read-permissions flag from persisted storage

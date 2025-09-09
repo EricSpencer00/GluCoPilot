@@ -5,17 +5,24 @@ struct MedicalDisclaimerView: View {
     @State private var hasAcknowledged = false
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Medical Disclaimer")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.bottom, 10)
-                
-                Text("IMPORTANT: NOT A MEDICAL DEVICE")
-                    .font(.headline)
-                    .foregroundColor(.red)
-                    .padding(.bottom, 5)
+        ZStack {
+            // Solid background to prevent text from showing over tab bar
+            Color(.systemBackground)
+                .edgesIgnoringSafeArea(.all)
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header with fixed white color
+                    Text("Medical Disclaimer")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.bottom, 10)
+                    
+                    Text("IMPORTANT: NOT A MEDICAL DEVICE")
+                        .font(.headline)
+                        .foregroundColor(.red)
+                        .padding(.bottom, 5)
                 
                 Text("GluCoPilot is not a medical device and is not intended to diagnose, treat, cure, or prevent any disease or health condition. The information provided by this app is for informational and educational purposes only.")
                     .font(.body)
@@ -59,7 +66,9 @@ struct MedicalDisclaimerView: View {
                 .padding(.top, 20)
                 
                 Button(action: {
-                    onAccept()
+                    if hasAcknowledged {
+                        onAccept()
+                    }
                 }) {
                     Text("I Understand and Accept")
                         .font(.headline)
@@ -71,10 +80,23 @@ struct MedicalDisclaimerView: View {
                 }
                 .disabled(!hasAcknowledged)
                 .padding(.top, 20)
+                .padding(.bottom, 40)  // Add extra padding at bottom for scrolling
             }
             .padding()
         }
-        .withTopGradient()
+        .safeAreaInset(edge: .top) {
+            // Empty view with padding to ensure content doesn't go under the status bar
+            Color.clear.frame(height: 0)
+        }
+        .background(
+            // Custom background for the entire view
+            LinearGradient(
+                gradient: Gradient(colors: [Color.blue, Color(.systemBackground)]),
+                startPoint: .top,
+                endPoint: .center
+            )
+            .edgesIgnoringSafeArea(.all)
+        )
     }
 }
 
