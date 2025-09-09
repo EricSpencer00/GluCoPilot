@@ -11,6 +11,12 @@ struct HealthKitSetupView: View {
 
     init(onComplete: (() -> Void)? = nil) {
         self.onComplete = onComplete
+        
+        // Reset any cached permissions state when the view is created
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let manager = HealthKitManager()
+            manager.resetAllHealthKitState()
+        }
     }
 
     var body: some View {
@@ -58,29 +64,66 @@ struct HealthKitSetupView: View {
             
             // Add a direct request button as a fallback
             Button(action: {
+                // Create a completely new HKHealthStore instance
                 let healthStore = HKHealthStore()
-                let allTypes = Set([
-                    HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
-                    HKObjectType.quantityType(forIdentifier: .stepCount)!,
-                    HKObjectType.quantityType(forIdentifier: .heartRate)!
+                
+                // Start with a single type for initial request
+                let singleType = Set([
+                    HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
                 ])
                 
-                print("Requesting direct permission with minimal types")
+                print("Requesting direct inline permission with SINGLE type")
+                self.isRequesting = true
+                self.requestResult = "Requesting permission..."
                 
-                healthStore.requestAuthorization(toShare: nil, read: allTypes) { success, error in
-                    DispatchQueue.main.async {
-                        if let error = error {
-                            print("Direct permission error: \(error)")
-                        }
-                        print("Direct permission result: \(success)")
-                        
-                        if success {
-                            self.requestResult = "Permissions granted via direct request"
-                            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                            self.healthKitManager.shouldInitializeHealthKit = true
-                            self.healthKitManager.authorizationStatus = .sharingAuthorized
-                            // Use the helper method to call onComplete correctly
-                            self.updateProperties()
+                // Set a timeout for this direct request
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+                    guard isRequesting else { return }
+
+                    // If we're still requesting after 15 seconds, show a message
+                    isRequesting = false
+                    requestResult = "Direct request timed out. Please try again or open Health app settings."
+                }
+                
+                // First, request a single type to maximize chance of prompt appearing
+                healthStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
+                    print("First direct inline permission result: \(success), error: \(String(describing: error))")
+                    
+                    // Now try with multiple types as a fallback
+                    let allTypes = Set([
+                        HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
+                        HKObjectType.quantityType(forIdentifier: .stepCount)!,
+                        HKObjectType.quantityType(forIdentifier: .heartRate)!
+                    ])
+                    
+                    // Create a fresh store for the second request
+                    let secondStore = HKHealthStore()
+                    
+                    print("Trying second direct inline permission with MULTIPLE types")
+                    
+                    secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: allTypes) { secondSuccess, secondError in
+                        DispatchQueue.main.async {
+                            self.isRequesting = false
+                            
+                            print("Second direct inline permission result: \(secondSuccess), error: \(String(describing: secondError))")
+                            
+                            // Use the best result we got
+                            let finalSuccess = success || secondSuccess
+                            
+                            if finalSuccess {
+                                self.requestResult = "Permissions granted via direct request"
+                                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                                self.healthKitManager.shouldInitializeHealthKit = true
+                                self.healthKitManager.authorizationStatus = .sharingAuthorized
+                                // Use the helper method to call onComplete correctly
+                                self.updateProperties()
+                            } else {
+                                if let error = error ?? secondError {
+                                    self.requestResult = "Error: \(error.localizedDescription)"
+                                } else {
+                                    self.requestResult = "Direct request: Permissions not granted"
+                                }
+                            }
                         }
                     }
                 }
@@ -146,12 +189,31 @@ struct HealthKitSetupView: View {
         
         print("HealthKitSetupView: Starting permission request")
         
-        // Use the direct request method
-        healthKitManager.directRequestPermission { success in
-            DispatchQueue.main.async {
-                self.isRequesting = false
-                
-                if success {
+        // Set a timeout to update UI if the request hangs
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            guard isRequesting else { return }
+
+            // If we're still requesting after 15 seconds, show a message
+            isRequesting = false
+            requestResult = "Request timed out. Please try again or use the direct request button below."
+        }
+        
+        // Clear all cached permissions to ensure prompt shows
+        UserDefaults.standard.removeObject(forKey: "hk_read_permissions_granted")
+        
+        // Try a direct approach first with our own HKHealthStore
+        let directStore = HKHealthStore()
+        let singleType = Set([HKObjectType.quantityType(forIdentifier: .bloodGlucose)!])
+        
+        print("HealthKitSetupView: Trying direct single-type request first")
+        
+        directStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { [self] firstSuccess, firstError in
+            print("HealthKitSetupView: First direct request result: \(firstSuccess), error: \(String(describing: firstError))")
+            
+            // If that worked, great! If not, try the manager approach
+            if firstSuccess {
+                DispatchQueue.main.async {
+                    self.isRequesting = false
                     self.requestResult = "Permissions granted \u{2014} syncing data..."
                     // Mark that user has completed setup
                     UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
@@ -162,10 +224,35 @@ struct HealthKitSetupView: View {
                     self.healthKitManager.shouldInitializeHealthKit = true
                     self.healthKitManager.authorizationStatus = .sharingAuthorized
                     
-                    // Fetch initial properties using a Task wrapped in a function that doesn't use async/await
+                    // Fetch initial properties
                     self.updateProperties()
-                } else {
-                    self.requestResult = "Permissions not granted. You can enable them in Settings to access full features."
+                }
+            } else {
+                // Try the manager's method as a fallback
+                print("HealthKitSetupView: First attempt failed, trying manager method")
+                
+                // Use the direct request method from the manager
+                healthKitManager.directRequestPermission { success in
+                    DispatchQueue.main.async {
+                        self.isRequesting = false
+                        
+                        if success {
+                            self.requestResult = "Permissions granted \u{2014} syncing data..."
+                            // Mark that user has completed setup
+                            UserDefaults.standard.set(false, forKey: "hasSkippedHealthKitSetup")
+                            UserDefaults.standard.set(true, forKey: "hasAcknowledgedLimitedFunctionality")
+                            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                            
+                            // Set the manager state
+                            self.healthKitManager.shouldInitializeHealthKit = true
+                            self.healthKitManager.authorizationStatus = .sharingAuthorized
+                            
+                            // Fetch initial properties
+                            self.updateProperties()
+                        } else {
+                            self.requestResult = "Permissions not granted. You can enable them in Settings to access full features."
+                        }
+                    }
                 }
             }
         }

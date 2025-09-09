@@ -949,42 +949,93 @@ extension HealthKitManager {
     func directRequestPermission(completion: @escaping (Bool) -> Void) {
         print("Attempting direct HealthKit permission request")
         
-        // Define a minimal set of types to increase chances of prompt showing
-        let minimalTypes: Set<HKObjectType> = [
+        // Force reset status to ensure iOS shows the prompt
+        authorizationStatus = .notDetermined
+        readPermissionsGranted = false
+        readPermissionsGrantedStored = false
+        
+        // Create a completely new minimal type set
+        let singleType: Set<HKObjectType> = [
             HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
         ]
         
-        // Create a new store explicitly for this request
-        let store = HKHealthStore()
+        // Create a brand new store instance to avoid any iOS caching
+        let freshStore = HKHealthStore()
         
-        // Request authorization directly with minimal types
-        store.requestAuthorization(toShare: nil, read: minimalTypes) { [weak self] success, error in
-            guard let self = self else {
-                DispatchQueue.main.async {
-                    completion(false)
-                }
-                return
-            }
+        // Set a timeout to ensure the completion is called eventually
+        let timeoutWorkItem = DispatchWorkItem {
+            print("HealthKit permission request timed out")
+            completion(false)
+        }
+        
+        print("Requesting SINGLE type authorization to force prompt")
+        
+        // Request authorization with minimal configuration
+        freshStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
+            // Cancel timeout since we got a response
+            timeoutWorkItem.cancel()
             
             DispatchQueue.main.async {
                 if let error = error {
                     print("Direct HealthKit request error: \(error.localizedDescription)")
+                    completion(false)
+                    return
                 }
                 
-                print("Direct HealthKit request result: \(success)")
+                print("Direct HealthKit SINGLE type request result: \(success)")
                 
-                if success {
-                    // If minimal permission was granted, request the full set
-                    self.healthStore.requestAuthorization(toShare: nil, read: self.readTypes) { fullSuccess, fullError in
-                        DispatchQueue.main.async {
-                            completion(fullSuccess)
+                // Even if the first request fails, try the second one
+                // Create yet another fresh store for the second request
+                let secondStore = HKHealthStore()
+                let allTypesForSecondRequest: Set<HKObjectType> = [
+                    HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
+                    HKObjectType.quantityType(forIdentifier: .stepCount)!,
+                    HKObjectType.quantityType(forIdentifier: .heartRate)!
+                ]
+                
+                print("Requesting MULTIPLE types authorization as backup")
+                
+                // Try a second request with more types
+                secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: allTypesForSecondRequest) { secondSuccess, secondError in
+                    DispatchQueue.main.async {
+                        if let secondError = secondError {
+                            print("Second HealthKit request error: \(secondError.localizedDescription)")
                         }
+                        
+                        print("Second HealthKit request result: \(secondSuccess)")
+                        
+                        // Return the best result we got
+                        let finalResult = success || secondSuccess
+                        completion(finalResult)
                     }
-                } else {
-                    completion(success)
                 }
             }
         }
+        
+        // Set a timeout of 15 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeoutWorkItem)
+    }
+    
+    /// Reset all HealthKit-related caches to force a fresh authorization prompt
+    func resetAllHealthKitState() {
+        print("Resetting all HealthKit state")
+        
+        // Reset our internal tracking
+        readPermissionsGranted = false
+        readPermissionsGrantedStored = false
+        hasLoggedAuthorizationGranted = false
+        authorizationStatus = .notDetermined
+        shouldInitializeHealthKit = false
+        
+        // Clear UserDefaults values
+        UserDefaults.standard.removeObject(forKey: "hk_read_permissions_granted")
+        UserDefaults.standard.removeObject(forKey: "hasSkippedHealthKitSetup")
+        
+        // Force a new HealthStore to be created next time
+        activeQueries.forEach { query in
+            healthStore.stop(query)
+        }
+        activeQueries.removeAll()
     }
     
     /// Forces a new permission request by resetting internal state
@@ -1001,29 +1052,55 @@ extension HealthKitManager {
         // Create a brand new instance of HKHealthStore to avoid any caching
         let freshHealthStore = HKHealthStore()
         
-        // Request permissions with fresh state and store
-        freshHealthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
-            guard let self = self else { return }
-            
+        // Set a timeout to ensure we don't hang indefinitely
+        let timeoutWorkItem = DispatchWorkItem {
+            print("HealthKit permission request timed out")
             DispatchQueue.main.async {
-                if let error = error {
-                    print("HealthKit permission error: \(error.localizedDescription)")
-                }
+                self.authorizationStatus = .sharingDenied
+            }
+        }
+        
+        // Try with a minimal set first to increase chances of prompt
+        let singleType: Set<HKObjectType> = [
+            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
+        ]
+        
+        // Request permissions with fresh state and store
+        freshHealthStore.requestAuthorization(toShare: Set<HKSampleType>(), read: singleType) { success, error in
+            print("First force permission request result: \(success), error: \(String(describing: error))")
+            
+            // Create a second fresh store
+            let secondStore = HKHealthStore()
+            
+            // Try with more types if first attempt didn't work
+            secondStore.requestAuthorization(toShare: Set<HKSampleType>(), read: self.readTypes) { [weak self] secondSuccess, secondError in
+                // Cancel timeout since we have a response
+                timeoutWorkItem.cancel()
                 
-                print("HealthKit permission result: \(success)")
+                guard let self = self else { return }
                 
-                if success {
-                    self.authorizationStatus = .sharingAuthorized
-                    self.readPermissionsGranted = true
-                    self.readPermissionsGrantedStored = true
-                    self.startGlucoseObserving()
-                    Task {
-                        await self.updatePublishedProperties()
+                print("Second force permission request result: \(secondSuccess), error: \(String(describing: secondError))")
+                
+                // Use the best result
+                let finalSuccess = success || secondSuccess
+                
+                DispatchQueue.main.async {
+                    if finalSuccess {
+                        self.authorizationStatus = .sharingAuthorized
+                        self.readPermissionsGranted = true
+                        self.readPermissionsGrantedStored = true
+                        self.startGlucoseObserving()
+                        Task {
+                            await self.updatePublishedProperties()
+                        }
+                    } else {
+                        self.authorizationStatus = .sharingDenied
                     }
-                } else {
-                    self.authorizationStatus = .sharingDenied
                 }
             }
         }
+        
+        // Set a timeout of 15 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeoutWorkItem)
     }
 }
