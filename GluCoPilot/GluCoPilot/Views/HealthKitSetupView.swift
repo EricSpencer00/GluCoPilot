@@ -73,6 +73,28 @@ struct HealthKitSetupView: View {
             .controlSize(.mini)
             .padding(.horizontal)
 
+            // Minimal request for debugging: only ask for blood glucose
+            Button(action: {
+                isRequesting = true
+                requestResult = "Requesting minimal HealthKit permissions..."
+                Task {
+                    await MainActor.run {
+                        healthKitManager.requestHealthKitPermissionsMinimal()
+                    }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    await MainActor.run {
+                        isRequesting = false
+                        requestResult = "Minimal permission request sent"
+                    }
+                }
+            }) {
+                Text("Request minimal (blood glucose only)")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
             // If the auth flow requires HealthKit, do not allow skipping.
             if authManager.requiresHealthKitAuthorization {
                 Text("Health data permission is required to continue.")

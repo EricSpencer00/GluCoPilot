@@ -213,6 +213,51 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// Debug helper: request authorization for only blood glucose (minimal set) to test whether the system
+    /// permission sheet appears. This reduces the surface area of the permission dialog and helps
+    /// determine if asking for many types at once is causing suppression.
+    func requestHealthKitPermissionsMinimal() {
+        guard isHealthKitAvailable else {
+            print("[HealthKitManager] Minimal request: HealthKit not available")
+            return
+        }
+
+        guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else {
+            print("[HealthKitManager] Minimal request: bloodGlucose type unavailable")
+            return
+        }
+
+        // If app is not active, defer until it is to avoid suppression
+        if UIApplication.shared.applicationState != .active {
+            print("[HealthKitManager] Minimal request: app not active; deferring until didBecomeActive")
+            if let token = pendingAuthorizationObserver {
+                NotificationCenter.default.removeObserver(token)
+                pendingAuthorizationObserver = nil
+            }
+            pendingAuthorizationObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.pendingAuthorizationObserver = nil
+                print("[HealthKitManager] Minimal request: didBecomeActive observed — retrying minimal permission request")
+                self?.requestHealthKitPermissionsMinimal()
+            }
+            return
+        }
+
+        print("[HealthKitManager] Minimal requestAuthorization called for bloodGlucose only")
+        HKHealthStore().requestAuthorization(toShare: nil, read: [glucoseType]) { success, error in
+            print("[HealthKitManager] Minimal requestAuthorization completion. success=\(success) error=\(String(describing: error))")
+            DispatchQueue.main.async {
+                if success {
+                    self.authorizationStatus = .sharingAuthorized
+                    self.readPermissionsGranted = true
+                    self.readPermissionsGrantedStored = true
+                    self.startGlucoseObserving()
+                } else {
+                    self.lastAuthorizationErrorMessage = error?.localizedDescription
+                }
+            }
+        }
+    }
+
     /// Run a compact diagnostics report that prints authorization/read state and recent glucose/source counts.
     func runDiagnostics() async {
         var out: [String] = []
