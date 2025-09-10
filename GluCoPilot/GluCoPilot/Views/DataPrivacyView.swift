@@ -90,7 +90,7 @@ struct DataPrivacyView: View {
         }
         .alert("Data Export", isPresented: $exportSuccess) {
             Button("Share") {
-                if let url = shareURL { showShareSheet = true }
+                if shareURL != nil { showShareSheet = true }
             }
             Button("OK", role: .cancel) { }
         } message: {
