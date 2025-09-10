@@ -1212,6 +1212,34 @@ class APIManager: ObservableObject {
         return payload
     }
     
+    /// Send a combined frontend payload (health data + cached items) to the dedicated `/ai-insights` endpoint.
+    /// Returns parsed AI insights on success.
+    func sendAIInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem], prompt: String? = nil) async throws -> [AIInsight] {
+        let url = URL(string: "\(baseURL)/ai-insights")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Prefer a backend-issued token if available
+        if let token = try? await ensureBackendToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let payload = buildAIInsightsPayload(healthData: healthData, cachedItems: cachedItems, prompt: prompt)
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw APIManagerError.invalidResponse }
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw APIManagerError.unauthorized }
+            let msg = String(data: data, encoding: .utf8) ?? "<no body>"
+            throw APIManagerError.serverError(msg)
+        }
+
+        // Reuse existing insights parsing
+        return try parseInsightsResponse(data: data)
+    }
+    
     private func getDefaultInsights() -> [AIInsight] {
         return [
             AIInsight(

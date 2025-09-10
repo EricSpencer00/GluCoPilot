@@ -1381,6 +1381,46 @@ class HealthKitManager: ObservableObject {
                 print("[HealthKitManager] requested WidgetCenter.reloadAllTimelines()")
 #endif
             }
+
+            // Build combined payload and send to AI insights endpoint in one call
+            Task { @MainActor in
+                // Map glucose samples to APIManager model
+                let apiGlucose: [APIManagerGlucoseReading] = samples.map { s in
+                    let mgdl = s.value
+                    return APIManagerGlucoseReading(value: Int(round(mgdl)), trend: "unknown", timestamp: s.timestamp, unit: s.unit)
+                }
+
+                // Map workouts from local store
+                let savedWorkouts = self.getSavedWorkouts()
+                let apiWorkouts: [APIManagerWorkoutData] = savedWorkouts.map { w in
+                    return APIManagerWorkoutData(type: w.type, duration: w.durationMinutes * 60.0, calories: w.caloriesKcal, startDate: w.startDate, endDate: w.endDate)
+                }
+
+                // Map food items from local store
+                let savedFoods = self.getSavedFoodItems()
+                let apiFoods: [APIManagerNutritionData] = savedFoods.map { f in
+                    return APIManagerNutritionData(name: f.name ?? "Food", calories: f.caloriesKcal, carbs: f.carbsGrams, protein: f.proteinGrams, fat: f.fatGrams, timestamp: f.timestamp)
+                }
+
+                // Build APIManagerHealthData
+                let apiHealthData = APIManagerHealthData(glucose: apiGlucose, workouts: apiWorkouts, nutrition: apiFoods, timestamp: Date())
+
+                // Gather cached items from CacheManager
+                let cached = CacheManager.shared.getItems(since: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date())
+
+                // Send to API
+                let api = APIManager()
+                do {
+                    let insights = try await api.sendAIInsights(healthData: apiHealthData, cachedItems: cached, prompt: nil)
+#if DEBUG
+                    print("[HealthKitManager] sendAIInsights returned \(insights.count) insights")
+#endif
+                } catch {
+#if DEBUG
+                    print("[HealthKitManager] sendAIInsights failed: \(error.localizedDescription)")
+#endif
+                }
+            }
         } catch {
 #if DEBUG
             print("[HealthKitManager] refreshFromHealthKit failed: \(error.localizedDescription)")
