@@ -66,4 +66,18 @@ struct AnyCodable: Codable, Equatable {
         default: try container.encode(String(describing: value))
         }
     }
+
+    static func ==(lhs: AnyCodable, rhs: AnyCodable) -> Bool {
+        switch (lhs.value, rhs.value) {
+        case let (l as Int, r as Int): return l == r
+        case let (l as Double, r as Double): return l == r
+        case let (l as Bool, r as Bool): return l == r
+        case let (l as String, r as String): return l == r
+        case let (l as [String: AnyCodable], r as [String: AnyCodable]): return l == r
+        case let (l as [AnyCodable], r as [AnyCodable]): return l == r
+        default:
+            // Fallback: compare stable string representations
+            return String(describing: lhs.value) == String(describing: rhs.value)
+        }
+    }
 }
