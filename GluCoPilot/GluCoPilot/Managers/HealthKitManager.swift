@@ -618,6 +618,51 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
+
+    /// Fetch recent HKCorrelation "food" records and return a human-readable summary.
+    /// This helps verify whether apps like MyFitnessPal are writing food/nutrition data into HealthKit.
+    func fetchRecentFoodCorrelations(limit: Int = 50, from startDate: Date? = nil, to endDate: Date = Date()) async -> [String] {
+        guard let foodType = HKObjectType.correlationType(forIdentifier: .food) else {
+            return ["food correlation type not available on this device"]
+        }
+
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: foodType,
+                                      predicate: predicate,
+                                      limit: limit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    continuation.resume(returning: ["error: \(error.localizedDescription)"])
+                    return
+                }
+
+                let formatted: [String] = (samples as? [HKCorrelation])?.map { corr in
+                    let start = corr.startDate
+                    let source = corr.sourceRevision.source.name
+                    let bundle = corr.sourceRevision.source.bundleIdentifier ?? "-"
+                    // Summarize contained samples (quantity samples usually hold nutrient values)
+                    let components = corr.objects.map { obj -> String in
+                        if let q = obj as? HKQuantitySample {
+                            let id = (q.quantityType as? HKQuantityType)?.identifier ?? "qty"
+                            // Try grams then fallback to raw double
+                            let v = q.quantity.doubleValue(for: .gram())
+                            return "\(id):\(String(format: "%.1f", v))"
+                        } else {
+                            return String(describing: type(of: obj))
+                        }
+                    }
+                    return "ts:\(start) source:\(source) bundle:\(bundle) items:[\(components.joined(separator: ","))] metadata:\(corr.metadata ?? [:])"
+                } ?? ["<no food correlations found>"]
+
+                continuation.resume(returning: formatted)
+            }
+
+            healthStore.execute(query)
+        }
+    }
     
     func fetchGlucoseSampleCount() async throws -> Int {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return 0 }

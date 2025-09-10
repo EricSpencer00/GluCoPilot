@@ -6,6 +6,7 @@ struct HealthKitSetupView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var isRequesting = false
     @State private var requestResult: String? = nil
+    @State private var nutritionReport: [String]? = nil
     let onComplete: (() -> Void)?
 
     init(onComplete: (() -> Void)? = nil) {
@@ -119,6 +120,23 @@ struct HealthKitSetupView: View {
             .controlSize(.mini)
             .padding(.horizontal)
 
+            // Quick-check: list nutrition sources and recent food correlations
+            Button(action: fetchNutritionSources) {
+                Text("Check Nutrition Sources")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: fetchRecentFood) {
+                Text("Fetch Recent Food Records")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
             if let report = healthKitManager.debugReport {
                 ScrollView {
                     Text(report)
@@ -127,6 +145,24 @@ struct HealthKitSetupView: View {
                 }
                 .frame(maxHeight: 240)
                 .background(Color(.secondarySystemBackground))
+                .cornerRadius(8)
+                .padding(.horizontal)
+            }
+
+            if let nutrition = nutritionReport {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(nutrition.indices, id: \.self) { i in
+                            Text(nutrition[i])
+                                .font(.caption2)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding()
+                }
+                .frame(maxHeight: 240)
+                .background(Color(.tertiarySystemBackground))
                 .cornerRadius(8)
                 .padding(.horizontal)
             }
@@ -245,6 +281,30 @@ struct HealthKitSetupView: View {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         if UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
+        }
+    }
+
+    private func fetchNutritionSources() {
+        requestResult = "Fetching nutrition sources..."
+        nutritionReport = nil
+        Task {
+            let sources = await healthKitManager.fetchSourcesReportAll()
+            await MainActor.run {
+                nutritionReport = sources
+                requestResult = "Nutrition sources fetched"
+            }
+        }
+    }
+
+    private func fetchRecentFood() {
+        requestResult = "Fetching recent food records..."
+        nutritionReport = nil
+        Task {
+            let items = await healthKitManager.fetchRecentFoodCorrelations()
+            await MainActor.run {
+                nutritionReport = items
+                requestResult = "Recent food records fetched"
+            }
         }
     }
 }
