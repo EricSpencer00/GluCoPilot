@@ -36,7 +36,7 @@ async def get_glucose_readings(
     if not settings.USE_DATABASE:
         raise HTTPException(status_code=410, detail="Disabled in stateless mode. Use POST /api/v1/glucose/stateless/sync with Dexcom credentials.")
 
-    logger.info(f"Fetching glucose readings for user {current_user.id}")
+    logger.debug(f"Fetching glucose readings for user {current_user.id}")
     
     query = db.query(GlucoseReading).filter(GlucoseReading.user_id == current_user.id)
     
@@ -67,7 +67,7 @@ async def get_glucose_readings(
     for r in readings:
         r.trend_arrow = map_trend_arrow(r.trend)
     
-    logger.info(f"Retrieved {len(readings)} glucose readings")
+    logger.debug(f"Retrieved {len(readings)} glucose readings")
     return readings
 
 @router.get("/latest", response_model=GlucoseReadingResponse)
@@ -119,7 +119,7 @@ async def create_glucose_reading(
     if not settings.USE_DATABASE:
         raise HTTPException(status_code=410, detail="Disabled in stateless mode.")
 
-    logger.info(f"Creating manual glucose reading for user {current_user.id}")
+    logger.debug(f"Creating manual glucose reading for user {current_user.id}")
     
     reading = GlucoseReading(
         user_id=current_user.id,
@@ -142,7 +142,7 @@ async def create_glucose_reading(
     db.commit()
     db.refresh(reading)
     
-    logger.info(f"Created glucose reading: {reading.value} mg/dL")
+    logger.debug(f"Created glucose reading: {reading.value} mg/dL")
     return reading
 
 @router.get("/stats", response_model=GlucoseStats)
@@ -156,7 +156,7 @@ async def get_glucose_stats(
     if not settings.USE_DATABASE:
         raise HTTPException(status_code=410, detail="Disabled in stateless mode. Use POST /api/v1/glucose/stateless/stats with Dexcom credentials.")
 
-    logger.info(f"Calculating glucose stats for user {current_user.id}, {days} days")
+    logger.debug(f"Calculating glucose stats for user {current_user.id}, {days} days")
     
     start_date = datetime.utcnow() - timedelta(days=days)
     
@@ -198,7 +198,7 @@ async def get_glucose_stats(
         period_days=days
     )
     
-    logger.info(f"Glucose stats calculated: TIR={stats.time_in_range}%")
+    logger.debug(f"Glucose stats calculated: TIR={stats.time_in_range}%")
     return stats
 
 @router.post("/sync")

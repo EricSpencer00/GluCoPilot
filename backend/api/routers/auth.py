@@ -36,12 +36,12 @@ async def apple_register(
     db: Session = Depends(get_db)
 ):
     """Register/authenticate with Apple ID token."""
-    logger.info(f"Apple registration attempt: {data.email or '[no email]'}")
+    logger.debug(f"Apple registration attempt: {data.email or '[no email]'}")
 
     if not credentials or not getattr(credentials, 'credentials', None):
         raise HTTPException(status_code=401, detail="Missing Authorization header with Apple id_token")
     claims = verify_apple_token(credentials.credentials, audience=settings.APPLE_CLIENT_ID or None)
-    logger.info(f"Apple token claims: {claims}")
+    logger.debug(f"Apple token claims: {claims}")
     apple_user_id = claims.get('sub')
     
     # Verify the apple_id matches the token
@@ -55,15 +55,15 @@ async def apple_register(
 
     if not settings.USE_DATABASE:
         # Stateless mode: just return JWT without DB persistence
-        logger.info("Stateless mode: creating JWT without DB persistence")
-        access_token = create_access_token(data={"sub": apple_user_id})
-        return {"access_token": access_token, "token_type": "bearer"}
+    logger.debug("Stateless mode: creating JWT without DB persistence")
+    access_token = create_access_token(data={"sub": apple_user_id})
+    return {"access_token": access_token, "token_type": "bearer"}
 
     # Database mode: find or create user
     # Database mode: find or create user
     user = db.query(User).filter(User.apple_id == apple_user_id).first()
     if not user:
-        logger.info(f"Creating new user with Apple ID: {apple_user_id}")
+        logger.debug(f"Creating new user with Apple ID: {apple_user_id}")
         user = User(
             apple_id=apple_user_id,
             email=data.email,
@@ -93,8 +93,8 @@ async def social_login(
     db: Session = Depends(get_db)
 ):
     """Authenticate via Apple/Google. If USE_DATABASE is False, do not persist users; just mint app JWT."""
-    logger.info(f"Entered social_login handler for provider={data.provider} email={data.email}")
-    logger.info(f"Social login attempt: {data.email or '[no email]'} via {data.provider}")
+    logger.debug(f"Entered social_login handler for provider={data.provider} email={data.email}")
+    logger.debug(f"Social login attempt: {data.email or '[no email]'} via {data.provider}")
 
     apple_user_id = None
     if data.provider == 'apple':
@@ -102,7 +102,7 @@ async def social_login(
         token = data.id_token
         if not token:
             raise HTTPException(status_code=400, detail="No Apple id_token provided in request body")
-        logger.info("Verifying Apple id_token from request body")
+        logger.debug("Verifying Apple id_token from request body")
         try:
             claims = verify_apple_token(token, audience=settings.APPLE_CLIENT_ID or None)
         except HTTPException:
@@ -110,7 +110,7 @@ async def social_login(
             raise
         except Exception:
             raise HTTPException(status_code=401, detail="Failed to verify Apple id_token")
-        logger.info(f"Apple token claims: {claims}")
+        logger.debug(f"Apple token claims: {claims}")
         apple_user_id = claims.get('sub')
         # Only check email match if both are present
         if claims.get("email") and data.email:
@@ -201,7 +201,7 @@ async def social_login(
         db.commit()
     except Exception:
         # In case some user fields aren't writable or DB issues occur, continue and return tokens
-        logger.info("Could not persist refresh token; continuing in stateless-like mode")
+    logger.debug("Could not persist refresh token; continuing in stateless-like mode")
 
     return {
         "access_token": access_token,
@@ -236,7 +236,7 @@ async def debug_social_login(data: SocialLoginRequest):
 @router.post("/social-login-unprotected")
 async def social_login_unprotected(data: SocialLoginRequest):
     """Unprotected test endpoint to verify routing without Authorization header."""
-    logger.info("Entered social_login_unprotected handler")
+    logger.debug("Entered social_login_unprotected handler")
     return {"ok": True, "provider": data.provider, "email": data.email}
 
 # Keep Dexcom connect endpoint after auth
