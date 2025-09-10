@@ -368,29 +368,41 @@ class AIInsightsEngine:
                     
                     if completion.choices and completion.choices[0].message.content:
                         ai_response = completion.choices[0].message.content.strip()
-                        # Log a trimmed preview of model output to help debug parsing issues
+                        # In production (DEBUG=false) avoid logging full model output or previews.
                         try:
-                            preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
-                            logger.info(f"Model returned {len(ai_response)} chars; preview: {preview}")
-                            
-                            # Quick validation - attempt to parse here just for logging
+                            if getattr(settings, 'DEBUG', False):
+                                preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
+                                logger.info(f"Model returned {len(ai_response)} chars; preview: {preview}")
+                            else:
+                                # Log only length and hash to assist diagnostics without exposing content
+                                try:
+                                    import hashlib
+                                    h = hashlib.sha256(ai_response.encode('utf-8')).hexdigest()
+                                    logger.info(f"Model output length={len(ai_response)} sha256={h}")
+                                except Exception:
+                                    logger.info(f"Model output length={len(ai_response)}")
+
+                            # Quick validation - attempt to parse here but do not log raw JSON in production
                             try:
                                 json.loads(ai_response)
-                                logger.info("Model returned valid JSON that parsed successfully")
+                                if getattr(settings, 'DEBUG', False):
+                                    logger.info("Model returned valid JSON that parsed successfully")
                             except json.JSONDecodeError as je:
-                                logger.warning(f"Model returned invalid JSON: {str(je)}")
-                                
+                                if getattr(settings, 'DEBUG', False):
+                                    logger.warning(f"Model returned invalid JSON: {str(je)}")
                                 # Try to clean the response for JSON parsing
                                 cleaned_response = re.sub(r'```json|```', '', ai_response).strip()
                                 try:
                                     json.loads(cleaned_response)
-                                    logger.info("Cleaned response is valid JSON")
+                                    if getattr(settings, 'DEBUG', False):
+                                        logger.info("Cleaned response is valid JSON")
                                     ai_response = cleaned_response
                                 except json.JSONDecodeError:
-                                    logger.warning("Even after cleaning, JSON is invalid")
-                                
+                                    if getattr(settings, 'DEBUG', False):
+                                        logger.warning("Even after cleaning, JSON is invalid")
                         except Exception:
-                            logger.info("Model returned content (unable to preview)")
+                            if getattr(settings, 'DEBUG', False):
+                                logger.info("Model returned content (unable to preview)")
                         
                         # If response looks truncated, try a single continuation attempt
                         try:

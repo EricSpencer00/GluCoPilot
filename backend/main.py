@@ -119,13 +119,18 @@ async def log_requests(request: Request, call_next):
                 pass
         except Exception:
             headers['authorization'] = 'Bearer [REDACTED]'
+    # Minimal request logging in production to avoid sensitive data in logs
     logger.info(f"Incoming request: {request.method} {request.url}")
-    logger.info(f"Headers: {headers}")
-    logger.info(f"Client: {request.client}")
+    if getattr(settings, 'DEBUG', False):
+        logger.info(f"Headers: {headers}")
+        logger.info(f"Client: {request.client}")
 
     response = await call_next(request)
 
-    logger.info(f"Response status: {response.status_code}")
+    if getattr(settings, 'DEBUG', False):
+        logger.info(f"Response status: {response.status_code}")
+    else:
+        logger.info(f"Response: {request.method} {request.url.path} -> {response.status_code}")
     return response
 
 @app.get("/")
