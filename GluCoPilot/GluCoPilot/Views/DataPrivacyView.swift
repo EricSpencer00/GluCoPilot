@@ -247,26 +247,37 @@ struct HealthDataAccessView: View {
 
 struct CollectedDataSummaryView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var glucoseCount24h: Int = 0
+    @State private var workoutCount24h: Int = 0
+    @State private var hasStepsToday: Bool = false
+    @State private var hasHeartRateToday: Bool = false
+    @State private var nutritionItems24h: Int = 0
+    @State private var sleepHours24h: Double = 0
+    @State private var loadError: String? = nil
     
     var body: some View {
         List {
             Section(header: Text("Glucose Data")) {
-                Text("Last 7 days: \(Int.random(in: 10...50)) readings")
-                Text("Last 30 days: \(Int.random(in: 40...200)) readings")
+                Text("Last 24 hours: \(glucoseCount24h) readings")
+                if let err = loadError {
+                    Text("Note: \(err)")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Section(header: Text("Activity Data")) {
-                Text("Last 7 days: \(Int.random(in: 5...20)) workouts")
-                Text("Step count records: \(Int.random(in: 1...30)) days")
+                Text("Last 24 hours: \(workoutCount24h) workouts")
+                Text(hasStepsToday ? "Step count: available today" : "Step count: not available today")
             }
             
             Section(header: Text("Food Entries")) {
-                Text("Last 30 days: \(Int.random(in: 0...60)) entries")
+                Text("Last 24 hours: \(nutritionItems24h) entries")
             }
             
             Section(header: Text("Other Health Data")) {
-                Text("Sleep records: \(Int.random(in: 1...30)) days")
-                Text("Heart rate samples: \(Int.random(in: 1...30)) days")
+                Text(String(format: "Sleep (last 24h): %.1f hours", sleepHours24h))
+                Text(hasHeartRateToday ? "Heart rate: available today" : "Heart rate: not available today")
             }
             
             Section(header: Text("Note")) {
@@ -277,6 +288,24 @@ struct CollectedDataSummaryView: View {
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Your Data Summary")
+        .task {
+            await loadCounts()
+        }
+    }
+
+    private func loadCounts() async {
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            glucoseCount24h = data.glucose.count
+            workoutCount24h = data.workouts.count
+            hasStepsToday = data.steps > 0
+            hasHeartRateToday = data.averageHeartRate > 0
+            nutritionItems24h = data.nutrition.count
+            sleepHours24h = data.sleepHours
+            loadError = nil
+        } catch {
+            loadError = "Health data not available or not authorized"
+        }
     }
 }
 
