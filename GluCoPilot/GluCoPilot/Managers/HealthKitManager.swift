@@ -81,6 +81,16 @@ class HealthKitManager: ObservableObject {
         HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
         HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!
     ]
+
+    // Health data types we may write back to HealthKit (used for storing AI insights)
+    // We use a category sample (mindfulSession) as a cross-SDK-compatible container for JSON metadata.
+    private var writeTypes: Set<HKSampleType> {
+        var s: Set<HKSampleType> = []
+        if let mindful = HKObjectType.categoryType(forIdentifier: .mindfulSession) {
+            s.insert(mindful)
+        }
+        return s
+    }
     
     // Add a new property to track read permissions
     // Persist read permission across instances so we don't re-prompt unnecessarily
@@ -169,7 +179,7 @@ class HealthKitManager: ObservableObject {
             }
             print("[HealthKitManager] requestAuthorization called. readTypes: \(readNames)")
         }
-        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+    healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { [weak self] success, error in
             print("[HealthKitManager] requestAuthorization completion invoked. success=\(success) error=\(String(describing: error))")
             DispatchQueue.main.async {
                 if success {
@@ -1469,8 +1479,38 @@ class HealthKitManager: ObservableObject {
     /// the idea of a pseudodatabase for later sync/inspection.
     private func saveInsightsToHealthKit(insights: [AIInsight]) async {
         guard !insights.isEmpty else { return }
+        // Try to write to HealthKit using a mindfulSession category sample if write permission exists
+        if let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) {
+            let status = healthStore.authorizationStatus(for: mindfulType)
+            if status == .sharingAuthorized {
+                // Prepare JSON metadata
+                guard let data = try? JSONEncoder().encode(insights), let json = String(data: data, encoding: .utf8) else {
+                    print("[HealthKitManager] Failed to encode insights for HealthKit storage")
+                    return
+                }
 
-        // Encode insights to JSON and persist in UserDefaults as a safe fallback.
+                // Use mindfulSession start/end same timestamp; duration zero. Store JSON in metadata.
+                let now = Date()
+                let metadata: [String: Any] = [
+                    "glucopilot.insights": json,
+                    "glucopilot.insight_count": insights.count,
+                    HKMetadataKeyWasUserEntered: true
+                ]
+
+                let sample = HKCategorySample(type: mindfulType, value: 0, start: now, end: now, metadata: metadata)
+
+                do {
+                    try await healthStore.save(sample)
+                    print("[HealthKitManager] Saved \(insights.count) insights to Health app via mindfulSession sample")
+                    return
+                } catch {
+                    print("[HealthKitManager] Failed to save insights to HealthKit: \(error.localizedDescription)")
+                    // Fall through to local persistence
+                }
+            }
+        }
+
+        // Fallback: Encode insights to JSON and persist in UserDefaults
         do {
             let data = try JSONEncoder().encode(insights)
             UserDefaults.standard.setValue(data, forKey: "glucopilot.saved_insights")
