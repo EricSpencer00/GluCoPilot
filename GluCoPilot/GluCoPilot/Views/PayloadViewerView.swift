@@ -1,3 +1,5 @@
+// Debug helper view — exclude from Release builds
+#if DEBUG
 import SwiftUI
 
 struct PayloadViewerView: View {
@@ -32,3 +34,5 @@ struct PayloadViewerView_Previews: PreviewProvider {
         PayloadViewerView(payload: ["example": ["a": 1, "b": 2]], title: "Payload")
     }
 }
+
+#endif

@@ -20,7 +20,7 @@ struct GluCoPilotApp: App {
                     // For now, request HealthKit permissions immediately on first UI appearance.
                     // This is a temporary measure to ensure the permission prompt is shown reliably
                     // before we start observation. We may move this into an onboarding flow later.
-
+                    #if DEBUG
                     // Detailed runtime diagnostics to help debug HealthKit permission problems
                     let bundle = Bundle.main
                     print("[App] bundleIdentifier: \(bundle.bundleIdentifier ?? "<none>")")
@@ -49,6 +49,7 @@ struct GluCoPilotApp: App {
                     } else {
                         print("[App] No embedded.mobileprovision in bundle (normal for App Store / TestFlight builds)")
                     }
+                    #endif
 
                     // Trigger the in-app permission request asynchronously on the main queue to avoid UI timing issues
                     DispatchQueue.main.async {
@@ -61,7 +62,9 @@ struct GluCoPilotApp: App {
                 Task {
                     let refreshed = await authManager.refreshAppleIDTokenIfNeeded()
                     if refreshed {
+                        #if DEBUG
                         print("[App] Apple id_token refreshed on becoming active")
+                        #endif
                     }
                     // Ensure HealthKit permissions are requested (if not determined) and start observation/refresh.
                     // Requesting permissions before starting observations avoids the "permissions not granted" race.

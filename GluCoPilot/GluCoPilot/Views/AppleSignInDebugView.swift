@@ -1,3 +1,5 @@
+// Compiled only in Debug builds to avoid exposing debug UI in production
+#if DEBUG
 import SwiftUI
 import AuthenticationServices
 
@@ -721,3 +723,5 @@ fileprivate func decode(jwtToken jwt: String) throws -> [String: Any]? {
             .environmentObject(AuthenticationManager())
     }
 }
+
+#endif

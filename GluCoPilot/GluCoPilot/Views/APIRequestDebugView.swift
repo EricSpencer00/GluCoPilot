@@ -1,3 +1,5 @@
+// Compiled only in Debug builds to prevent shipping debug UI in App Store
+#if DEBUG
 import SwiftUI
 
 struct APIRequestDebugView: View {
@@ -296,3 +298,5 @@ struct APIRequestDebugView: View {
     APIRequestDebugView(healthKitManager: HealthKitManager())
         .environmentObject(APIManager())
 }
+
+#endif

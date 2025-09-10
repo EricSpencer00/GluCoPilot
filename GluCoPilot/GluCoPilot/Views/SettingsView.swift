@@ -149,14 +149,16 @@ struct SettingsView: View {
                 }
             }
             
-            // HealthKit logs toggle
-            Section("HealthKit") {
+            // HealthKit logs toggle (debug only)
+            #if DEBUG
+            Section("HealthKit (Debug)") {
                 Toggle("Show HealthKit permission logs", isOn: $showHealthKitPermissionLogs)
                     .font(.subheadline)
                 Text("Enable this to see detailed HealthKit permission messages in the console. Useful for debugging permissions.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            #endif
             
             // Support Section
             Section("Support") {
