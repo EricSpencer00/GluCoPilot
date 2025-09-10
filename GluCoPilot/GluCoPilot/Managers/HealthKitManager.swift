@@ -97,6 +97,10 @@ class HealthKitManager: ObservableObject {
     @Published var lastAuthorizationErrorMessage: String?
     // Diagnostics output for debugging HealthKit behavior
     @Published var debugReport: String? = nil
+    // Track cooldown period for refresh (15 minutes)
+    @AppStorage("last_refresh_timestamp") private var lastRefreshTimestamp: Double = 0
+    // Whether refresh is currently on cooldown
+    @Published var isRefreshOnCooldown: Bool = false
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -107,6 +111,12 @@ class HealthKitManager: ObservableObject {
             self.authorizationStatus = .sharingAuthorized
             self.hasLoggedAuthorizationGranted = true
         }
+        
+        // Check if we're on cooldown
+        let now = Date()
+        let lastRefresh = Date(timeIntervalSince1970: lastRefreshTimestamp)
+        let cooldownPeriod: TimeInterval = 15 * 60 // 15 minutes
+        self.isRefreshOnCooldown = now.timeIntervalSince(lastRefresh) < cooldownPeriod
     }
     
     
@@ -1329,8 +1339,31 @@ class HealthKitManager: ObservableObject {
     /// Public: force a refresh of recent glucose data from HealthKit and update published values.
     /// This will fetch recent samples (default last 6 hours), update `latestGlucoseSample`,
     /// and run the anchored query path to persist anchors so future observer callbacks behave correctly.
-    func refreshFromHealthKit(lastHours: Int = 6) async {
+    /// A 15-minute cooldown is enforced between refreshes unless forceCooldownOverride is true.
+    func refreshFromHealthKit(lastHours: Int = 6, forceCooldownOverride: Bool = false) async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
+        
+        // Check cooldown period (15 minutes) unless override is requested
+        if !forceCooldownOverride {
+            let now = Date()
+            let lastRefreshDate = Date(timeIntervalSince1970: lastRefreshTimestamp)
+            let cooldownPeriod: TimeInterval = 15 * 60 // 15 minutes in seconds
+            
+            if now.timeIntervalSince(lastRefreshDate) < cooldownPeriod {
+                // Still on cooldown, update flag and exit
+                await MainActor.run {
+                    self.isRefreshOnCooldown = true
+                    let remainingSeconds = Int(cooldownPeriod - now.timeIntervalSince(lastRefreshDate))
+                    print("[HealthKitManager] Refresh on cooldown. \(remainingSeconds) seconds remaining.")
+                }
+                return
+            }
+        }
+        
+        // Reset cooldown flag
+        await MainActor.run {
+            self.isRefreshOnCooldown = false
+        }
         
         // Validate permission status first to ensure we have the correct state
         let isAuthorized = validatePermissionStatus()
@@ -1352,9 +1385,10 @@ class HealthKitManager: ObservableObject {
                 self.latestGlucoseSample = latest
             }
             
-            // Update debug timestamp
+            // Update timestamps for tracking refresh time and cooldown
             let now = Date()
             self.lastHealthKitRefresh = now
+            self.lastRefreshTimestamp = now.timeIntervalSince1970
             
             // Debug log summary
 #if DEBUG
@@ -1411,13 +1445,15 @@ class HealthKitManager: ObservableObject {
                 // Send to API
                 let api = APIManager()
                 do {
-                    let insights = try await api.sendAIInsights(healthData: apiHealthData, cachedItems: cached, prompt: nil)
+                    let insights = try await api.uploadCacheAndGenerateInsights(healthData: apiHealthData, cachedItems: cached, prompt: nil)
 #if DEBUG
-                    print("[HealthKitManager] sendAIInsights returned \(insights.count) insights")
+                    print("[HealthKitManager] uploadCacheAndGenerateInsights returned \(insights.count) insights")
 #endif
+                    // Write insights back to HealthKit as a pseudodatabase
+                    await saveInsightsToHealthKit(insights: insights)
                 } catch {
 #if DEBUG
-                    print("[HealthKitManager] sendAIInsights failed: \(error.localizedDescription)")
+                    print("[HealthKitManager] uploadCacheAndGenerateInsights failed: \(error.localizedDescription)")
 #endif
                 }
             }
@@ -1425,6 +1461,50 @@ class HealthKitManager: ObservableObject {
 #if DEBUG
             print("[HealthKitManager] refreshFromHealthKit failed: \(error.localizedDescription)")
 #endif
+        }
+    }
+    
+    /// Saves AI insights to HealthKit as a pseudodatabase using clinical records
+    private func saveInsightsToHealthKit(insights: [AIInsight]) async {
+        // Skip if we don't have HealthKit write permission or if there are no insights
+        guard !insights.isEmpty else { return }
+        
+        let clinicalType = HKObjectType.clinicalType(forIdentifier: .clinicalNote)!
+        let authStatus = healthStore.authorizationStatus(for: clinicalType)
+        
+        if authStatus != .sharingAuthorized {
+            print("[HealthKitManager] Cannot write insights to HealthKit: no write permission")
+            return
+        }
+        
+        // Convert insights to JSON
+        guard let insightsData = try? JSONEncoder().encode(insights),
+              let insightsJSON = String(data: insightsData, encoding: .utf8) else {
+            print("[HealthKitManager] Failed to encode insights for HealthKit storage")
+            return
+        }
+        
+        // Create a clinical note record
+        let metadata: [String: Any] = [
+            HKMetadataKeyWasUserEntered: true,
+            "glucopilot.insight_count": insights.count,
+            "glucopilot.insight_date": ISO8601DateFormatter().string(from: Date())
+        ]
+        
+        let clinicalNote = HKClinicalRecord(
+            type: clinicalType,
+            title: "GluCoPilot AI Insights",
+            text: insightsJSON,
+            date: Date(),
+            clinicalType: .note,
+            metadata: metadata
+        )
+        
+        do {
+            try await healthStore.save(clinicalNote)
+            print("[HealthKitManager] Successfully saved \(insights.count) insights to HealthKit")
+        } catch {
+            print("[HealthKitManager] Failed to save insights to HealthKit: \(error.localizedDescription)")
         }
     }
     

@@ -963,7 +963,7 @@ class APIManager: ObservableObject {
     }
     
     // Upload local cache (logs) plus HealthKit context (24h) and ask backend to generate insights
-    func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem]) async throws -> [AIInsight] {
+    func uploadCacheAndGenerateInsights(healthData: APIManagerHealthData, cachedItems: [CacheManager.LoggedItem], prompt: String? = nil) async throws -> [AIInsight] {
         // Try to obtain a backend-issued token, but allow unauthenticated/stateless calls
         // (backend in non-production accepts missing api_key / bearer token for /generate)
         var authToken: String? = nil
