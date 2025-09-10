@@ -772,8 +772,8 @@ class HealthKitManager: ObservableObject {
                 metaCodable = out
             }
 
-            let fi = FoodItem(timestamp: ts,
-                              name: name,
+            let fi = FoodItem(name: name,
+                              timestamp: ts,
                               caloriesKcal: calories,
                               carbsGrams: carbs,
                               proteinGrams: protein,
