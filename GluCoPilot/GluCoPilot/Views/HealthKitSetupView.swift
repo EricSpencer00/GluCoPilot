@@ -146,6 +146,31 @@ struct HealthKitSetupView: View {
             .controlSize(.mini)
             .padding(.horizontal)
 
+            // Workouts: fetch & save
+            Button(action: fetchRecentWorkouts) {
+                Text("Fetch Recent Workouts (24h)")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: saveWorkoutsToLocal) {
+                Text("Save Recent Workouts Locally")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: showSavedWorkoutsCount) {
+                Text("Show Saved Workout Count")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
             Button(action: saveFoodItemsToLocal) {
                 Text("Save Fetched Items Locally")
                     .frame(maxWidth: .infinity)
@@ -391,6 +416,40 @@ struct HealthKitSetupView: View {
     private func showSavedCount() {
         let saved = healthKitManager.getSavedFoodItems().count
         requestResult = "Saved food items: \(saved)"
+    }
+
+    private func fetchRecentWorkouts() {
+        requestResult = "Fetching recent workouts..."
+        Task {
+            let items = await healthKitManager.fetchRecentWorkouts()
+            await MainActor.run {
+                // Convert to string list for quick UI display
+                let lines = items.map { item -> String in
+                    let start = item["startDate"] as? Date
+                    let type = item["type"] as? String ?? "Workout"
+                    let dur = item["durationMinutes"] as? Double ?? 0
+                    let cal = item["caloriesKcal"] as? Double ?? 0
+                    return "\(type) \(start.map { String(describing: $0) } ?? "") — \(String(format: "%.0f", cal)) kcal • \(String(format: "%.1f", dur)) min"
+                }
+                nutritionReport = lines
+                requestResult = "Recent workouts fetched"
+            }
+        }
+    }
+
+    private func saveWorkoutsToLocal() {
+        requestResult = "Saving workouts locally..."
+        Task {
+            let saved = await healthKitManager.saveFetchedWorkoutsToLocalStore()
+            await MainActor.run {
+                requestResult = "Saved \(saved) workouts locally"
+            }
+        }
+    }
+
+    private func showSavedWorkoutsCount() {
+        let saved = healthKitManager.getSavedWorkouts().count
+        requestResult = "Saved workouts: \(saved)"
     }
 }
 

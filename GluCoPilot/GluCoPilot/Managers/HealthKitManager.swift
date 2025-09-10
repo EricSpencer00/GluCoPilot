@@ -465,7 +465,8 @@ class HealthKitManager: ObservableObject {
         }
         // Do not gate read access by write authorization status; perform the query and handle empty results.
         
-        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+    // Default to last 24 hours when startDate is not provided
+    let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
         
         return try await withCheckedThrowingContinuation { continuation in
@@ -626,7 +627,8 @@ class HealthKitManager: ObservableObject {
             return ["food correlation type not available on this device"]
         }
 
-        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+    // Default to last 24 hours when startDate is not provided
+    let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
 
         return await withCheckedContinuation { continuation in
@@ -800,6 +802,75 @@ class HealthKitManager: ObservableObject {
             return items
         } catch {
             print("[HealthKitManager] Failed to decode saved food items: \(error)")
+            return []
+        }
+    }
+
+    // MARK: - Workouts helpers (last 24 hours default)
+    private let localWorkoutItemsKey = "hk_workout_items_v1"
+
+    func fetchRecentWorkouts(limit: Int = 50, from startDate: Date? = nil, to endDate: Date = Date()) async -> [[String: Any]] {
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: HKWorkoutType.workoutType(), predicate: predicate, limit: limit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    continuation.resume(returning: [["error": error.localizedDescription]])
+                    return
+                }
+
+                let out = (samples as? [HKWorkout])?.map { w in
+                    return [
+                        "startDate": w.startDate,
+                        "endDate": w.endDate,
+                        "durationMinutes": w.duration / 60.0,
+                        "caloriesKcal": w.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()) ?? 0,
+                        "type": w.workoutActivityType.name,
+                        "sourceName": w.sourceRevision.source.name,
+                        "sourceBundleId": w.sourceRevision.source.bundleIdentifier ?? "-"
+                    ]
+                } ?? []
+
+                continuation.resume(returning: out)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func saveFetchedWorkoutsToLocalStore(limit: Int = 50) async -> Int {
+        let raw = await fetchRecentWorkouts(limit: limit)
+        var items: [WorkoutItem] = []
+        for dict in raw {
+            if let _ = dict["error"] as? String { continue }
+            guard let start = dict["startDate"] as? Date,
+                  let end = dict["endDate"] as? Date else { continue }
+            let duration = dict["durationMinutes"] as? Double ?? 0
+            let cal = dict["caloriesKcal"] as? Double ?? 0
+            let type = dict["type"] as? String ?? "Workout"
+            let source = dict["sourceName"] as? String
+            let bundle = dict["sourceBundleId"] as? String
+            let wi = WorkoutItem(type: type, startDate: start, endDate: end, durationMinutes: duration, caloriesKcal: cal, sourceName: source, sourceBundleId: bundle)
+            items.append(wi)
+        }
+
+        do {
+            let data = try JSONEncoder().encode(items)
+            UserDefaults.standard.set(data, forKey: localWorkoutItemsKey)
+            return items.count
+        } catch {
+            print("[HealthKitManager] Failed to encode workout items: \(error)")
+            return 0
+        }
+    }
+
+    func getSavedWorkouts() -> [WorkoutItem] {
+        guard let data = UserDefaults.standard.data(forKey: localWorkoutItemsKey) else { return [] }
+        do {
+            let items = try JSONDecoder().decode([WorkoutItem].self, from: data)
+            return items
+        } catch {
+            print("[HealthKitManager] Failed to decode saved workout items: \(error)")
             return []
         }
     }
