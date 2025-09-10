@@ -663,6 +663,146 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
+
+    /// Returns structured FoodItem-like summaries from recent HKCorrelation(food) records.
+    /// Aggregates nutrient quantity samples (kcal for energy, grams for macros) for accuracy.
+    func fetchRecentFoodItems(limit: Int = 50, from startDate: Date? = nil, to endDate: Date = Date()) async -> [[String: Any]] {
+        guard let foodType = HKObjectType.correlationType(forIdentifier: .food) else {
+            return [["error": "food correlation type not available"]]
+        }
+
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: foodType,
+                                      predicate: predicate,
+                                      limit: limit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    continuation.resume(returning: [["error": error.localizedDescription]])
+                    return
+                }
+
+                let formatted: [[String: Any]] = (samples as? [HKCorrelation])?.compactMap { corr in
+                    var calories = 0.0
+                    var carbs = 0.0
+                    var protein = 0.0
+                    var fat = 0.0
+                    // Try to infer a name from metadata or type
+                    var name: String? = nil
+                    if let nm = corr.metadata?[HKMetadataKeyFoodType] as? String { name = nm }
+
+                    for obj in corr.objects {
+                        if let q = obj as? HKQuantitySample {
+                            let id = (q.quantityType as? HKQuantityType)?.identifier ?? "qty"
+                            // Energy: prefer kilocalorie
+                            if id.contains("Energy") || id.contains("dietaryEnergyConsumed") {
+                                calories += q.quantity.doubleValue(for: HKUnit.kilocalorie())
+                            } else if id.contains("Carbohydrates") {
+                                carbs += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else if id.contains("Protein") {
+                                protein += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else if id.contains("Fat") {
+                                fat += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else {
+                                // fallback: attempt common units
+                                calories += q.quantity.doubleValue(for: HKUnit.kilocalorie())
+                            }
+                        }
+                    }
+
+                    let source = corr.sourceRevision.source.name
+                    let bundle = corr.sourceRevision.source.bundleIdentifier ?? "-"
+
+                    var metaOut: [String: Any] = [:]
+                    if let meta = corr.metadata {
+                        for (k, v) in meta {
+                            metaOut[k] = v
+                        }
+                    }
+
+                    return [
+                        "timestamp": corr.startDate,
+                        "name": name ?? "Food",
+                        "caloriesKcal": calories,
+                        "carbsGrams": carbs,
+                        "proteinGrams": protein,
+                        "fatGrams": fat,
+                        "sourceName": source,
+                        "sourceBundleId": bundle,
+                        "metadata": metaOut
+                    ]
+                } ?? []
+
+                continuation.resume(returning: formatted)
+            }
+
+            healthStore.execute(query)
+        }
+    }
+
+    // MARK: - Local persistence helpers for standardized FoodItem model
+    private let localFoodItemsKey = "hk_food_items_v1"
+
+    /// Fetch recent food items and persist them locally as `FoodItem` JSON. Returns number saved.
+    func saveFetchedFoodItemsToLocalStore(limit: Int = 50) async -> Int {
+        let raw = await fetchRecentFoodItems(limit: limit)
+        var items: [FoodItem] = []
+        for dict in raw {
+            if let err = dict["error"] as? String {
+                continue
+            }
+            guard let ts = dict["timestamp"] as? Date else { continue }
+            let name = dict["name"] as? String
+            let calories = dict["caloriesKcal"] as? Double ?? 0
+            let carbs = dict["carbsGrams"] as? Double ?? 0
+            let protein = dict["proteinGrams"] as? Double ?? 0
+            let fat = dict["fatGrams"] as? Double ?? 0
+            let sourceName = dict["sourceName"] as? String
+            let sourceBundle = dict["sourceBundleId"] as? String
+            var metaCodable: [String: AnyCodable]? = nil
+            if let meta = dict["metadata"] as? [String: Any] {
+                var out: [String: AnyCodable] = [:]
+                for (k, v) in meta {
+                    out[k] = AnyCodable(v)
+                }
+                metaCodable = out
+            }
+
+            let fi = FoodItem(timestamp: ts,
+                              name: name,
+                              caloriesKcal: calories,
+                              carbsGrams: carbs,
+                              proteinGrams: protein,
+                              fatGrams: fat,
+                              sourceName: sourceName,
+                              sourceBundleId: sourceBundle,
+                              metadata: metaCodable)
+            items.append(fi)
+        }
+
+        do {
+            let data = try JSONEncoder().encode(items)
+            UserDefaults.standard.set(data, forKey: localFoodItemsKey)
+            return items.count
+        } catch {
+            print("[HealthKitManager] Failed to encode food items: \(error)")
+            return 0
+        }
+    }
+
+    /// Return locally saved FoodItems (decoded), or empty array if none
+    func getSavedFoodItems() -> [FoodItem] {
+        guard let data = UserDefaults.standard.data(forKey: localFoodItemsKey) else { return [] }
+        do {
+            let items = try JSONDecoder().decode([FoodItem].self, from: data)
+            return items
+        } catch {
+            print("[HealthKitManager] Failed to decode saved food items: \(error)")
+            return []
+        }
+    }
     
     func fetchGlucoseSampleCount() async throws -> Int {
         guard let glucoseType = HKObjectType.quantityType(forIdentifier: .bloodGlucose) else { return 0 }
