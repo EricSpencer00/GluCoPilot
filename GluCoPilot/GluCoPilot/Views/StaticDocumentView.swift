@@ -91,7 +91,7 @@ extension StaticDocumentView {
     
     ## Contact Us
     
-    If you have any questions about this Privacy Policy, please contact us at: [YOUR CONTACT EMAIL]
+    If you have any questions about this Privacy Policy, please contact us at: ericspencer1450@gmail.com
     
     Last Updated: September 8, 2025
     """
@@ -145,11 +145,11 @@ extension StaticDocumentView {
     
     ## Governing Law
     
-    These Terms shall be governed by and construed in accordance with the laws of [YOUR JURISDICTION], without regard to its conflict of law provisions.
+    These Terms shall be governed by and construed in accordance with the laws of the United States, without regard to its conflict of law provisions.
     
     ## Contact Us
     
-    If you have any questions about these Terms, please contact us at: [YOUR CONTACT EMAIL]
+    If you have any questions about these Terms, please contact us at: ericspencer1450@gmail.com
     
     Last Updated: September 8, 2025
     """
@@ -192,7 +192,7 @@ extension StaticDocumentView {
     
     ## Contact Support
     
-    If you're experiencing issues not covered above, please contact our support team at [YOUR SUPPORT EMAIL].
+    If you're experiencing issues not covered above, please contact our support team at ericspencer1450@gmail.com
     
     We aim to respond to all inquiries within 48 hours.
     """
@@ -203,19 +203,15 @@ extension StaticDocumentView {
     We're here to help with any questions, feedback, or support needs you may have regarding GluCoPilot.
     
     ## Support Email
-    [YOUR SUPPORT EMAIL]
+    ericspencer1450@gmail.com
     
     ## Business Inquiries
-    [YOUR BUSINESS EMAIL]
+    ericspencer1450@gmail.com
     
-    ## Mailing Address
-    [YOUR PHYSICAL ADDRESS] (if applicable)
     
     ## Response Time
     We aim to respond to all inquiries within 48 hours during business days.
-    
-    ## Follow Us
-    [YOUR SOCIAL MEDIA LINKS] (if applicable)
+
     
     ## Report an Issue
     If you've encountered a bug or technical issue, please include:
@@ -226,6 +222,6 @@ extension StaticDocumentView {
     - Screenshots (if applicable)
     
     ## Feature Requests
-    We value your input! If you have ideas for new features or improvements, please let us know at [YOUR FEEDBACK EMAIL].
+    We value your input! If you have ideas for new features or improvements, please let us know at ericspencer1450@gmail.com
     """
 }
