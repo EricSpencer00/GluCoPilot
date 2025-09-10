@@ -9,23 +9,51 @@ GluCoPilot is a comprehensive, privacy-focused diabetes management platform. It 
 
 ## 🚀 Quick Start
 
+These instructions assume macOS with Python 3.11+ installed for the backend and Xcode for the iOS app.
+
 ### 1. Backend (FastAPI)
 
 ```bash
 cd backend
+# create a virtualenv (python3.11 recommended)
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # Edit as needed
+# copy example env and edit backend/.env as needed
+cp .env.example .env
+# run migrations (if using database)
+alembic upgrade head
+# run the API (development)
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Notes:
+- The backend loads environment variables from `backend/.env` by default. See `backend/.env.example` for available settings.
+- Default `DATABASE_URL` is `sqlite:///./glucopilot.db`. To use Postgres, set `DATABASE_URL` accordingly and enable `USE_DATABASE=true` in the env.
 
 ### 2. iOS App (SwiftUI, iOS 18+)
 
 ```bash
-cd new-frontend
-open Package.swift  # Or open in Xcode
-# Build and run on device/simulator (iOS 18+ required)
+cd GluCoPilot
+# open the Xcode project or workspace
+open GluCoPilot.xcodeproj
+# or open the workspace if you use SPM or CocoaPods
 ```
+
+Notes:
+- This repo contains a modern SwiftUI iOS app in `GluCoPilot/` (target: iOS 18+, Swift 6).
+- In Xcode: set your development team, update the bundle identifier, and enable the Apple Sign In and HealthKit capabilities in the target's Signing & Capabilities tab.
+- Update the app's API base URL in `GluCoPilot/Managers/APIManager.swift` (or equivalent) to point to your running backend (e.g., `http://localhost:8000`).
+
+### 3. (Optional) React Native / legacy frontend
+
+```bash
+cd frontend
+npm install
+# run the React Native app (legacy) or follow the README inside frontend/
+npx react-native run-ios
+```
+
+The `new-frontend/` name used earlier in older docs is now `GluCoPilot/` (SwiftUI). The `frontend/` folder is the previous React Native codebase (legacy).
 ---
 
 ## ✨ Core Features
