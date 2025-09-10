@@ -7,6 +7,7 @@ struct HealthKitSetupView: View {
     @State private var isRequesting = false
     @State private var requestResult: String? = nil
     @State private var nutritionReport: [String]? = nil
+    @State private var foodItemsReport: [[String: Any]]? = nil
     let onComplete: (() -> Void)?
 
     init(onComplete: (() -> Void)? = nil) {
@@ -137,6 +138,55 @@ struct HealthKitSetupView: View {
             .controlSize(.mini)
             .padding(.horizontal)
 
+            Button(action: fetchRecentFoodItems) {
+                Text("Fetch Structured Food Items")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            // Workouts: fetch & save
+            Button(action: fetchRecentWorkouts) {
+                Text("Fetch Recent Workouts (24h)")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: saveWorkoutsToLocal) {
+                Text("Save Recent Workouts Locally")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: showSavedWorkoutsCount) {
+                Text("Show Saved Workout Count")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: saveFoodItemsToLocal) {
+                Text("Save Fetched Items Locally")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
+            Button(action: showSavedCount) {
+                Text("Show Saved Food Count")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .padding(.horizontal)
+
             if let report = healthKitManager.debugReport {
                 ScrollView {
                     Text(report)
@@ -165,6 +215,39 @@ struct HealthKitSetupView: View {
                 .background(Color(.tertiarySystemBackground))
                 .cornerRadius(8)
                 .padding(.horizontal)
+            }
+
+            if let items = foodItemsReport {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(items.indices, id: \.self) { idx in
+                            let item = items[idx]
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(item["name"] as? String ?? "Food") — \(String(describing: item["timestamp"]))")
+                                    .font(.caption)
+                                    .bold()
+                                Text("cal: \(String(format: "%.0f", item["caloriesKcal"] as? Double ?? 0)) kcal • carbs: \(String(format: "%.1f", item["carbsGrams"] as? Double ?? 0)) g • protein: \(String(format: "%.1f", item["proteinGrams"] as? Double ?? 0)) g • fat: \(String(format: "%.1f", item["fatGrams"] as? Double ?? 0)) g")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(6)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(6)
+                        }
+                    }
+                    .padding()
+                }
+                .frame(maxHeight: 240)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(8)
+                .padding(.horizontal)
+            }
+
+            // Small saved items indicator
+            if let result = requestResult, result.contains("saved") || result.contains("count") {
+                Text(result)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
             }
 
             if let result = requestResult, result.contains("not granted") {
@@ -306,6 +389,67 @@ struct HealthKitSetupView: View {
                 requestResult = "Recent food records fetched"
             }
         }
+    }
+
+    private func fetchRecentFoodItems() {
+        requestResult = "Fetching structured food items..."
+        foodItemsReport = nil
+        Task {
+            let items = await healthKitManager.fetchRecentFoodItems()
+            await MainActor.run {
+                foodItemsReport = items
+                requestResult = "Structured food items fetched"
+            }
+        }
+    }
+
+    private func saveFoodItemsToLocal() {
+        requestResult = "Saving fetched items locally..."
+        Task {
+            let saved = await healthKitManager.saveFetchedFoodItemsToLocalStore()
+            await MainActor.run {
+                requestResult = "Saved \(saved) food items locally"
+            }
+        }
+    }
+
+    private func showSavedCount() {
+        let saved = healthKitManager.getSavedFoodItems().count
+        requestResult = "Saved food items: \(saved)"
+    }
+
+    private func fetchRecentWorkouts() {
+        requestResult = "Fetching recent workouts..."
+        Task {
+            let items = await healthKitManager.fetchRecentWorkouts()
+            await MainActor.run {
+                // Convert to string list for quick UI display
+                let lines = items.map { item -> String in
+                    let start = item["startDate"] as? Date
+                    let type = item["type"] as? String ?? "Workout"
+                    let dur = item["durationMinutes"] as? Double ?? 0
+                    let cal = item["caloriesKcal"] as? Double ?? 0
+                    return "\(type) \(start.map { String(describing: $0) } ?? "") — \(String(format: "%.0f", cal)) kcal • \(String(format: "%.1f", dur)) min"
+                }
+                nutritionReport = lines
+                requestResult = "Recent workouts fetched"
+            }
+        }
+    }
+
+    private func saveWorkoutsToLocal() {
+        requestResult = "Saving workouts locally..."
+        Task {
+            let saved = await healthKitManager.saveFetchedWorkoutsToLocalStore()
+            await MainActor.run {
+                requestResult = "Saved \(saved) workouts locally"
+            }
+        }
+    }
+
+    private func showSavedWorkoutsCount() {
+        let saved = healthKitManager.getSavedWorkouts().count
+        requestResult = "Saved workouts: \(saved)"
     }
 }
 

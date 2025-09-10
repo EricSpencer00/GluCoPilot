@@ -6,6 +6,8 @@ struct DataPrivacyView: View {
     @State private var exportInProgress = false
     @State private var exportSuccess = false
     @State private var exportError = false
+    @State private var shareURL: URL? = nil
+    @State private var showShareSheet = false
     
     var body: some View {
         List {
@@ -26,9 +28,7 @@ struct DataPrivacyView: View {
             }
             
             Section(header: Text("Data Controls")) {
-                Button(action: {
-                    exportData()
-                }) {
+                Button(action: { exportData() }) {
                     HStack {
                         Label("Export Your Data", systemImage: "square.and.arrow.up")
                         Spacer()
@@ -83,10 +83,18 @@ struct DataPrivacyView: View {
                 secondaryButton: .cancel()
             )
         }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = shareURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
         .alert("Data Export", isPresented: $exportSuccess) {
-            Button("OK", role: .cancel) {}
+            Button("Share") {
+                if shareURL != nil { showShareSheet = true }
+            }
+            Button("OK", role: .cancel) { }
         } message: {
-            Text("Your data has been exported successfully. You can find the file in your Downloads folder.")
+            Text("Your data export is ready.")
         }
         .alert("Export Failed", isPresented: $exportError) {
             Button("OK", role: .cancel) {}
@@ -97,31 +105,88 @@ struct DataPrivacyView: View {
     
     private func exportData() {
         exportInProgress = true
-        
-        // Simulate export process
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            exportInProgress = false
-            exportSuccess = true
-            // In a real implementation, you would:
-            // 1. Gather all user data
-            // 2. Format it as JSON or CSV
-            // 3. Use UIActivityViewController or similar to let user save the file
+        Task {
+            do {
+                // Gather recent data (last 30 days) from HealthKit and local cache
+                let end = Date()
+                let start = Calendar.current.date(byAdding: .day, value: -30, to: end) ?? Date(timeIntervalSinceNow: -30*24*3600)
+                let hk = try await healthKitManager.fetchLast24HoursData() // minimal for MVP
+
+                // Build JSON object
+                var payload: [String: Any] = [:]
+                payload["exported_at"] = ISO8601DateFormatter().string(from: Date())
+                payload["glucose"] = hk.glucose.map { s in
+                    [
+                        "value": s.value,
+                        "unit": s.unit,
+                        "timestamp": ISO8601DateFormatter().string(from: s.timestamp)
+                    ]
+                }
+                payload["workouts"] = hk.workouts.map { w in
+                    [
+                        "name": w.name,
+                        "duration": w.duration,
+                        "calories": w.calories,
+                        "startDate": ISO8601DateFormatter().string(from: w.startDate),
+                        "endDate": ISO8601DateFormatter().string(from: w.endDate)
+                    ]
+                }
+                payload["nutrition"] = hk.nutrition.map { n in
+                    [
+                        "name": n.name,
+                        "calories": n.calories,
+                        "carbs": n.carbs,
+                        "protein": n.protein,
+                        "fat": n.fat,
+                        "timestamp": ISO8601DateFormatter().string(from: n.timestamp)
+                    ]
+                }
+                payload["steps_today"] = hk.steps
+                payload["activeCalories_today"] = hk.activeCalories
+                payload["avgHeartRate_today"] = hk.averageHeartRate
+                payload["sleepHours_today"] = hk.sleepHours
+
+                // Include locally cached log items
+                let cached = CacheManager.shared.getItems(since: start)
+                payload["cached_items"] = cached.map { item in
+                    [
+                        "id": item.id.uuidString,
+                        "type": item.type,
+                        "payload": item.payload,
+                        "timestamp": ISO8601DateFormatter().string(from: item.timestamp)
+                    ] as [String: Any]
+                }
+
+                let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
+                let tmp = FileManager.default.temporaryDirectory
+                let url = tmp.appendingPathComponent("glucopilot-export-\(Int(Date().timeIntervalSince1970)).json")
+                try data.write(to: url, options: .atomic)
+                await MainActor.run {
+                    self.shareURL = url
+                    self.exportSuccess = true
+                    self.exportInProgress = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.exportError = true
+                    self.exportInProgress = false
+                }
+            }
         }
     }
     
     private func deleteAllData() {
-        // In a real implementation, you would:
-        // 1. Call your API to delete user data from the server
-        // 2. Clear local caches
-        // 3. Reset user preferences
-        
-        // Note: HealthKit data itself can't be deleted by your app,
-        // but you can revoke permissions and stop collecting it
+        // Best-effort local cleanup for MVP
+        CacheManager.shared.clearAll()
+        healthKitManager.resetAllHealthKitState()
+        UserDefaults.standard.removeObject(forKey: "hasConsentedToDataCollection")
+        UserDefaults.standard.removeObject(forKey: "hasAcknowledgedLimitedFunctionality")
     }
     
     private func showConsentAgain() {
-        // In a real implementation, you would present the ConsentView again
-        // This is a placeholder for the implementation
+        // Mark onboarding steps incomplete so the app routes user through consent/onboarding again
+        UserDefaults.standard.set(false, forKey: "hasCompletedMedicalDisclaimer")
+        UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
     }
 }
 
@@ -182,26 +247,37 @@ struct HealthDataAccessView: View {
 
 struct CollectedDataSummaryView: View {
     @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var glucoseCount24h: Int = 0
+    @State private var workoutCount24h: Int = 0
+    @State private var hasStepsToday: Bool = false
+    @State private var hasHeartRateToday: Bool = false
+    @State private var nutritionItems24h: Int = 0
+    @State private var sleepHours24h: Double = 0
+    @State private var loadError: String? = nil
     
     var body: some View {
         List {
             Section(header: Text("Glucose Data")) {
-                Text("Last 7 days: \(Int.random(in: 10...50)) readings")
-                Text("Last 30 days: \(Int.random(in: 40...200)) readings")
+                Text("Last 24 hours: \(glucoseCount24h) readings")
+                if let err = loadError {
+                    Text("Note: \(err)")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Section(header: Text("Activity Data")) {
-                Text("Last 7 days: \(Int.random(in: 5...20)) workouts")
-                Text("Step count records: \(Int.random(in: 1...30)) days")
+                Text("Last 24 hours: \(workoutCount24h) workouts")
+                Text(hasStepsToday ? "Step count: available today" : "Step count: not available today")
             }
             
             Section(header: Text("Food Entries")) {
-                Text("Last 30 days: \(Int.random(in: 0...60)) entries")
+                Text("Last 24 hours: \(nutritionItems24h) entries")
             }
             
             Section(header: Text("Other Health Data")) {
-                Text("Sleep records: \(Int.random(in: 1...30)) days")
-                Text("Heart rate samples: \(Int.random(in: 1...30)) days")
+                Text(String(format: "Sleep (last 24h): %.1f hours", sleepHours24h))
+                Text(hasHeartRateToday ? "Heart rate: available today" : "Heart rate: not available today")
             }
             
             Section(header: Text("Note")) {
@@ -212,6 +288,24 @@ struct CollectedDataSummaryView: View {
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Your Data Summary")
+        .task {
+            await loadCounts()
+        }
+    }
+
+    private func loadCounts() async {
+        do {
+            let data = try await healthKitManager.fetchLast24HoursData()
+            glucoseCount24h = data.glucose.count
+            workoutCount24h = data.workouts.count
+            hasStepsToday = data.steps > 0
+            hasHeartRateToday = data.averageHeartRate > 0
+            nutritionItems24h = data.nutrition.count
+            sleepHours24h = data.sleepHours
+            loadError = nil
+        } catch {
+            loadError = "Health data not available or not authorized"
+        }
     }
 }
 

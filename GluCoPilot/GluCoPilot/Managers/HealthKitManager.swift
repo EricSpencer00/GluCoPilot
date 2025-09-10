@@ -81,6 +81,16 @@ class HealthKitManager: ObservableObject {
         HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
         HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!
     ]
+
+    // Health data types we may write back to HealthKit (used for storing AI insights)
+    // We use a category sample (mindfulSession) as a cross-SDK-compatible container for JSON metadata.
+    private var writeTypes: Set<HKSampleType> {
+        var s: Set<HKSampleType> = []
+        if let mindful = HKObjectType.categoryType(forIdentifier: .mindfulSession) {
+            s.insert(mindful)
+        }
+        return s
+    }
     
     // Add a new property to track read permissions
     // Persist read permission across instances so we don't re-prompt unnecessarily
@@ -97,6 +107,10 @@ class HealthKitManager: ObservableObject {
     @Published var lastAuthorizationErrorMessage: String?
     // Diagnostics output for debugging HealthKit behavior
     @Published var debugReport: String? = nil
+    // Track cooldown period for refresh (15 minutes)
+    @AppStorage("last_refresh_timestamp") private var lastRefreshTimestamp: Double = 0
+    // Whether refresh is currently on cooldown
+    @Published var isRefreshOnCooldown: Bool = false
     
     init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -107,6 +121,12 @@ class HealthKitManager: ObservableObject {
             self.authorizationStatus = .sharingAuthorized
             self.hasLoggedAuthorizationGranted = true
         }
+        
+        // Check if we're on cooldown
+        let now = Date()
+        let lastRefresh = Date(timeIntervalSince1970: lastRefreshTimestamp)
+        let cooldownPeriod: TimeInterval = 15 * 60 // 15 minutes
+        self.isRefreshOnCooldown = now.timeIntervalSince(lastRefresh) < cooldownPeriod
     }
     
     
@@ -159,7 +179,7 @@ class HealthKitManager: ObservableObject {
             }
             print("[HealthKitManager] requestAuthorization called. readTypes: \(readNames)")
         }
-        healthStore.requestAuthorization(toShare: nil, read: readTypes) { [weak self] success, error in
+    healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { [weak self] success, error in
             print("[HealthKitManager] requestAuthorization completion invoked. success=\(success) error=\(String(describing: error))")
             DispatchQueue.main.async {
                 if success {
@@ -465,7 +485,8 @@ class HealthKitManager: ObservableObject {
         }
         // Do not gate read access by write authorization status; perform the query and handle empty results.
         
-        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+    // Default to last 24 hours when startDate is not provided
+    let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
         
         return try await withCheckedThrowingContinuation { continuation in
@@ -626,7 +647,8 @@ class HealthKitManager: ObservableObject {
             return ["food correlation type not available on this device"]
         }
 
-        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+    // Default to last 24 hours when startDate is not provided
+    let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
         let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
 
         return await withCheckedContinuation { continuation in
@@ -661,6 +683,215 @@ class HealthKitManager: ObservableObject {
             }
 
             healthStore.execute(query)
+        }
+    }
+
+    /// Returns structured FoodItem-like summaries from recent HKCorrelation(food) records.
+    /// Aggregates nutrient quantity samples (kcal for energy, grams for macros) for accuracy.
+    func fetchRecentFoodItems(limit: Int = 50, from startDate: Date? = nil, to endDate: Date = Date()) async -> [[String: Any]] {
+        guard let foodType = HKObjectType.correlationType(forIdentifier: .food) else {
+            return [["error": "food correlation type not available"]]
+        }
+
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .day, value: -7, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: foodType,
+                                      predicate: predicate,
+                                      limit: limit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    continuation.resume(returning: [["error": error.localizedDescription]])
+                    return
+                }
+
+                let formatted: [[String: Any]] = (samples as? [HKCorrelation])?.compactMap { corr in
+                    var calories = 0.0
+                    var carbs = 0.0
+                    var protein = 0.0
+                    var fat = 0.0
+                    // Try to infer a name from metadata or type
+                    var name: String? = nil
+                    if let nm = corr.metadata?[HKMetadataKeyFoodType] as? String { name = nm }
+
+                    for obj in corr.objects {
+                        if let q = obj as? HKQuantitySample {
+                            let id = (q.quantityType as? HKQuantityType)?.identifier ?? "qty"
+                            // Energy: prefer kilocalorie
+                            if id.contains("Energy") || id.contains("dietaryEnergyConsumed") {
+                                calories += q.quantity.doubleValue(for: HKUnit.kilocalorie())
+                            } else if id.contains("Carbohydrates") {
+                                carbs += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else if id.contains("Protein") {
+                                protein += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else if id.contains("Fat") {
+                                fat += q.quantity.doubleValue(for: HKUnit.gram())
+                            } else {
+                                // fallback: attempt common units
+                                calories += q.quantity.doubleValue(for: HKUnit.kilocalorie())
+                            }
+                        }
+                    }
+
+                    let source = corr.sourceRevision.source.name
+                    let bundle = corr.sourceRevision.source.bundleIdentifier ?? "-"
+
+                    var metaOut: [String: Any] = [:]
+                    if let meta = corr.metadata {
+                        for (k, v) in meta {
+                            metaOut[k] = v
+                        }
+                    }
+
+                    return [
+                        "timestamp": corr.startDate,
+                        "name": name ?? "Food",
+                        "caloriesKcal": calories,
+                        "carbsGrams": carbs,
+                        "proteinGrams": protein,
+                        "fatGrams": fat,
+                        "sourceName": source,
+                        "sourceBundleId": bundle,
+                        "metadata": metaOut
+                    ]
+                } ?? []
+
+                continuation.resume(returning: formatted)
+            }
+
+            healthStore.execute(query)
+        }
+    }
+
+    // MARK: - Local persistence helpers for standardized FoodItem model
+    private let localFoodItemsKey = "hk_food_items_v1"
+
+    /// Fetch recent food items and persist them locally as `FoodItem` JSON. Returns number saved.
+    func saveFetchedFoodItemsToLocalStore(limit: Int = 50) async -> Int {
+        let raw = await fetchRecentFoodItems(limit: limit)
+        var items: [FoodItem] = []
+        for dict in raw {
+            if let err = dict["error"] as? String {
+                continue
+            }
+            guard let ts = dict["timestamp"] as? Date else { continue }
+            let name = dict["name"] as? String
+            let calories = dict["caloriesKcal"] as? Double ?? 0
+            let carbs = dict["carbsGrams"] as? Double ?? 0
+            let protein = dict["proteinGrams"] as? Double ?? 0
+            let fat = dict["fatGrams"] as? Double ?? 0
+            let sourceName = dict["sourceName"] as? String
+            let sourceBundle = dict["sourceBundleId"] as? String
+            var metaCodable: [String: AnyCodable]? = nil
+            if let meta = dict["metadata"] as? [String: Any] {
+                var out: [String: AnyCodable] = [:]
+                for (k, v) in meta {
+                    out[k] = AnyCodable(v)
+                }
+                metaCodable = out
+            }
+
+            let fi = FoodItem(name: name,
+                              timestamp: ts,
+                              caloriesKcal: calories,
+                              carbsGrams: carbs,
+                              proteinGrams: protein,
+                              fatGrams: fat,
+                              sourceName: sourceName,
+                              sourceBundleId: sourceBundle,
+                              metadata: metaCodable)
+            items.append(fi)
+        }
+
+        do {
+            let data = try JSONEncoder().encode(items)
+            UserDefaults.standard.set(data, forKey: localFoodItemsKey)
+            return items.count
+        } catch {
+            print("[HealthKitManager] Failed to encode food items: \(error)")
+            return 0
+        }
+    }
+
+    /// Return locally saved FoodItems (decoded), or empty array if none
+    func getSavedFoodItems() -> [FoodItem] {
+        guard let data = UserDefaults.standard.data(forKey: localFoodItemsKey) else { return [] }
+        do {
+            let items = try JSONDecoder().decode([FoodItem].self, from: data)
+            return items
+        } catch {
+            print("[HealthKitManager] Failed to decode saved food items: \(error)")
+            return []
+        }
+    }
+
+    // MARK: - Workouts helpers (last 24 hours default)
+    private let localWorkoutItemsKey = "hk_workout_items_v1"
+
+    func fetchRecentWorkouts(limit: Int = 50, from startDate: Date? = nil, to endDate: Date = Date()) async -> [[String: Any]] {
+        let fromDate = startDate ?? Calendar.current.date(byAdding: .hour, value: -24, to: endDate)!
+        let predicate = HKQuery.predicateForSamples(withStart: fromDate, end: endDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: HKWorkoutType.workoutType(), predicate: predicate, limit: limit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error = error {
+                    continuation.resume(returning: [["error": error.localizedDescription]])
+                    return
+                }
+
+                let out = (samples as? [HKWorkout])?.map { w in
+                    return [
+                        "startDate": w.startDate,
+                        "endDate": w.endDate,
+                        "durationMinutes": w.duration / 60.0,
+                        "caloriesKcal": w.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()) ?? 0,
+                        "type": w.workoutActivityType.name,
+                        "sourceName": w.sourceRevision.source.name,
+                        "sourceBundleId": w.sourceRevision.source.bundleIdentifier ?? "-"
+                    ]
+                } ?? []
+
+                continuation.resume(returning: out)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func saveFetchedWorkoutsToLocalStore(limit: Int = 50) async -> Int {
+        let raw = await fetchRecentWorkouts(limit: limit)
+        var items: [WorkoutItem] = []
+        for dict in raw {
+            if let _ = dict["error"] as? String { continue }
+            guard let start = dict["startDate"] as? Date,
+                  let end = dict["endDate"] as? Date else { continue }
+            let duration = dict["durationMinutes"] as? Double ?? 0
+            let cal = dict["caloriesKcal"] as? Double ?? 0
+            let type = dict["type"] as? String ?? "Workout"
+            let source = dict["sourceName"] as? String
+            let bundle = dict["sourceBundleId"] as? String
+            let wi = WorkoutItem(type: type, startDate: start, endDate: end, durationMinutes: duration, caloriesKcal: cal, sourceName: source, sourceBundleId: bundle)
+            items.append(wi)
+        }
+
+        do {
+            let data = try JSONEncoder().encode(items)
+            UserDefaults.standard.set(data, forKey: localWorkoutItemsKey)
+            return items.count
+        } catch {
+            print("[HealthKitManager] Failed to encode workout items: \(error)")
+            return 0
+        }
+    }
+
+    func getSavedWorkouts() -> [WorkoutItem] {
+        guard let data = UserDefaults.standard.data(forKey: localWorkoutItemsKey) else { return [] }
+        do {
+            let items = try JSONDecoder().decode([WorkoutItem].self, from: data)
+            return items
+        } catch {
+            print("[HealthKitManager] Failed to decode saved workout items: \(error)")
+            return []
         }
     }
     
@@ -1118,8 +1349,31 @@ class HealthKitManager: ObservableObject {
     /// Public: force a refresh of recent glucose data from HealthKit and update published values.
     /// This will fetch recent samples (default last 6 hours), update `latestGlucoseSample`,
     /// and run the anchored query path to persist anchors so future observer callbacks behave correctly.
-    func refreshFromHealthKit(lastHours: Int = 6) async {
+    /// A 15-minute cooldown is enforced between refreshes unless forceCooldownOverride is true.
+    func refreshFromHealthKit(lastHours: Int = 6, forceCooldownOverride: Bool = false) async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
+        
+        // Check cooldown period (15 minutes) unless override is requested
+        if !forceCooldownOverride {
+            let now = Date()
+            let lastRefreshDate = Date(timeIntervalSince1970: lastRefreshTimestamp)
+            let cooldownPeriod: TimeInterval = 15 * 60 // 15 minutes in seconds
+            
+            if now.timeIntervalSince(lastRefreshDate) < cooldownPeriod {
+                // Still on cooldown, update flag and exit
+                await MainActor.run {
+                    self.isRefreshOnCooldown = true
+                    let remainingSeconds = Int(cooldownPeriod - now.timeIntervalSince(lastRefreshDate))
+                    print("[HealthKitManager] Refresh on cooldown. \(remainingSeconds) seconds remaining.")
+                }
+                return
+            }
+        }
+        
+        // Reset cooldown flag
+        await MainActor.run {
+            self.isRefreshOnCooldown = false
+        }
         
         // Validate permission status first to ensure we have the correct state
         let isAuthorized = validatePermissionStatus()
@@ -1141,9 +1395,10 @@ class HealthKitManager: ObservableObject {
                 self.latestGlucoseSample = latest
             }
             
-            // Update debug timestamp
+            // Update timestamps for tracking refresh time and cooldown
             let now = Date()
             self.lastHealthKitRefresh = now
+            self.lastRefreshTimestamp = now.timeIntervalSince1970
             
             // Debug log summary
 #if DEBUG
@@ -1170,10 +1425,99 @@ class HealthKitManager: ObservableObject {
                 print("[HealthKitManager] requested WidgetCenter.reloadAllTimelines()")
 #endif
             }
+
+            // Build combined payload and send to AI insights endpoint in one call
+            Task { @MainActor in
+                // Map glucose samples to APIManager model
+                let apiGlucose: [APIManagerGlucoseReading] = samples.map { s in
+                    let mgdl = s.value
+                    return APIManagerGlucoseReading(value: Int(round(mgdl)), trend: "unknown", timestamp: s.timestamp, unit: s.unit)
+                }
+
+                // Map workouts from local store
+                let savedWorkouts = self.getSavedWorkouts()
+                let apiWorkouts: [APIManagerWorkoutData] = savedWorkouts.map { w in
+                    return APIManagerWorkoutData(type: w.type, duration: w.durationMinutes * 60.0, calories: w.caloriesKcal, startDate: w.startDate, endDate: w.endDate)
+                }
+
+                // Map food items from local store
+                let savedFoods = self.getSavedFoodItems()
+                let apiFoods: [APIManagerNutritionData] = savedFoods.map { f in
+                    return APIManagerNutritionData(name: f.name ?? "Food", calories: f.caloriesKcal, carbs: f.carbsGrams, protein: f.proteinGrams, fat: f.fatGrams, timestamp: f.timestamp)
+                }
+
+                // Build APIManagerHealthData
+                let apiHealthData = APIManagerHealthData(glucose: apiGlucose, workouts: apiWorkouts, nutrition: apiFoods, timestamp: Date())
+
+                // Gather cached items from CacheManager
+                let cached = CacheManager.shared.getItems(since: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date())
+
+                // Send to API
+                let api = APIManager()
+                do {
+                    let insights = try await api.uploadCacheAndGenerateInsights(healthData: apiHealthData, cachedItems: cached, prompt: nil)
+#if DEBUG
+                    print("[HealthKitManager] uploadCacheAndGenerateInsights returned \(insights.count) insights")
+#endif
+                    // Write insights back to HealthKit as a pseudodatabase
+                    await saveInsightsToHealthKit(insights: insights)
+                } catch {
+#if DEBUG
+                    print("[HealthKitManager] uploadCacheAndGenerateInsights failed: \(error.localizedDescription)")
+#endif
+                }
+            }
         } catch {
 #if DEBUG
             print("[HealthKitManager] refreshFromHealthKit failed: \(error.localizedDescription)")
 #endif
+        }
+    }
+    
+    /// Persist insights locally as a fallback. Some HealthKit clinical APIs are not available
+    /// across all SDK versions; storing locally avoids using unavailable types while preserving
+    /// the idea of a pseudodatabase for later sync/inspection.
+    private func saveInsightsToHealthKit(insights: [AIInsight]) async {
+        guard !insights.isEmpty else { return }
+        // Try to write to HealthKit using a mindfulSession category sample if write permission exists
+        if let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) {
+            let status = healthStore.authorizationStatus(for: mindfulType)
+            if status == .sharingAuthorized {
+                // Prepare JSON metadata
+                guard let data = try? JSONEncoder().encode(insights), let json = String(data: data, encoding: .utf8) else {
+                    print("[HealthKitManager] Failed to encode insights for HealthKit storage")
+                    return
+                }
+
+                // Use mindfulSession start/end same timestamp; duration zero. Store JSON in metadata.
+                let now = Date()
+                let metadata: [String: Any] = [
+                    "glucopilot.insights": json,
+                    "glucopilot.insight_count": insights.count,
+                    HKMetadataKeyWasUserEntered: true
+                ]
+
+                let sample = HKCategorySample(type: mindfulType, value: 0, start: now, end: now, metadata: metadata)
+
+                do {
+                    try await healthStore.save(sample)
+                    print("[HealthKitManager] Saved \(insights.count) insights to Health app via mindfulSession sample")
+                    return
+                } catch {
+                    print("[HealthKitManager] Failed to save insights to HealthKit: \(error.localizedDescription)")
+                    // Fall through to local persistence
+                }
+            }
+        }
+
+        // Fallback: Encode insights to JSON and persist in UserDefaults
+        do {
+            let data = try JSONEncoder().encode(insights)
+            UserDefaults.standard.setValue(data, forKey: "glucopilot.saved_insights")
+            UserDefaults.standard.setValue(Date().timeIntervalSince1970, forKey: "glucopilot.saved_insights_ts")
+            print("[HealthKitManager] Persisted \(insights.count) insights to UserDefaults (pseudodatabase)")
+        } catch {
+            print("[HealthKitManager] Failed to persist insights locally: \(error.localizedDescription)")
         }
     }
     

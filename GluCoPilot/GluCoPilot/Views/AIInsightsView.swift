@@ -164,6 +164,25 @@ struct AIInsightsView: View {
     }
     
     private func refreshInsights() {
+        // Check if we're on cooldown
+        if healthKitManager.isRefreshOnCooldown {
+            // Calculate remaining time
+            let lastRefreshTimestamp = UserDefaults.standard.double(forKey: "last_refresh_timestamp")
+            let lastRefreshDate = Date(timeIntervalSince1970: lastRefreshTimestamp)
+            let cooldownPeriod: TimeInterval = 15 * 60 // 15 minutes
+            let now = Date()
+            let remainingTime = cooldownPeriod - now.timeIntervalSince(lastRefreshDate)
+            
+            if remainingTime > 0 {
+                let minutes = Int(remainingTime) / 60
+                let seconds = Int(remainingTime) % 60
+                
+                errorMessage = "Please wait \(minutes)m \(seconds)s before refreshing again"
+                showError = true
+                return
+            }
+        }
+        
         isLoading = true
         
         Task {

@@ -114,6 +114,9 @@ struct DashboardView: View {
 
                 NutritionSummaryView()
 
+                // Recent food logs from HealthKit
+                RecentFoodView()
+
                 RecentActivityView()
             }
             .padding()
@@ -838,6 +841,103 @@ struct MainTabView_Previews: PreviewProvider {
         MainTabView()
             .environmentObject(APIManager())
             .environmentObject(HealthKitManager())
+    }
+}
+
+// MARK: - Recent Food View
+struct RecentFoodView: View {
+    @EnvironmentObject private var healthKitManager: HealthKitManager
+    @State private var foods: [FoodItem] = []
+    @State private var isLoading: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Recent Food")
+                    .font(.headline)
+                Spacer()
+                Button(action: {
+                    Task {
+                        await refreshFood()
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if isLoading {
+                VStack(spacing: 8) {
+                    SkeletonCard(height: 16, cornerRadius: 8)
+                    SkeletonCard(height: 16, cornerRadius: 8)
+                    SkeletonCard(height: 16, cornerRadius: 8)
+                }
+            } else if foods.isEmpty {
+                VStack(spacing: 8) {
+                    Text("No food logs found")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    HStack {
+                        Button("Sync from HealthKit") {
+                            Task { await performFetchAndSave() }
+                        }
+                        .buttonStyle(GradientButtonStyle(colors: [Color.orange, Color.red]))
+                    }
+                }
+            } else {
+                ForEach(foods.prefix(6)) { food in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(food.name ?? "Food")
+                                .font(.subheadline)
+                            Text(relativeTime(from: food.timestamp))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing) {
+                            Text("\(Int(food.caloriesKcal)) cal")
+                                .font(.subheadline)
+                            Text("C:\(Int(food.carbsGrams)) P:\(Int(food.proteinGrams)) F:\(Int(food.fatGrams))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .cardStyle(baseColor: Color.orange, cornerRadius: 16)
+        .task { await loadSavedFoods() }
+    }
+
+    private func loadSavedFoods() async {
+        isLoading = true
+        await MainActor.run {
+            self.foods = healthKitManager.getSavedFoodItems()
+        }
+        isLoading = false
+    }
+
+    private func performFetchAndSave() async {
+        isLoading = true
+        let count = await healthKitManager.saveFetchedFoodItemsToLocalStore(limit: 50)
+        await loadSavedFoods()
+        isLoading = false
+#if DEBUG
+        print("[RecentFoodView] saved \(count) food items from HealthKit")
+#endif
+    }
+
+    private func refreshFood() async {
+        await performFetchAndSave()
+    }
+
+    private func relativeTime(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
