@@ -37,25 +37,32 @@ struct SettingsView: View {
                         .font(.title3)
                         .foregroundStyle(.red)
                         .frame(width: 25)
-
+                    
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Apple Health (HealthKit)")
                             .font(.subheadline)
                             .fontWeight(.medium)
-
+                        
                         Text(healthManager.isHealthKitAvailable ? "Available" : "Not Available")
                             .font(.caption)
                             .foregroundStyle(healthManager.isHealthKitAvailable ? .green : .secondary)
                     }
-
+                    
                     Spacer()
-
-                    Button("Manage") {
-                        healthManager.requestHealthKitPermissions()
+                    
+                    if healthManager.authorizationStatus == .sharingAuthorized {
+                        NavigationLink(destination: HealthDataAccessView()) {
+                            Text("Manage")
+                        }
+                    } else {
+                        Button("Connect") {
+                            healthManager.requestHealthKitPermissions()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.blue)
                     }
-                    .font(.caption)
-                    .foregroundStyle(.blue)
                 }
+                .foregroundStyle(.blue)
                 
                 // Apple Health Connection
                 HStack {
@@ -101,19 +108,21 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 
+                
                 NavigationLink {
-                    StaticDocumentView(title: "Privacy Policy", content: StaticDocumentView.privacyPlaceholder)
+                    DataPrivacyView()
+                        .environmentObject(healthManager)
                 } label: {
                     HStack {
                         Image(systemName: "shield.checkered")
                             .foregroundStyle(.green)
                             .frame(width: 25)
-
-                        Text("Privacy Policy")
+                        
+                        Text("Data & Privacy")
                             .font(.subheadline)
-
+                        
                         Spacer()
-
+                        
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -127,19 +136,19 @@ struct SettingsView: View {
                         Image(systemName: "doc.text")
                             .foregroundStyle(.blue)
                             .frame(width: 25)
-
+                        
                         Text("Terms of Service")
                             .font(.subheadline)
-
+                        
                         Spacer()
-
+                        
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 }
             }
-
+            
             // HealthKit logs toggle
             Section("HealthKit") {
                 Toggle("Show HealthKit permission logs", isOn: $showHealthKitPermissionLogs)
@@ -158,18 +167,18 @@ struct SettingsView: View {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(.blue)
                             .frame(width: 25)
-
+                        
                         Text("Help & Support")
                             .font(.subheadline)
-
+                        
                         Spacer()
-
+                        
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 }
-
+                
                 NavigationLink {
                     StaticDocumentView(title: "Contact Us", content: StaticDocumentView.contactPlaceholder)
                 } label: {
@@ -177,12 +186,12 @@ struct SettingsView: View {
                         Image(systemName: "envelope")
                             .foregroundStyle(.blue)
                             .frame(width: 25)
-
+                        
                         Text("Contact Us")
                             .font(.subheadline)
-
+                        
                         Spacer()
-
+                        
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -191,27 +200,27 @@ struct SettingsView: View {
             }
             
             // DEBUG Section - Remove for production
-            #if DEBUG
+#if DEBUG
             // Debug navigation links intentionally disabled for production-like UI.
             // To re-enable for development, uncomment the NavigationLink below.
             /*
-            Section("Debug Options") {
-                NavigationLink {
-                    AppleSignInDebugView()
-                        .environmentObject(authManager)
-                } label: {
-                    HStack {
-                        Image(systemName: "hammer.fill")
-                            .foregroundStyle(.orange)
-                            .frame(width: 25)
-                        
-                        Text("Test Apple Sign In")
-                            .font(.subheadline)
-                    }
-                }
-            }
-            */
-            #endif
+             Section("Debug Options") {
+             NavigationLink {
+             AppleSignInDebugView()
+             .environmentObject(authManager)
+             } label: {
+             HStack {
+             Image(systemName: "hammer.fill")
+             .foregroundStyle(.orange)
+             .frame(width: 25)
+             
+             Text("Test Apple Sign In")
+             .font(.subheadline)
+             }
+             }
+             }
+             */
+#endif
             
             // Sign Out Section
             Section {
@@ -240,14 +249,18 @@ struct SettingsView: View {
         } message: {
             Text("Are you sure you want to sign out? You'll need to sign in again to access your data.")
         }
-    // Dexcom disconnect UI removed; integration deprecated.
+        // Dexcom disconnect UI removed; integration deprecated.
     }
-}
-
-#Preview {
-    NavigationStack {
-        SettingsView()
-            .environmentObject(AuthenticationManager())
-            .environmentObject(HealthKitManager())
+    
+#if DEBUG
+    struct SettingsView_Previews: PreviewProvider {
+        static var previews: some View {
+            NavigationStack {
+                SettingsView()
+                    .environmentObject(AuthenticationManager())
+                    .environmentObject(HealthKitManager())
+            }
+        }
     }
+#endif
 }

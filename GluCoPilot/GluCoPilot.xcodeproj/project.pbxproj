@@ -29,9 +29,22 @@
 		97C4CB362E65244A00D4F5BF /* GluCoPilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GluCoPilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		97C184F12E70B5C70088CC30 /* Exceptions for "GluCoPilot" folder in "GluCoPilot" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 97C4CB1E2E65244500D4F5BF /* GluCoPilot */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		97C4CB212E65244500D4F5BF /* GluCoPilot */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				97C184F12E70B5C70088CC30 /* Exceptions for "GluCoPilot" folder in "GluCoPilot" target */,
+			);
 			path = GluCoPilot;
 			sourceTree = "<group>";
 		};
@@ -400,15 +413,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GluCoPilot;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "GluCoPilot needs access to your health data to track glucose levels, heart rate, and other health metrics to provide personalized insights and glucose management recommendations.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GluCoPilot needs to write health data to your Health app to sync your glucose readings, exercise data, and other health metrics for comprehensive health tracking.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_FILE = GluCoPilot/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -432,15 +437,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GluCoPilot;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "GluCoPilot needs access to your health data to track glucose levels, heart rate, and other health metrics to provide personalized insights and glucose management recommendations.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GluCoPilot needs to write health data to your Health app to sync your glucose readings, exercise data, and other health metrics for comprehensive health tracking.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_FILE = GluCoPilot/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -461,7 +458,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GluCoPilotTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotTests;
@@ -480,7 +477,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GluCoPilotTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotTests;
@@ -498,7 +495,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GluCoPilotUITests/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -515,7 +512,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QAWD9U9CF6;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GluCoPilotUITests/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = EricSpencer.GluCoPilotUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
