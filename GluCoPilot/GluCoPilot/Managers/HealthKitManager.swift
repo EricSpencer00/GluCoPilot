@@ -1464,47 +1464,20 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    /// Saves AI insights to HealthKit as a pseudodatabase using clinical records
+    /// Persist insights locally as a fallback. Some HealthKit clinical APIs are not available
+    /// across all SDK versions; storing locally avoids using unavailable types while preserving
+    /// the idea of a pseudodatabase for later sync/inspection.
     private func saveInsightsToHealthKit(insights: [AIInsight]) async {
-        // Skip if we don't have HealthKit write permission or if there are no insights
         guard !insights.isEmpty else { return }
-        
-        let clinicalType = HKObjectType.clinicalType(forIdentifier: .clinicalNote)!
-        let authStatus = healthStore.authorizationStatus(for: clinicalType)
-        
-        if authStatus != .sharingAuthorized {
-            print("[HealthKitManager] Cannot write insights to HealthKit: no write permission")
-            return
-        }
-        
-        // Convert insights to JSON
-        guard let insightsData = try? JSONEncoder().encode(insights),
-              let insightsJSON = String(data: insightsData, encoding: .utf8) else {
-            print("[HealthKitManager] Failed to encode insights for HealthKit storage")
-            return
-        }
-        
-        // Create a clinical note record
-        let metadata: [String: Any] = [
-            HKMetadataKeyWasUserEntered: true,
-            "glucopilot.insight_count": insights.count,
-            "glucopilot.insight_date": ISO8601DateFormatter().string(from: Date())
-        ]
-        
-        let clinicalNote = HKClinicalRecord(
-            type: clinicalType,
-            title: "GluCoPilot AI Insights",
-            text: insightsJSON,
-            date: Date(),
-            clinicalType: .note,
-            metadata: metadata
-        )
-        
+
+        // Encode insights to JSON and persist in UserDefaults as a safe fallback.
         do {
-            try await healthStore.save(clinicalNote)
-            print("[HealthKitManager] Successfully saved \(insights.count) insights to HealthKit")
+            let data = try JSONEncoder().encode(insights)
+            UserDefaults.standard.setValue(data, forKey: "glucopilot.saved_insights")
+            UserDefaults.standard.setValue(Date().timeIntervalSince1970, forKey: "glucopilot.saved_insights_ts")
+            print("[HealthKitManager] Persisted \(insights.count) insights to UserDefaults (pseudodatabase)")
         } catch {
-            print("[HealthKitManager] Failed to save insights to HealthKit: \(error.localizedDescription)")
+            print("[HealthKitManager] Failed to persist insights locally: \(error.localizedDescription)")
         }
     }
     
