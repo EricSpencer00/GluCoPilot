@@ -55,9 +55,9 @@ async def apple_register(
 
     if not settings.USE_DATABASE:
         # Stateless mode: just return JWT without DB persistence
-    logger.debug("Stateless mode: creating JWT without DB persistence")
-    access_token = create_access_token(data={"sub": apple_user_id})
-    return {"access_token": access_token, "token_type": "bearer"}
+        logger.debug("Stateless mode: creating JWT without DB persistence")
+        access_token = create_access_token(data={"sub": apple_user_id})
+        return {"access_token": access_token, "token_type": "bearer"}
 
     # Database mode: find or create user
     # Database mode: find or create user
@@ -195,19 +195,23 @@ async def social_login(
             db.commit()
 
     access_token = create_access_token(data={"sub": user.username})
-    refresh_token = create_access_token(data={"sub": user.username, "type": "refresh"}, expires_delta=timedelta(days=7))
+    refresh_token = create_access_token(
+        data={"sub": user.username, "type": "refresh"},
+        expires_delta=timedelta(days=7)
+    )
+
+    # Attempt to persist the refresh token; if it fails, continue without blocking the response
     try:
         user.refresh_token = refresh_token
         db.commit()
     except Exception:
-        # In case some user fields aren't writable or DB issues occur, continue and return tokens
-    logger.debug("Could not persist refresh token; continuing in stateless-like mode")
+        logger.debug("Could not persist refresh token; continuing without persistence")
 
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": 1800
+        "expires_in": 1800,
     }
 
 
