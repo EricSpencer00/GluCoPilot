@@ -25,8 +25,8 @@ struct MainTabView: View {
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
                 .tabItem {
-                    Image(systemName: selectedTab == 1 ? "drop.fill" : "drop")
-                    Text("Glucose")
+                    Image(systemName: "list.bullet")
+                    Text("Log")
                 }
                 .tag(1)
 
@@ -49,7 +49,7 @@ struct MainTabView: View {
                 }
                 .tag(3)
 
-            // Settings Tab
+            // Settings Tab (5th screen -> Settings only)
             SettingsView()
                 .environmentObject(healthKitManager)
                 .environmentObject(apiManager)
@@ -58,17 +58,6 @@ struct MainTabView: View {
                     Text("Settings")
                 }
                 .tag(5)
-
-#if DEBUG
-            // Debug Tab (only in debug builds)
-            APIRequestDebugView(healthKitManager: healthKitManager)
-                .environmentObject(apiManager)
-                .tabItem {
-                    Image(systemName: selectedTab == 99 ? "ant.fill" : "ant")
-                    Text("Debug")
-                }
-                .tag(99)
-#endif
         }
         .environmentObject(apiManager)
         .accentColor(.accentColor)

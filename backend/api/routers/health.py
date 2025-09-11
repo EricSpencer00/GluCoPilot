@@ -19,7 +19,7 @@ async def sync_health_data(
     db: Session = Depends(get_db)
 ):
     """Sync health data from Apple Health or other platforms"""
-    logger.info(f"Health sync request from user {getattr(current_user, 'id', 'stateless')}")
+    logger.debug(f"Health sync request from user {getattr(current_user, 'id', 'stateless')}")
 
     try:
         processed_count = 0

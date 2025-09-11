@@ -36,14 +36,16 @@ async def create_tables():
     """Create database tables"""
     try:
         from models import user, glucose, insulin, food, analysis, recommendations, health_data
-        logger.info("Creating database tables...")
+        logger.debug("Creating database tables...")
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+        logger.debug("Database tables created successfully")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
         raise
 
-def get_db() -> Session:
+from typing import Generator
+
+def get_db() -> Generator[Session, None, None]:
     """Dependency to get database session"""
     db = SessionLocal()
     try:

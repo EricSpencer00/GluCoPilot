@@ -30,23 +30,23 @@ logger = setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown events"""
-    logger.info("Starting GluCoPilot Backend...")
+    logger.debug("Starting GluCoPilot Backend...")
     
     # Initialize database only if enabled
     if settings.USE_DATABASE:
         await create_tables()
-        logger.info("Database initialized")
+        logger.debug("Database initialized")
     else:
-        logger.info("Stateless mode: skipping database initialization")
+        logger.debug("Stateless mode: skipping database initialization")
     
     # Start background tasks (to be implemented)
     # await start_background_tasks()
-    logger.info("Background tasks will be implemented later")
+    logger.debug("Background tasks will be implemented later")
     
     yield
     
     # Cleanup
-    logger.info("Shutting down GluCoPilot Backend...")
+    logger.debug("Shutting down GluCoPilot Backend...")
     # await stop_background_tasks()
 
 # Create FastAPI app
@@ -119,13 +119,18 @@ async def log_requests(request: Request, call_next):
                 pass
         except Exception:
             headers['authorization'] = 'Bearer [REDACTED]'
-    logger.info(f"Incoming request: {request.method} {request.url}")
-    logger.info(f"Headers: {headers}")
-    logger.info(f"Client: {request.client}")
+    # Minimal request logging in production to avoid sensitive data in logs
+    logger.debug(f"Incoming request: {request.method} {request.url}")
+    if getattr(settings, 'DEBUG', False):
+        logger.debug(f"Headers: {headers}")
+        logger.debug(f"Client: {request.client}")
 
     response = await call_next(request)
 
-    logger.info(f"Response status: {response.status_code}")
+    if getattr(settings, 'DEBUG', False):
+        logger.debug(f"Response status: {response.status_code}")
+    else:
+        logger.debug(f"Response: {request.method} {request.url.path} -> {response.status_code}")
     return response
 
 @app.get("/")

@@ -108,10 +108,9 @@ The app follows the Model-View-ViewModel pattern with:
 
 ## Technical Requirements
 
-- iOS 18.0+
-- Xcode 16.0+
+- macOS with Xcode 16+ and iOS 18+ SDK
 - Swift 6.0
-- Apple Developer Account (for Apple Sign In and HealthKit)
+- An Apple Developer account for provisioning (required for Apple Sign In and HealthKit on device)
 
 ## Permissions Required
 
@@ -121,23 +120,27 @@ The app follows the Model-View-ViewModel pattern with:
 
 ## Setup Instructions
 
-1. **Xcode Configuration**:
-   ```bash
-   open GluCoPilot.xcodeproj
-   ```
+1. Open the Xcode project/workspace:
 
-2. **Team and Bundle ID**:
-   - Set your development team in project settings
-   - Update bundle identifier to match your Apple Developer account
+```bash
+open GluCoPilot.xcodeproj
+```
 
-3. **Capabilities**:
-   - Enable Apple Sign In capability
-   - Enable HealthKit capability
-   - Configure entitlements file
+2. Team, bundle ID, and capabilities:
+- In Xcode, select the app target -> Signing & Capabilities.
+- Set your development team and update the bundle identifier to a unique value.
+- Add the Apple Sign In and HealthKit capabilities and confirm the entitlements file is configured.
 
-4. **Backend Configuration**:
-   - Update `APIManager.swift` with your backend URL
-   - Ensure backend supports all required endpoints
+3. Configure the API base URL:
+- Update the backend URL used by the app in `GluCoPilot/Managers/APIManager.swift` (or `Constants.swift` if present). Use `http://localhost:8000` for local development, or your deployed backend URL for remote testing.
+
+4. Run on simulator or device:
+- Simulator: HealthKit is limited on simulator — for full HealthKit testing use a device and sandbox/test accounts where possible.
+- Device: Ensure provisioning is set up and capabilities are enabled.
+
+5. Backend notes:
+- Start the backend (see project root README) before launching the app to allow API communication and AI insights.
+- If you enable Apple Sign In or Dexcom integration, you may need to configure credentials in `backend/.env` (see `backend/.env.example`).
 
 ## Key Files
 

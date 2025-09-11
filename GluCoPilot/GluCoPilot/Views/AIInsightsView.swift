@@ -101,7 +101,8 @@ struct AIInsightsView: View {
                     }
                     .padding(.vertical, 40)
                 }
-                // Payload viewer button
+                // Debug-only: view the raw payload sent to AI
+                #if DEBUG
                 Button(action: {
                     Task {
                         do {
@@ -134,6 +135,7 @@ struct AIInsightsView: View {
                 }
                 .buttonStyle(.bordered)
                 .padding(.horizontal)
+                #endif
             }
             .padding(.vertical)
         }
@@ -152,9 +154,11 @@ struct AIInsightsView: View {
         .sheet(item: $selectedInsight) { insight in
             InsightDetailView(insight: insight)
         }
+        #if DEBUG
         .sheet(isPresented: $showPayloadSheet) {
             PayloadViewerView(payload: builtPayload, title: "AI Insights Payload")
         }
+        #endif
         .onAppear {
             if insights.isEmpty {
                 refreshInsights()

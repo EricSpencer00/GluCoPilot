@@ -40,7 +40,7 @@ class PredictionService:
             logger.warning(f"AI engine optional initialize skipped: {e}")
         
         self.initialized = True
-        logger.info("Prediction service initialized")
+        logger.debug("Prediction service initialized")
     
     async def generate_predictions(
         self, 
@@ -66,7 +66,7 @@ class PredictionService:
         if not self.initialized:
             await self.initialize()
         
-        logger.info(f"Generating predictions for user {user.id}, horizon: {time_horizon_minutes}min")
+        logger.debug(f"Generating predictions for user {user.id}, horizon: {time_horizon_minutes}min")
         
         try:
             # Gather input data (last 24 hours)

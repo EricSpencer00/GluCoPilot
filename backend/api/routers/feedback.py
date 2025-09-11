@@ -15,7 +15,7 @@ class FeedbackRequest(BaseModel):
 @router.post("/ai/feedback", status_code=status.HTTP_201_CREATED)
 async def submit_ai_feedback(payload: FeedbackRequest, request: Request):
     # Here you would store feedback in the database or send to an AI audit pipeline
-    logger.info(f"AI Feedback received: {payload.dict()} from {request.client.host}")
+    logger.debug(f"AI Feedback received: {payload.dict()} from {request.client.host}")
     # Simulate AI audit or queue for review
     # TODO: Integrate with actual AI audit pipeline or DB
     return {"message": "Feedback received. Thank you!"}

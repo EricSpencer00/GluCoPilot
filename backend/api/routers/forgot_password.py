@@ -61,9 +61,9 @@ async def forgot_password(
         # Generate a secure token (simulate, not stored)
         token = secrets.token_urlsafe(32)
         reset_link = f"https://glucopilot.ai/reset-password?token={token}"
-        logger.info(f"Password reset requested for user: {user.email}")
+        logger.debug(f"Password reset requested for user: {user.email}")
         background_tasks.add_task(send_reset_email, user.email, reset_link)
     else:
-        logger.info(f"Password reset requested for non-existent email: {request.email}")
+        logger.debug(f"Password reset requested for non-existent email: {request.email}")
     # Always return success to prevent email enumeration
     return {"message": "If an account exists for this email, reset instructions have been sent."}

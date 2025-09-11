@@ -49,7 +49,7 @@ def verify_apple_token(id_token: str, audience: str | None = None) -> Dict:
     try:
         jwks = requests.get(APPLE_JWKS_URL, timeout=5).json()
         all_kids = [k.get("kid") for k in jwks.get("keys", [])]
-        logger.info(f"Apple token kid: {headers.get('kid')}, JWKS kids: {all_kids}")
+        logger.debug(f"Apple token kid: {headers.get('kid')}, JWKS kids: {all_kids}")
         key = next((k for k in jwks.get("keys", []) if k.get("kid") == headers.get("kid")), None)
         if not key:
             logger.error(f"No matching Apple public key for kid {headers.get('kid')}. JWKS kids: {all_kids}")

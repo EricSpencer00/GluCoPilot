@@ -45,7 +45,8 @@ class AIInsightsEngine:
         menstrual_cycle_data: Optional[List[MenstrualCycle]] = None,
         health_data: Optional[List[HealthData]] = None,
     ) -> List[Dict[str, Any]]:
-        logger.info(f"Generating recommendations for user {getattr(user, 'id', 'unknown')}")
+        # Start generation; keep minimal debug (no PHI)
+        # logger.debug(f"Generating recommendations for user {getattr(user, 'id', 'unknown')}")
         try:
             # Default empty lists for optional params
             activity_data = activity_data or []
@@ -360,37 +361,49 @@ class AIInsightsEngine:
                     try:
                         # Add response_format if the client supports it (newer OpenAI SDK versions)
                         completion_params["response_format"] = {"type": "json_object"}
-                        logger.info("Using response_format parameter for JSON output")
+                        logger.debug("Using response_format parameter for JSON output")
                     except Exception:
-                        logger.info("response_format parameter not supported, proceeding without it")
+                        logger.debug("response_format parameter not supported, proceeding without it")
                     
                     completion = client.chat.completions.create(**completion_params)
                     
                     if completion.choices and completion.choices[0].message.content:
                         ai_response = completion.choices[0].message.content.strip()
-                        # Log a trimmed preview of model output to help debug parsing issues
+                        # In production (DEBUG=false) avoid logging full model output or previews.
                         try:
-                            preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
-                            logger.info(f"Model returned {len(ai_response)} chars; preview: {preview}")
-                            
-                            # Quick validation - attempt to parse here just for logging
-                            try:
-                                json.loads(ai_response)
-                                logger.info("Model returned valid JSON that parsed successfully")
-                            except json.JSONDecodeError as je:
-                                logger.warning(f"Model returned invalid JSON: {str(je)}")
-                                
-                                # Try to clean the response for JSON parsing
-                                cleaned_response = re.sub(r'```json|```', '', ai_response).strip()
+                            if getattr(settings, 'DEBUG', False):
+                                preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
+                                # logger.debug(f"Model returned {len(ai_response)} chars; preview: {preview}")
+                            else:
+                                # Log only length and hash to assist diagnostics without exposing content
                                 try:
-                                    json.loads(cleaned_response)
-                                    logger.info("Cleaned response is valid JSON")
-                                    ai_response = cleaned_response
-                                except json.JSONDecodeError:
-                                    logger.warning("Even after cleaning, JSON is invalid")
-                                
+                                    import hashlib
+                                    h = hashlib.sha256(ai_response.encode('utf-8')).hexdigest()
+                                    logger.debug(f"Model output length={len(ai_response)} sha256={h}")
+                                except Exception:
+                                    logger.debug(f"Model output length={len(ai_response)}")
                         except Exception:
-                            logger.info("Model returned content (unable to preview)")
+                            if getattr(settings, 'DEBUG', False):
+                                logger.debug("Model returned content (unable to preview)")
+
+                        # Quick validation - attempt to parse here but do not log raw JSON in production
+                        try:
+                            json.loads(ai_response)
+                            if getattr(settings, 'DEBUG', False):
+                                logger.debug("Model returned valid JSON that parsed successfully")
+                        except json.JSONDecodeError as je:
+                            if getattr(settings, 'DEBUG', False):
+                                logger.warning(f"Model returned invalid JSON: {str(je)}")
+                            # Try to clean the response for JSON parsing
+                            cleaned_response = re.sub(r'```json|```', '', ai_response).strip()
+                            try:
+                                json.loads(cleaned_response)
+                                if getattr(settings, 'DEBUG', False):
+                                    logger.debug("Cleaned response is valid JSON")
+                                ai_response = cleaned_response
+                            except json.JSONDecodeError:
+                                if getattr(settings, 'DEBUG', False):
+                                    logger.warning("Even after cleaning, JSON is invalid")
                         
                         # If response looks truncated, try a single continuation attempt
                         try:
@@ -408,11 +421,11 @@ class AIInsightsEngine:
                                     )
                                     if continuation.choices and continuation.choices[0].message.content:
                                         extra = continuation.choices[0].message.content.strip()
-                                        logger.info(f"Continuation returned {len(extra)} chars")
+                                        logger.debug(f"Continuation returned {len(extra)} chars")
                                         candidate = ai_response + extra
                                         repaired = self._repair_json(candidate)
                                         if repaired:
-                                            logger.info("Continuation + repair produced valid JSON")
+                                            logger.debug("Continuation + repair produced valid JSON")
                                             return repaired
                                 except Exception as e:
                                     logger.warning(f"Continuation attempt failed: {e}")
@@ -735,9 +748,9 @@ class AIInsightsEngine:
         # Enhanced logging to better diagnose parsing issues
         try:
             preview = ai_text[:500].replace('\n', ' ') if ai_text else '<empty>'
-            logger.info(f"Processing recommendations from text ({len(ai_text)} chars): {preview}...")
+            logger.debug(f"Processing recommendations from text ({len(ai_text)} chars): {preview}...")
         except Exception:
-            logger.info("Processing recommendations (preview unavailable)")
+            logger.debug("Processing recommendations (preview unavailable)")
 
         # Method 1: Direct parse after repair
         try:
@@ -745,7 +758,7 @@ class AIInsightsEngine:
             if repaired:
                 parsed = json.loads(repaired)
                 if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
-                    logger.info(f"Successfully parsed repaired JSON array with {len(parsed)} items")
+                    logger.debug(f"Successfully parsed repaired JSON array with {len(parsed)} items")
                     for item in parsed:
                         rec = {
                             'title': item.get('title', ''),
@@ -760,7 +773,7 @@ class AIInsightsEngine:
                         recommendations.append(rec)
                     return recommendations[:5]
         except Exception as e:
-            logger.info(f"Repaired JSON parsing failed: {str(e)}")
+            logger.debug(f"Repaired JSON parsing failed: {str(e)}")
 
         # Method 2: Extract array, then split into objects with state-aware parser
         try:
@@ -768,7 +781,7 @@ class AIInsightsEngine:
             if array_str:
                 repaired_array = self._repair_json(array_str) or array_str
                 objects = self._split_json_array_objects(repaired_array)
-                logger.info(f"Split array into {len(objects)} potential objects (state-aware)")
+                logger.debug(f"Split array into {len(objects)} potential objects (state-aware)")
                 for i, obj_str in enumerate(objects):
                     try:
                         repaired_obj = self._repair_json(obj_str) or obj_str
@@ -785,18 +798,18 @@ class AIInsightsEngine:
                         }
                         recommendations.append(rec)
                     except Exception as e:
-                        logger.info(f"Failed to parse object {i+1}: {str(e)}")
+                        logger.debug(f"Failed to parse object {i+1}: {str(e)}")
                         continue
                 if recommendations:
-                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using state-aware parsing")
+                    logger.debug(f"Successfully extracted {len(recommendations)} recommendations using state-aware parsing")
                     return recommendations[:5]
         except Exception as e:
-            logger.info(f"State-aware array parsing failed: {str(e)}")
+            logger.debug(f"State-aware array parsing failed: {str(e)}")
 
         # Method 3: Regex object extraction as last resort before text heuristics
         try:
             json_objects = re.findall(r'\{[\s\S]*?\}', ai_text)
-            logger.info(f"Found {len(json_objects)} potential JSON objects using regex")
+            logger.debug(f"Found {len(json_objects)} potential JSON objects using regex")
             for i, obj_str in enumerate(json_objects):
                 try:
                     repaired_obj = self._repair_json(obj_str) or obj_str
@@ -817,15 +830,15 @@ class AIInsightsEngine:
                 except Exception:
                     continue
             if recommendations:
-                logger.info(f"Successfully extracted {len(recommendations)} recommendations using regex objects")
+                logger.debug(f"Successfully extracted {len(recommendations)} recommendations using regex objects")
                 return recommendations[:5]
         except Exception as e:
-            logger.info(f"Regex JSON extraction failed: {str(e)}")
+            logger.debug(f"Regex JSON extraction failed: {str(e)}")
 
         # Method 4: Numbered text fallback
         try:
             numbered_items = re.split(r'\n(?=\d+[\.)] )', ai_text.strip())
-            logger.info(f"Found {len(numbered_items)} potential numbered items")
+            logger.debug(f"Found {len(numbered_items)} potential numbered items")
             
             if len(numbered_items) > 1:
                 for i, item in enumerate(numbered_items):
@@ -856,21 +869,21 @@ class AIInsightsEngine:
                         }
                         if rec['title'] or rec['description']:
                             recommendations.append(rec)
-                            logger.info(f"Added item {i+1} from text format with title: {rec['title'][:30]}...")
+                            logger.debug(f"Added item {i+1} from text format with title: {rec['title'][:30]}...")
                     except Exception as e:
-                        logger.info(f"Failed to parse numbered item {i+1}: {str(e)}")
+                        logger.debug(f"Failed to parse numbered item {i+1}: {str(e)}")
                         continue
                         
                 if recommendations:
-                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 4")
+                    logger.debug(f"Successfully extracted {len(recommendations)} recommendations using method 4")
                     return recommendations[:5]
         except Exception as e:
-            logger.info(f"Numbered text parsing failed: {str(e)}")
+            logger.debug(f"Numbered text parsing failed: {str(e)}")
 
         # Method 5: Markdown-style fallback
         try:
             items = re.split(r'\n---+\n|(?=\*\*\d+\. Title:)', ai_text)
-            logger.info(f"Found {len(items)} potential markdown items")
+            logger.debug(f"Found {len(items)} potential markdown items")
             
             for i, item in enumerate(items):
                 if not item.strip():
@@ -899,21 +912,21 @@ class AIInsightsEngine:
                     }
                     if rec['title'] or rec['description']:
                         recommendations.append(rec)
-                        logger.info(f"Added item {i+1} from markdown format with title: {rec['title'][:30]}...")
+                        logger.debug(f"Added item {i+1} from markdown format with title: {rec['title'][:30]}...")
                 except Exception as e:
-                    logger.info(f"Failed to parse markdown item {i+1}: {str(e)}")
+                    logger.debug(f"Failed to parse markdown item {i+1}: {str(e)}")
                     continue
                     
-            if recommendations:
-                logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 5")
+                if recommendations:
+                    logger.debug(f"Successfully extracted {len(recommendations)} recommendations using method 5")
                 return recommendations[:5]
         except Exception as e:
-            logger.info(f"Markdown parsing failed: {str(e)}")
+            logger.debug(f"Markdown parsing failed: {str(e)}")
         
         # Method 6: Last resort - look for title-description pairs anywhere in text
         try:
             title_matches = re.findall(r'(?:^|\n)(?:Title:?\s*|Recommendation\s*\d+:?\s*)(.*?)(?:\n|$)', ai_text, re.IGNORECASE)
-            logger.info(f"Found {len(title_matches)} potential title matches in raw text")
+            logger.debug(f"Found {len(title_matches)} potential title matches in raw text")
             
             if title_matches and len(title_matches) <= 10:  # Reasonable number of recommendations
                 for i, title in enumerate(title_matches):
@@ -950,13 +963,13 @@ class AIInsightsEngine:
                             }),
                         }
                         recommendations.append(rec)
-                        logger.info(f"Added item {i+1} from title-description with title: {title[:30]}...")
+                        logger.debug(f"Added item {i+1} from title-description with title: {title[:30]}...")
                 
                 if recommendations:
-                    logger.info(f"Successfully extracted {len(recommendations)} recommendations using method 6")
+                    logger.debug(f"Successfully extracted {len(recommendations)} recommendations using method 6")
                     return recommendations[:5]
         except Exception as e:
-            logger.info(f"Title-description parsing failed: {str(e)}")
+            logger.debug(f"Title-description parsing failed: {str(e)}")
 
         # Final fallback
         try:
@@ -995,10 +1008,10 @@ class AIInsightsEngine:
                             'ai_raw_text': ai_text[:2000] if len(ai_text) > 2000 else ai_text,
                         }),
                     })
-                    logger.info("Created one recommendation from unstructured AI text")
+                    logger.debug("Created one recommendation from unstructured AI text")
                     return recommendations
             except Exception as e:
-                logger.info(f"Failed to create recommendation from unstructured text: {str(e)}")
+                    logger.debug(f"Failed to create recommendation from unstructured text: {str(e)}")
         
         # Ultimate fallback - use hardcoded recommendations
         return self._process_recommendations(self._fallback_recommendations(), user_id)
