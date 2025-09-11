@@ -45,8 +45,8 @@ class AIInsightsEngine:
         menstrual_cycle_data: Optional[List[MenstrualCycle]] = None,
         health_data: Optional[List[HealthData]] = None,
     ) -> List[Dict[str, Any]]:
-    # Start generation; keep minimal debug (no PHI)
-    logger.debug(f"Generating recommendations for user {getattr(user, 'id', 'unknown')}")
+        # Start generation; keep minimal debug (no PHI)
+        # logger.debug(f"Generating recommendations for user {getattr(user, 'id', 'unknown')}")
         try:
             # Default empty lists for optional params
             activity_data = activity_data or []
@@ -373,7 +373,7 @@ class AIInsightsEngine:
                         try:
                             if getattr(settings, 'DEBUG', False):
                                 preview = ai_response[:1000].replace('\n', ' ') if ai_response else ''
-                                logger.debug(f"Model returned {len(ai_response)} chars; preview: {preview}")
+                                # logger.debug(f"Model returned {len(ai_response)} chars; preview: {preview}")
                             else:
                                 # Log only length and hash to assist diagnostics without exposing content
                                 try:
