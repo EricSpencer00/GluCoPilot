@@ -1,6 +1,10 @@
 <!-- Official badge -->
 ![CI](https://github.com/EricSpencer00/GluCoPilot/actions/workflows/i-like-seeing-green.yml/badge.svg)
 
+# Info
+
+- Uses openai/gpt-oss-20b for a backend
+- Calls the native model via API, no fine-tuning whatsoever besides some prompt engineering
 
 # GluCoPilot - AI-Powered Diabetes Management
 
