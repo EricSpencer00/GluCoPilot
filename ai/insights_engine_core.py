@@ -45,6 +45,7 @@ class AIInsightsEngine:
         menstrual_cycle_data: Optional[List[MenstrualCycle]] = None,
         health_data: Optional[List[HealthData]] = None,
     ) -> List[Dict[str, Any]]:
+    # Start generation; keep minimal debug (no PHI)
     logger.debug(f"Generating recommendations for user {getattr(user, 'id', 'unknown')}")
         try:
             # Default empty lists for optional params
